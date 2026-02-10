@@ -88,43 +88,45 @@ const App: React.FC = () => {
 
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-100 p-4">
-        <div className="bg-white rounded-xl shadow-2xl overflow-hidden max-w-md w-full border border-slate-200">
-            <div className="bg-white p-8 text-center border-b border-slate-100">
-                <img 
-                    src="https://d2cqpzl92y75ws.cloudfront.net/components/uploads/cms-medias/2021/10/EPROM_logo-280x115.png" 
-                    alt="EPROM Logo" 
-                    className="mx-auto w-full max-w-[220px] h-auto object-contain mb-4"
-                />
-                <h1 className="text-xl font-bold text-slate-800">Competency Manager</h1>
-                <p className="text-slate-500 text-sm mt-1">Employee Skill Management System</p>
-                {CONFIG.SOURCE === 'MOCK' && <span className="inline-block mt-2 px-2 py-0.5 bg-yellow-100 text-yellow-800 text-[10px] font-bold rounded uppercase border border-yellow-200">Mock Mode</span>}
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+        <div className="bg-white rounded-xl shadow-xl overflow-hidden max-w-md w-full border border-slate-200">
+            <div className="p-8 text-center">
+                <div className="flex justify-center mb-6">
+                    <img 
+                        src="https://d2cqpzl92y75ws.cloudfront.net/components/uploads/cms-medias/2021/10/EPROM_logo-280x115.png" 
+                        alt="EPROM Logo" 
+                        className="h-16 w-auto object-contain"
+                    />
+                </div>
+                <h1 className="text-xl font-bold text-slate-900">Competency Manager</h1>
+                <p className="text-slate-500 text-sm mt-1">Sign in to your account</p>
+                {CONFIG.SOURCE === 'MOCK' && <span className="inline-block mt-3 px-2 py-0.5 bg-yellow-50 text-yellow-700 text-[10px] font-bold rounded border border-yellow-200">Mock Mode Active</span>}
             </div>
             
-            <form onSubmit={handleAuth} className="p-8 space-y-5">
+            <form onSubmit={handleAuth} className="px-8 pb-8 space-y-5">
                 {signupSuccess && (
                     <div className="bg-green-50 border border-green-200 text-green-800 p-4 rounded-lg flex items-start gap-3 mb-4">
                         <CheckCircle size={20} className="mt-0.5 flex-shrink-0" />
                         <div className="text-sm">
                             <p className="font-bold">Account Created!</p>
-                            <p>Your account is pending administrator approval. Please check back later.</p>
+                            <p>Your account is pending administrator approval.</p>
                         </div>
                     </div>
                 )}
 
-                <div className="flex justify-center mb-4">
-                    <div className="bg-slate-100 p-1 rounded-lg flex text-sm font-medium">
+                <div className="flex justify-center mb-6">
+                    <div className="bg-slate-100 p-1 rounded-lg flex text-sm font-medium w-full">
                         <button 
                             type="button"
                             onClick={() => { setIsLoginMode(true); setError(''); setSignupSuccess(false); }}
-                            className={`px-4 py-1.5 rounded-md transition-all ${isLoginMode ? 'bg-white shadow text-teal-700' : 'text-slate-500 hover:text-slate-700'}`}
+                            className={`flex-1 py-2 rounded-md transition-all text-center ${isLoginMode ? 'bg-white shadow text-slate-900 font-bold' : 'text-slate-500 hover:text-slate-700'}`}
                         >
                             Log In
                         </button>
                         <button 
                             type="button"
                             onClick={() => { setIsLoginMode(false); setError(''); setSignupSuccess(false); }}
-                            className={`px-4 py-1.5 rounded-md transition-all ${!isLoginMode ? 'bg-white shadow text-teal-700' : 'text-slate-500 hover:text-slate-700'}`}
+                            className={`flex-1 py-2 rounded-md transition-all text-center ${!isLoginMode ? 'bg-white shadow text-slate-900 font-bold' : 'text-slate-500 hover:text-slate-700'}`}
                         >
                             Sign Up
                         </button>
@@ -133,14 +135,14 @@ const App: React.FC = () => {
 
                 {!isLoginMode && (
                     <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Full Name</label>
+                        <label className="block text-xs font-bold text-slate-600 uppercase mb-1.5">Full Name</label>
                         <div className="relative">
                             <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                             <input 
                                 type="text" 
                                 value={fullName}
                                 onChange={(e) => setFullName(e.target.value)}
-                                className="w-full pl-10 pr-4 py-3 rounded-lg border border-slate-200 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition-all text-slate-800"
+                                className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition-all text-slate-800"
                                 placeholder="John Doe"
                                 required={!isLoginMode}
                             />
@@ -149,14 +151,14 @@ const App: React.FC = () => {
                 )}
 
                 <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Company Email</label>
+                    <label className="block text-xs font-bold text-slate-600 uppercase mb-1.5">Email Address</label>
                     <div className="relative">
                         <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                         <input 
                             type="email" 
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            className="w-full pl-10 pr-4 py-3 rounded-lg border border-slate-200 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition-all text-slate-800"
+                            className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition-all text-slate-800"
                             placeholder="name@eprom.com"
                             required
                         />
@@ -164,38 +166,38 @@ const App: React.FC = () => {
                 </div>
 
                 <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Password</label>
+                    <label className="block text-xs font-bold text-slate-600 uppercase mb-1.5">Password</label>
                     <div className="relative">
                         <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                         <input 
                             type="password" 
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            className="w-full pl-10 pr-4 py-3 rounded-lg border border-slate-200 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition-all text-slate-800"
+                            className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition-all text-slate-800"
                             placeholder="••••••••"
                             required
                         />
                     </div>
                 </div>
                 
-                {error && <p className="text-red-500 text-xs bg-red-50 p-3 rounded border border-red-100">{error}</p>}
+                {error && <p className="text-red-600 text-xs bg-red-50 p-3 rounded-lg border border-red-100 flex items-center gap-2"><ShieldCheck size={14}/> {error}</p>}
 
                 <button 
                     type="submit" 
                     disabled={authLoading}
-                    className="w-full bg-slate-900 hover:bg-slate-800 disabled:bg-slate-700 text-white font-bold py-3 rounded-lg transition-colors flex items-center justify-center gap-2"
+                    className="w-full bg-slate-900 hover:bg-slate-800 disabled:bg-slate-700 text-white font-bold py-2.5 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg shadow-slate-200"
                 >
                     {authLoading && <Loader2 className="animate-spin" size={18} />}
                     {isLoginMode ? 'Access Portal' : 'Create Account'}
                 </button>
 
                 {CONFIG.SOURCE === 'MOCK' && isLoginMode && (
-                    <div className="pt-4 border-t border-slate-100">
-                        <p className="text-xs text-center text-slate-400">Demo Credentials (Mock Mode):</p>
-                        <div className="flex flex-wrap gap-2 justify-center mt-2">
-                            <span onClick={() => { setEmail('sara@erpom.com'); setPassword('any'); }} className="cursor-pointer px-2 py-1 bg-slate-100 rounded text-xs text-slate-600 hover:bg-slate-200">Employee</span>
-                            <span onClick={() => { setEmail('ahmed@erpom.com'); setPassword('any'); }} className="cursor-pointer px-2 py-1 bg-slate-100 rounded text-xs text-slate-600 hover:bg-slate-200">Manager</span>
-                            <span onClick={() => { setEmail('admin@erpom.com'); setPassword('any'); }} className="cursor-pointer px-2 py-1 bg-slate-100 rounded text-xs text-slate-600 hover:bg-slate-200">Admin</span>
+                    <div className="pt-6 border-t border-slate-100 text-center">
+                        <p className="text-xs text-slate-400 mb-2 font-medium uppercase tracking-wide">Quick Login (Mock)</p>
+                        <div className="flex flex-wrap gap-2 justify-center">
+                            <span onClick={() => { setEmail('sara@erpom.com'); setPassword('any'); }} className="cursor-pointer px-3 py-1 bg-slate-50 border border-slate-200 rounded text-xs font-medium text-slate-600 hover:bg-white hover:border-slate-300 transition-colors">Employee</span>
+                            <span onClick={() => { setEmail('ahmed@erpom.com'); setPassword('any'); }} className="cursor-pointer px-3 py-1 bg-slate-50 border border-slate-200 rounded text-xs font-medium text-slate-600 hover:bg-white hover:border-slate-300 transition-colors">Manager</span>
+                            <span onClick={() => { setEmail('admin@erpom.com'); setPassword('any'); }} className="cursor-pointer px-3 py-1 bg-slate-50 border border-slate-200 rounded text-xs font-medium text-slate-600 hover:bg-white hover:border-slate-300 transition-colors">Admin</span>
                         </div>
                     </div>
                 )}

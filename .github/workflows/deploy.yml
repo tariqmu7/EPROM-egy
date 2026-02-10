@@ -25,6 +25,7 @@ jobs:
         with:
           node-version: "20"
           cache: 'npm'
+          # Cache removed to prevent "lock file not found" error
       - name: Install dependencies
         run: npm install
       - name: Build
