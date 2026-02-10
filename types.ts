@@ -1,3 +1,4 @@
+
 export enum Role {
   ADMIN = 'ADMIN',
   EMPLOYEE = 'EMPLOYEE',
@@ -78,4 +79,11 @@ export interface Assessment {
   comment: string;
   date: string;
   type: 'SELF' | 'PEER' | 'MANAGER';
+}
+
+export interface ActivityLog {
+  id: string;
+  action: string;
+  target: string;
+  timestamp: string;
 }

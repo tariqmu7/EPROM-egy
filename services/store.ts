@@ -1,4 +1,4 @@
-import { User, Role, JobProfile, Skill, Department, Assessment, ORG_HIERARCHY_ORDER } from '../types';
+import { User, Role, JobProfile, Skill, Department, Assessment, ActivityLog, ORG_HIERARCHY_ORDER } from '../types';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 // ==========================================
@@ -7,13 +7,13 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 export const CONFIG = {
   // 1. CHOOSE YOUR DATA SOURCE: 'MOCK' | 'SUPABASE'
   // Change this to 'SUPABASE' to use the real backend.
-  SOURCE: 'SUPABASE', 
+  SOURCE: 'MOCK', 
 
   // 2. SUPABASE CONFIGURATION
   // Get these from your Supabase Project Settings -> API
   SUPABASE: {
-    url: "https://ubomvpncmpmarjvwljah.supabase.co", // e.g., https://xyz.supabase.co
-    key: "sb_publishable_nb3ERkam7kbwJBgUaX3zcA_CX-lfi6o"
+    url: "https://your-project.supabase.co", // Replace with your actual Supabase URL
+    key: "your-public-anon-key" // Replace with your actual Supabase Key
   }
 };
 
@@ -172,6 +172,12 @@ const MOCK_ASSESSMENTS: Assessment[] = [
   { id: 'a3', raterId: 'u3', subjectId: 'u3', skillId: 's2', score: 3, comment: 'Solid understanding', date: '2023-10-01', type: 'SELF' },
 ];
 
+const MOCK_LOGS: ActivityLog[] = [
+    { id: 'l1', action: 'Modified Skill Requirements', target: 'Process Engineer Track', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString() },
+    { id: 'l2', action: 'Onboarded Employee', target: 'Sarah Connor', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString() },
+    { id: 'l3', action: 'System Initialization', target: 'Core Modules', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString() }
+];
+
 // ==========================================
 // 🚀 DATA SERVICE
 // ==========================================
@@ -182,6 +188,7 @@ class DataService {
   private skills: Skill[] = [];
   private assessments: Assessment[] = [];
   private departments: Department[] = [];
+  private logs: ActivityLog[] = [];
   
   private supabase: SupabaseClient | null = null;
   public isInitialized = false;
@@ -197,6 +204,7 @@ class DataService {
     this.skills = [...MOCK_SKILLS];
     this.assessments = [...MOCK_ASSESSMENTS];
     this.departments = [...MOCK_DEPTS];
+    this.logs = [...MOCK_LOGS];
   }
 
   // --- INITIALIZATION ---
@@ -206,7 +214,7 @@ class DataService {
     
     if (CONFIG.SOURCE === 'SUPABASE') {
       // Basic validation to prevent "Invalid URL" crash if credentials are missing
-      if (!CONFIG.SUPABASE.url || CONFIG.SUPABASE.url.includes('YOUR_SUPABASE_URL')) {
+      if (!CONFIG.SUPABASE.url || CONFIG.SUPABASE.url.includes('your-project.supabase.co')) {
         console.warn("Supabase credentials not set. Falling back to MOCK data.");
         this.resetToMock();
         this.isInitialized = true;
@@ -239,6 +247,7 @@ class DataService {
       const { data: skills } = await this.supabase.from('skills').select('*');
       const { data: depts } = await this.supabase.from('departments').select('*');
       const { data: assessments } = await this.supabase.from('assessments').select('*');
+      const { data: logs } = await this.supabase.from('system_logs').select('*').order('timestamp', { ascending: false }).limit(20);
 
       // Map snake_case from DB to camelCase for UI if necessary, or just cast
       // Assuming DB columns match Typescript interface largely or we map them:
@@ -287,6 +296,13 @@ class DataService {
         comment: a.comment,
         date: a.date,
         type: a.type
+      }));
+
+      if (logs) this.logs = logs.map(l => ({
+        id: l.id,
+        action: l.action,
+        target: l.target,
+        timestamp: l.timestamp
       }));
 
     } catch (error) {
@@ -339,6 +355,7 @@ class DataService {
           avatarUrl: newUserProfile.avatar_url
       };
       this.users.push(localUser);
+      this.logActivity('Self-Registration', localUser.name);
       return { user: localUser };
     }
     return { error: 'Unknown error' };
@@ -466,6 +483,15 @@ class DataService {
                     avatar_url: item.avatarUrl
                 };
                 break;
+            case 'logs':
+                tableName = 'system_logs';
+                payload = {
+                    id: item.id,
+                    action: item.action,
+                    target: item.target,
+                    timestamp: item.timestamp
+                };
+                break;
         }
 
         if(tableName) {
@@ -476,6 +502,27 @@ class DataService {
       } catch (e) {
         console.error(`Failed to save to Supabase [${collectionName}]`, e);
       }
+    }
+  }
+
+  private async deleteItem(collectionName: string, id: string) {
+    if (CONFIG.SOURCE === 'SUPABASE' && this.supabase) {
+        try {
+            let tableName = '';
+            switch(collectionName) {
+                case 'assessments': tableName = 'assessments'; break;
+                case 'skills': tableName = 'skills'; break;
+                case 'jobs': tableName = 'job_profiles'; break;
+                case 'departments': tableName = 'departments'; break;
+                case 'users': tableName = 'user_profiles'; break;
+            }
+            if (tableName) {
+                const { error } = await this.supabase.from(tableName).delete().eq('id', id);
+                if (error) console.error(`Supabase Delete Error [${tableName}]:`, error);
+            }
+        } catch (e) {
+            console.error(`Failed to delete from Supabase [${collectionName}]`, e);
+        }
     }
   }
 
@@ -500,6 +547,7 @@ class DataService {
   getAllUsers() { return this.users; }
   getAllDepartments() { return this.departments; }
   getSkill(id: string) { return this.skills.find(s => s.id === id); }
+  getSystemLogs() { return this.logs; }
 
   getSubordinates(managerId: string) {
     return this.users.filter(u => u.managerId === managerId);
@@ -537,6 +585,18 @@ class DataService {
 
   // --- ACTIONS (Async Write-Behind) ---
 
+  public logActivity(action: string, target: string) {
+    const newLog: ActivityLog = {
+        id: Math.random().toString(36).substr(2, 9),
+        action,
+        target,
+        timestamp: new Date().toISOString()
+    };
+    this.logs.unshift(newLog); // Add to top
+    if (this.logs.length > 50) this.logs.pop(); // Keep list small locally
+    this.persistItem('logs', newLog);
+  }
+
   addAssessment(assessment: Omit<Assessment, 'id' | 'date'>) {
     const newAssessment: Assessment = {
       ...assessment,
@@ -545,26 +605,34 @@ class DataService {
     };
     this.assessments.push(newAssessment);
     this.persistItem('assessments', newAssessment);
+    
+    // Log Activity
+    const subject = this.users.find(u => u.id === assessment.subjectId)?.name || 'Employee';
+    this.logActivity('Submitted Assessment', `For ${subject}`);
   }
 
   addSkill(skill: Skill) { 
     this.skills.push(skill); 
     this.persistItem('skills', skill);
+    this.logActivity('Defined New Skill', skill.name);
   }
   
   addJobProfile(job: JobProfile) { 
     this.jobs.push(job); 
     this.persistItem('jobs', job);
+    this.logActivity('Created Job Profile', job.title);
   }
   
   addUser(user: User) { 
     this.users.push(user); 
     this.persistItem('users', user);
+    this.logActivity('Onboarded Employee', user.name);
   }
 
   addDepartment(dept: Department) {
     this.departments.push(dept);
     this.persistItem('departments', dept);
+    this.logActivity('Created Department', dept.name);
   }
 
   updateDepartment(dept: Department) {
@@ -572,6 +640,7 @@ class DataService {
     if (idx >= 0) {
       this.departments[idx] = dept;
       this.updateItem('departments', dept);
+      this.logActivity('Updated Department', dept.name);
     }
   }
 
@@ -580,6 +649,7 @@ class DataService {
     if (idx >= 0) {
       this.users[idx] = user;
       this.updateItem('users', user);
+      this.logActivity('Updated Profile', user.name);
     }
   }
   
@@ -588,6 +658,7 @@ class DataService {
     if (idx >= 0) {
       this.jobs[idx] = job;
       this.updateItem('jobs', job);
+      this.logActivity('Modified Job Profile', job.title);
     }
   }
   
@@ -596,6 +667,45 @@ class DataService {
     if (idx >= 0) {
       this.skills[idx] = skill;
       this.updateItem('skills', skill);
+      this.logActivity('Updated Skill Standard', skill.name);
+    }
+  }
+
+  // --- REMOVE METHODS ---
+
+  removeUser(id: string) {
+    const user = this.users.find(u => u.id === id);
+    if (user) {
+        this.users = this.users.filter(u => u.id !== id);
+        this.deleteItem('users', id);
+        this.logActivity('Removed Employee', user.name);
+    }
+  }
+
+  removeJobProfile(id: string) {
+    const job = this.jobs.find(j => j.id === id);
+    if (job) {
+        this.jobs = this.jobs.filter(j => j.id !== id);
+        this.deleteItem('jobs', id);
+        this.logActivity('Removed Job Profile', job.title);
+    }
+  }
+
+  removeSkill(id: string) {
+    const skill = this.skills.find(s => s.id === id);
+    if (skill) {
+        this.skills = this.skills.filter(s => s.id !== id);
+        this.deleteItem('skills', id);
+        this.logActivity('Removed Skill', skill.name);
+    }
+  }
+
+  removeDepartment(id: string) {
+    const dept = this.departments.find(d => d.id === id);
+    if (dept) {
+        this.departments = this.departments.filter(d => d.id !== id);
+        this.deleteItem('departments', id);
+        this.logActivity('Removed Department', dept.name);
     }
   }
 }

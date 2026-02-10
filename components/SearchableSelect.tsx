@@ -77,7 +77,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({ options, val
                 <input
                     ref={inputRef}
                     type="text"
-                    className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded-md focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                    className="w-full pl-8 pr-3 py-1.5 text-sm bg-white text-slate-900 border border-slate-200 rounded-md focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
                     placeholder="Type to search..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
@@ -85,7 +85,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({ options, val
                 />
              </div>
           </div>
-          <div className="overflow-y-auto flex-1 custom-scrollbar">
+          <div className="overflow-y-auto flex-1 custom-scrollbar bg-white">
             {filteredOptions.length > 0 ? (
                 filteredOptions.map(option => (
                     <div
