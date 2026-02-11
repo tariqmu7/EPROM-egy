@@ -129,7 +129,7 @@ const MOCK_USERS: User[] = [
     departmentId: 'd2',
     jobProfileId: 'j1',
     orgLevel: 'DM', // Department Manager
-    avatarUrl: 'https://picsum.photos/200/200?random=1'
+    avatarUrl: 'https://api.dicebear.com/9.x/rings/svg?seed=Sara'
   },
   {
     id: 'u3',
@@ -141,7 +141,7 @@ const MOCK_USERS: User[] = [
     managerId: 'u2',
     jobProfileId: 'j1',
     orgLevel: 'FP', // First Position
-    avatarUrl: 'https://picsum.photos/200/200?random=2'
+    avatarUrl: 'https://api.dicebear.com/9.x/rings/svg?seed=Sara'
   },
   {
     id: 'u4',
@@ -153,7 +153,7 @@ const MOCK_USERS: User[] = [
     managerId: 'u2',
     jobProfileId: 'j2',
     orgLevel: 'FR', // Fresh
-    avatarUrl: 'https://picsum.photos/200/200?random=3'
+    avatarUrl: 'https://api.dicebear.com/9.x/rings/svg?seed=Chase'
   },
   {
     id: 'u5',
@@ -162,7 +162,7 @@ const MOCK_USERS: User[] = [
     role: Role.EMPLOYEE,
     status: 'PENDING',
     departmentId: '',
-    avatarUrl: 'https://picsum.photos/200/200?random=4'
+    avatarUrl: 'https://api.dicebear.com/9.x/rings/svg?seed=Chase'
   }
 ];
 

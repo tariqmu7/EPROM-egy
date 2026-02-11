@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { dataService } from '../services/store';
 import { User, Role, JobProfile, Skill, JobProfileSkill, OrgLevel, ORG_LEVEL_LABELS, Department, ORG_HIERARCHY_ORDER } from '../types';
 import { Plus, Users, Briefcase, ChevronRight, CheckCircle, Shield, ShieldCheck, X, Save, Trash2, ArrowLeft, UserPlus, Building2, Search, Edit2, UserCheck, AlertCircle, Layers, BookOpen, MoreHorizontal, LayoutGrid, Activity } from 'lucide-react';
@@ -468,6 +468,14 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
   const [formMode, setFormMode] = useState(false);
   const [formType, setFormType] = useState<'USER' | 'JOB' | 'SKILL' | 'DEPT' | null>(null);
   const [editItem, setEditItem] = useState<any>(null);
+  
+  // Search State
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Reset search when view changes
+  useEffect(() => {
+    setSearchTerm('');
+  }, [view]);
 
   const users = dataService.getAllUsers();
   const jobs = dataService.getAllJobs();
@@ -480,6 +488,35 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
       if (a.status !== 'PENDING' && b.status === 'PENDING') return 1;
       return 0;
   });
+
+  // Filtering Logic
+  const filteredUsers = sortedUsers.filter(user => 
+      searchTerm === '' ||
+      user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (depts.find(d => d.id === user.departmentId)?.name || '').toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const filteredJobs = jobs.filter(job => 
+      searchTerm === '' ||
+      job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (depts.find(d => d.id === job.departmentId)?.name || '').toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const filteredSkills = skills.filter(skill => 
+      searchTerm === '' ||
+      skill.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      skill.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (skill.assessmentQuestion || '').toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const filteredDepts = depts.filter(dept => 
+      searchTerm === '' ||
+      dept.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (users.find(u => u.id === dept.managerId)?.name || '').toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
 
   const handleEdit = (type: 'USER' | 'JOB' | 'SKILL' | 'DEPT', item: any) => {
       setFormType(type);
@@ -727,7 +764,13 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
            <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
                <div className="relative max-w-sm w-full">
                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16}/>
-                   <input type="text" placeholder="Search records..." className="w-full pl-9 pr-4 py-2 text-sm bg-white text-slate-900 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-energy-teal transition-all" />
+                   <input 
+                      type="text" 
+                      placeholder="Search records..." 
+                      className="w-full pl-9 pr-4 py-2 text-sm bg-white text-slate-900 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-energy-teal transition-all" 
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                   />
                </div>
                <button onClick={() => handleAdd(view === 'USERS' ? 'USER' : view === 'JOBS' ? 'JOB' : view === 'SKILLS' ? 'SKILL' : 'DEPT')}
                    className="bg-brand-900 hover:bg-brand-800 text-white px-4 py-2 rounded-md text-xs font-bold uppercase tracking-wide shadow-sm flex items-center gap-2 transition-all">
@@ -748,7 +791,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                        </tr>
                    </thead>
                    <tbody className="divide-y divide-slate-100 text-sm">
-                       {view === 'USERS' && sortedUsers.map(user => (
+                       {view === 'USERS' && filteredUsers.map(user => (
                            <tr key={user.id} className="hover:bg-slate-50 transition-colors group">
                                <td className="p-4 pl-6">
                                    <div className="flex items-center gap-3">
@@ -788,7 +831,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                            </tr>
                        ))}
 
-                       {view === 'JOBS' && jobs.map(job => (
+                       {view === 'JOBS' && filteredJobs.map(job => (
                            <tr key={job.id} className="hover:bg-slate-50 transition-colors group">
                                <td className="p-4 pl-6 font-bold text-brand-900 group-hover:text-energy-teal">{job.title}</td>
                                <td className="p-4 text-slate-600">{depts.find(d => d.id === job.departmentId)?.name}</td>
@@ -804,7 +847,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                            </tr>
                        ))}
 
-                       {view === 'SKILLS' && skills.map(skill => (
+                       {view === 'SKILLS' && filteredSkills.map(skill => (
                            <tr key={skill.id} className="hover:bg-slate-50 transition-colors group">
                                <td className="p-4 pl-6 font-bold text-brand-900 group-hover:text-energy-teal">{skill.name}</td>
                                <td className="p-4">
@@ -820,7 +863,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                            </tr>
                        ))}
 
-                        {view === 'DEPTS' && depts.map(d => (
+                        {view === 'DEPTS' && filteredDepts.map(d => (
                            <tr key={d.id} className="hover:bg-slate-50 transition-colors group">
                                <td className="p-4 pl-6 font-bold text-brand-900 group-hover:text-energy-teal">{d.name}</td>
                                <td className="p-4 text-slate-600">
