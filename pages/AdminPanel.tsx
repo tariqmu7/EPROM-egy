@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { dataService } from '../services/store';
 import { User, Role, JobProfile, Skill, JobProfileSkill, OrgLevel, ORG_LEVEL_LABELS, Department, ORG_HIERARCHY_ORDER } from '../types';
-import { Plus, Users, Briefcase, ChevronRight, CheckCircle, Shield, ShieldCheck, X, Save, Trash2, ArrowLeft, UserPlus, Building2, Search, Edit2, UserCheck, AlertCircle, Layers, BookOpen, MoreHorizontal, LayoutGrid, Activity } from 'lucide-react';
+import { Plus, Users, Briefcase, ChevronRight, CheckCircle, Shield, ShieldCheck, X, Save, Trash2, ArrowLeft, UserPlus, Building2, Search, Edit2, UserCheck, AlertCircle, Layers, BookOpen, MoreHorizontal, LayoutGrid, Activity, Eye } from 'lucide-react';
 import { SearchableSelect, Option } from '../components/SearchableSelect';
 
 // --- Reusable Form Wrapper ---
@@ -16,6 +16,71 @@ const FormPage: React.FC<{ title: string; onBack: () => void; children: React.Re
       </div>
       <div className="bg-white rounded-lg shadow-panel border border-slate-200 overflow-hidden">
          {children}
+      </div>
+    </div>
+  );
+};
+
+// --- Skill Details Modal ---
+const SkillDetailsModal: React.FC<{ skill: Skill; onClose: () => void }> = ({ skill, onClose }) => {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="p-6 border-b border-slate-100 flex justify-between items-start bg-slate-50/50">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+                <h3 className="text-2xl font-bold text-brand-900">{skill.name}</h3>
+                <span className="px-2 py-1 bg-brand-100 text-brand-700 text-[10px] font-bold uppercase tracking-wide rounded border border-brand-200">
+                    {skill.category}
+                </span>
+            </div>
+            <p className="text-slate-500 text-sm italic">"{skill.assessmentQuestion || 'No assessment question defined.'}"</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full text-slate-400 hover:text-slate-600 transition-colors">
+            <X size={20} />
+          </button>
+        </div>
+        
+        <div className="p-6 max-h-[60vh] overflow-y-auto custom-scrollbar space-y-6">
+            <div className="space-y-4">
+                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <Layers size={14} /> Proficiency Levels
+                </h4>
+                <div className="grid gap-4">
+                    {[1, 2, 3, 4, 5].map((level) => {
+                        const lvlData = skill.levels[level];
+                        return (
+                            <div key={level} className="relative pl-6 border-l-2 border-slate-200 hover:border-energy-teal transition-colors group">
+                                <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-white border-2 border-slate-300 group-hover:border-energy-teal flex items-center justify-center text-[8px] font-bold text-slate-500 group-hover:text-energy-teal transition-colors">
+                                    {level}
+                                </div>
+                                <div className="mb-1">
+                                    <span className="text-sm font-bold text-brand-900">Level {level}</span>
+                                </div>
+                                <p className="text-sm text-slate-600 mb-2 leading-relaxed">
+                                    {lvlData?.description || <span className="text-slate-400 italic">No description provided.</span>}
+                                </p>
+                                {lvlData?.requiredCertificates && lvlData.requiredCertificates.length > 0 && (
+                                    <div className="flex flex-wrap gap-2 mt-2">
+                                        {lvlData.requiredCertificates.map((cert, idx) => (
+                                            <span key={idx} className="inline-flex items-center gap-1 px-2 py-1 bg-amber-50 text-amber-700 border border-amber-100 text-[10px] font-bold uppercase tracking-wide rounded">
+                                                <ShieldCheck size={10} /> {cert}
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        </div>
+
+        <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+            <button onClick={onClose} className="px-4 py-2 bg-white border border-slate-200 text-slate-600 font-bold text-xs uppercase tracking-wide rounded hover:bg-slate-50 hover:text-slate-800 transition-colors shadow-sm">
+                Close
+            </button>
+        </div>
       </div>
     </div>
   );
@@ -468,6 +533,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
   const [formMode, setFormMode] = useState(false);
   const [formType, setFormType] = useState<'USER' | 'JOB' | 'SKILL' | 'DEPT' | null>(null);
   const [editItem, setEditItem] = useState<any>(null);
+  const [viewSkill, setViewSkill] = useState<Skill | null>(null);
   
   // Search State
   const [searchTerm, setSearchTerm] = useState('');
@@ -783,10 +849,10 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                <table className="w-full text-left">
                    <thead className="bg-slate-50 text-slate-500 font-bold text-xs uppercase tracking-wider border-b border-slate-200">
                        <tr>
-                           {view === 'USERS' && <> <th className="p-4 pl-6">Employee</th> <th className="p-4">Role & Dept</th> <th className="p-4">Level</th> <th className="p-4">Status</th> </>}
-                           {view === 'JOBS' && <> <th className="p-4 pl-6">Job Title</th> <th className="p-4">Department</th> <th className="p-4">Complexity</th> </>}
-                           {view === 'SKILLS' && <> <th className="p-4 pl-6">Skill Name</th> <th className="p-4">Category</th> <th className="p-4">Definition</th> </>}
-                           {view === 'DEPTS' && <> <th className="p-4 pl-6">Department Name</th> <th className="p-4">Head of Dept</th> </>}
+                           {view === 'USERS' && <><th className="p-4 pl-6">Employee</th><th className="p-4">Role & Dept</th><th className="p-4">Level</th><th className="p-4">Status</th></>}
+                           {view === 'JOBS' && <><th className="p-4 pl-6">Job Title</th><th className="p-4">Department</th><th className="p-4">Complexity</th></>}
+                           {view === 'SKILLS' && <><th className="p-4 pl-6">Skill Name</th><th className="p-4">Category</th><th className="p-4">Definition</th></>}
+                           {view === 'DEPTS' && <><th className="p-4 pl-6">Department Name</th><th className="p-4">Head of Dept</th></>}
                            <th className="p-4 text-right pr-6">Actions</th>
                        </tr>
                    </thead>
@@ -829,9 +895,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                                    </div>
                                </td>
                            </tr>
-                       ))}
-
-                       {view === 'JOBS' && filteredJobs.map(job => (
+                       ))}{view === 'JOBS' && filteredJobs.map(job => (
                            <tr key={job.id} className="hover:bg-slate-50 transition-colors group">
                                <td className="p-4 pl-6 font-bold text-brand-900 group-hover:text-energy-teal">{job.title}</td>
                                <td className="p-4 text-slate-600">{depts.find(d => d.id === job.departmentId)?.name}</td>
@@ -845,9 +909,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                                    </div>
                                </td>
                            </tr>
-                       ))}
-
-                       {view === 'SKILLS' && filteredSkills.map(skill => (
+                       ))}{view === 'SKILLS' && filteredSkills.map(skill => (
                            <tr key={skill.id} className="hover:bg-slate-50 transition-colors group">
                                <td className="p-4 pl-6 font-bold text-brand-900 group-hover:text-energy-teal">{skill.name}</td>
                                <td className="p-4">
@@ -856,14 +918,13 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                                <td className="p-4 text-slate-500 truncate max-w-xs text-xs">{skill.assessmentQuestion || '-'}</td>
                                <td className="p-4 text-right pr-6">
                                    <div className="flex items-center justify-end gap-2">
+                                       <button onClick={() => setViewSkill(skill)} className="text-slate-400 hover:text-energy-teal p-2 transition-colors" title="View Details"><Eye size={16}/></button>
                                        <button onClick={() => handleEdit('SKILL', skill)} className="text-slate-400 hover:text-blue-600 p-2" title="Edit"><Edit2 size={16}/></button>
                                        <button onClick={() => handleDelete('SKILL', skill.id)} className="text-slate-400 hover:text-red-600 p-2" title="Delete"><Trash2 size={16}/></button>
                                    </div>
                                </td>
                            </tr>
-                       ))}
-
-                        {view === 'DEPTS' && filteredDepts.map(d => (
+                       ))}{view === 'DEPTS' && filteredDepts.map(d => (
                            <tr key={d.id} className="hover:bg-slate-50 transition-colors group">
                                <td className="p-4 pl-6 font-bold text-brand-900 group-hover:text-energy-teal">{d.name}</td>
                                <td className="p-4 text-slate-600">
@@ -881,6 +942,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                </table>
            </div>
        </div>
+       {viewSkill && <SkillDetailsModal skill={viewSkill} onClose={() => setViewSkill(null)} />}
     </div>
   );
 };
