@@ -61,7 +61,10 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
                 </>
               ) : (
                 <>
-                  <NavItem id="emp-dashboard" label="Dashboard" icon={LayoutDashboard} />
+                  <NavItem id="emp-dashboard" label="My Dashboard" icon={LayoutDashboard} />
+                  {user.role === Role.MANAGER && (
+                    <NavItem id="manager-dashboard" label="My Team" icon={Users} />
+                  )}
                   <NavItem id="emp-assessment" label="Assessments" icon={ClipboardList} />
                 </>
               )}

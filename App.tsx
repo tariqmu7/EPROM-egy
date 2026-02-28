@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Layout } from './components/Layout';
 import { EmployeeDashboard } from './pages/EmployeeDashboard';
+import { ManagerDashboard } from './pages/ManagerDashboard';
 import { AssessmentPortal } from './pages/AssessmentPortal';
 import { AdminPanel } from './pages/AdminPanel';
 import { dataService, CONFIG } from './services/store';
@@ -44,6 +45,8 @@ const App: React.FC = () => {
                 // Set default tab based on role
                 if (result.user.role === Role.ADMIN) {
                     setActiveTab('admin-dashboard');
+                } else if (result.user.role === Role.MANAGER) {
+                    setActiveTab('manager-dashboard');
                 } else {
                     setActiveTab('emp-dashboard');
                 }
@@ -212,6 +215,7 @@ const App: React.FC = () => {
   const renderContent = () => {
     switch(activeTab) {
         case 'emp-dashboard': return <EmployeeDashboard user={user} />;
+        case 'manager-dashboard': return <ManagerDashboard user={user} />;
         case 'emp-assessment': return <AssessmentPortal currentUser={user} />;
         // Admin Views - Mapped to sidebar IDs
         case 'admin-dashboard': return <AdminPanel view="OVERVIEW" onNavigate={setActiveTab} />;
