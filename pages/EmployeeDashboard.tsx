@@ -1,8 +1,8 @@
 import React from 'react';
 import { User, JobProfile, Skill } from '../types';
 import { dataService } from '../services/store';
-import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Tooltip, BarChart, CartesianGrid, XAxis, YAxis, Bar, Legend } from 'recharts';
-import { AlertCircle, CheckCircle, Award, BookOpen, Activity, TrendingUp } from 'lucide-react';
+import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Tooltip, BarChart, CartesianGrid, XAxis, YAxis, Bar, Legend, Cell } from 'recharts';
+import { AlertCircle, CheckCircle, Award, BookOpen, Activity, TrendingUp, Users, PlayCircle, Calendar, ArrowRight, Download, FileText } from 'lucide-react';
 
 interface EmployeeDashboardProps {
   user: User;
@@ -66,13 +66,85 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user }) =>
   const recommendations = gaps.map(g => {
     const nextLevel = g.current + 1;
     const levelDetails = g.skill?.levels[nextLevel <= 5 ? nextLevel : 5];
+    const isCritical = g.gap > 1;
+
+    // Mock specific actions based on skill category
+    const actions = [];
+    if (g.skill?.category === 'Safety') {
+        actions.push({ type: 'TRAINING', label: 'HSE Advanced Module', duration: '2 Days', icon: BookOpen });
+        actions.push({ type: 'OJT', label: 'Site Safety Walkthrough', duration: '4 Hours', icon: Activity });
+    } else if (g.skill?.category === 'Technical') {
+        actions.push({ type: 'TRAINING', label: 'Technical Certification Course', duration: '5 Days', icon: PlayCircle });
+        actions.push({ type: 'MENTORING', label: 'Shadow Senior Engineer', duration: '1 Week', icon: Users });
+    } else {
+        actions.push({ type: 'READING', label: 'Management SOPs', duration: '2 Hours', icon: BookOpen });
+    }
+
     return {
       skillName: g.skill?.name,
+      category: g.skill?.category,
+      currentLevel: g.current,
       targetLevel: nextLevel,
+      gapSize: g.gap,
+      isCritical,
       certs: levelDetails?.requiredCertificates || [],
-      description: levelDetails?.description
+      description: levelDetails?.description,
+      suggestedActions: actions
     };
   });
+
+  // Export Handlers
+  const handleExportReport = () => {
+    const headers = ['Skill Name', 'Category', 'Required Level', 'Current Level', 'Gap', 'Status'];
+    const rows = skillAnalysis.map(s => [
+      s.skill?.name || 'Unknown',
+      s.skill?.category || 'Unknown',
+      s.required.toString(),
+      s.current.toString(),
+      s.gap.toString(),
+      s.gap > 0 ? 'Gap' : 'Compliant'
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `Competency_Report_${user.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  };
+
+  const handleExportPlan = () => {
+    const headers = ['Skill', 'Target Level', 'Gap Size', 'Action Type', 'Action Item', 'Duration'];
+    const rows: string[][] = [];
+
+    recommendations.forEach(rec => {
+        rec.suggestedActions.forEach(action => {
+            rows.push([
+                rec.skillName || 'Unknown',
+                rec.targetLevel.toString(),
+                rec.gapSize.toString(),
+                action.type,
+                action.label,
+                action.duration
+            ]);
+        });
+    });
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `Development_Plan_${user.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  };
 
   // Custom Chart Tooltip
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -98,157 +170,165 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user }) =>
       {/* Dashboard Header */}
       <div className="flex flex-col md:flex-row justify-between items-end border-b border-slate-200 pb-6">
         <div>
-          <h2 className="text-3xl font-bold text-brand-900 tracking-tight">Competency Dashboard</h2>
+          <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Competency Dashboard</h2>
           <div className="flex items-center gap-2 mt-2 text-sm text-slate-500">
-             <span className="bg-brand-100 text-brand-700 px-2 py-0.5 rounded font-bold uppercase text-[10px] tracking-wider">{userLevel}</span>
+             <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded font-bold uppercase text-[10px] tracking-wider">{userLevel}</span>
              <span>{jobProfile.title}</span>
              <span className="text-slate-300">•</span>
              <span>{dataService.getAllDepartments().find(d => d.id === user.departmentId)?.name}</span>
           </div>
         </div>
         <div className="flex gap-2">
-            <button className="bg-white border border-slate-200 hover:border-brand-500 text-slate-600 px-4 py-2 rounded shadow-sm text-sm font-medium transition-all">Export Report</button>
-            <button className="bg-brand-900 text-white px-4 py-2 rounded shadow-sm text-sm font-bold hover:bg-brand-800 transition-all">Development Plan</button>
+            <button 
+                onClick={handleExportReport}
+                className="whitespace-nowrap bg-white border border-slate-200 hover:border-teal-500 text-slate-600 px-4 py-2 rounded shadow-sm text-sm font-medium transition-all flex items-center gap-2"
+            >
+                <Download size={16} /> Export Report
+            </button>
+            <button 
+                onClick={handleExportPlan}
+                className="whitespace-nowrap bg-teal-600 text-white px-4 py-2 rounded shadow-sm text-sm font-bold hover:bg-teal-700 transition-all flex items-center gap-2"
+            >
+                <FileText size={16} /> Development Plan
+            </button>
         </div>
       </div>
 
       {/* KPI Cards - Industrial Style */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-lg shadow-panel border-t-4 border-energy-teal">
+        <div className="bg-white p-6 rounded-lg shadow-panel border-t-4 border-teal-500">
           <div className="flex justify-between items-start mb-4">
             <div>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Compliance Rate</p>
-              <h3 className="text-4xl font-bold text-brand-900 mt-1">
-                {Math.round((compliant.length / skillAnalysis.length) * 100)}<span className="text-xl text-slate-400 font-normal">%</span>
+              <h3 className="text-4xl font-bold text-slate-900 mt-1">
+                {skillAnalysis.length > 0 ? Math.round((compliant.length / skillAnalysis.length) * 100) : 0}<span className="text-xl text-slate-400 font-normal">%</span>
               </h3>
             </div>
-            <div className="p-2 bg-slate-50 rounded-full text-energy-teal">
+            <div className="p-2 bg-slate-50 rounded-full text-teal-600">
               <CheckCircle size={24} />
             </div>
           </div>
           <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-             <div className="bg-energy-teal h-full" style={{ width: `${(compliant.length / skillAnalysis.length) * 100}%` }}></div>
+             <div className="bg-teal-500 h-full" style={{ width: `${skillAnalysis.length > 0 ? (compliant.length / skillAnalysis.length) * 100 : 0}%` }}></div>
           </div>
           <p className="text-xs text-slate-500 mt-3 font-medium flex items-center gap-1">
-             <span className="text-energy-teal">●</span> {compliant.length} skills fully compliant
+             <span className="text-teal-600">●</span> {compliant.length} skills fully compliant
           </p>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-panel border-t-4 border-energy-red">
+        <div className="bg-white p-6 rounded-lg shadow-panel border-t-4 border-red-500">
           <div className="flex justify-between items-start mb-4">
             <div>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Critical Gaps</p>
-              <h3 className="text-4xl font-bold text-brand-900 mt-1">{gaps.length}</h3>
+              <h3 className="text-4xl font-bold text-slate-900 mt-1">{gaps.length}</h3>
             </div>
-            <div className="p-2 bg-slate-50 rounded-full text-energy-red">
+            <div className="p-2 bg-slate-50 rounded-full text-red-500">
               <AlertCircle size={24} />
             </div>
           </div>
           <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-             <div className="bg-energy-red h-full" style={{ width: `${(gaps.length / skillAnalysis.length) * 100}%` }}></div>
+             <div className="bg-red-500 h-full" style={{ width: `${skillAnalysis.length > 0 ? (gaps.length / skillAnalysis.length) * 100 : 0}%` }}></div>
           </div>
           <p className="text-xs text-slate-500 mt-3 font-medium flex items-center gap-1">
-             <span className="text-energy-red">●</span> Requires immediate action
+             <span className="text-red-500">●</span> Requires immediate action
           </p>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-panel border-t-4 border-energy-gold">
+        <div className="bg-white p-6 rounded-lg shadow-panel border-t-4 border-amber-400">
           <div className="flex justify-between items-start mb-4">
             <div>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Certifications Needed</p>
-              <h3 className="text-4xl font-bold text-brand-900 mt-1">
+              <h3 className="text-4xl font-bold text-slate-900 mt-1">
                 {recommendations.reduce((acc, curr) => acc + curr.certs.length, 0)}
               </h3>
             </div>
-            <div className="p-2 bg-slate-50 rounded-full text-energy-gold">
+            <div className="p-2 bg-slate-50 rounded-full text-amber-400">
               <Award size={24} />
             </div>
           </div>
           <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-             <div className="bg-energy-gold h-full" style={{ width: '60%' }}></div>
+             <div className="bg-amber-400 h-full" style={{ width: `${Math.min(recommendations.reduce((acc, curr) => acc + curr.certs.length, 0) * 10, 100)}%` }}></div>
           </div>
            <p className="text-xs text-slate-500 mt-3 font-medium flex items-center gap-1">
-             <span className="text-energy-gold">●</span> To reach next level
+             <span className="text-amber-400">●</span> To reach next level
           </p>
-        </div>
-      </div>
-
-      {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Radar Chart */}
-        <div className="bg-white p-6 rounded-lg shadow-panel border border-slate-100">
-          <div className="flex items-center justify-between mb-6">
-             <h4 className="font-bold text-brand-900 flex items-center gap-2">
-                <Activity size={18} className="text-energy-teal"/> Skill Profile Visualization
-             </h4>
-          </div>
-          <div className="h-80 w-full relative">
-            <ResponsiveContainer width="100%" height="100%">
-              <RadarChart cx="50%" cy="50%" outerRadius="75%" data={chartData}>
-                <PolarGrid gridType="polygon" stroke="#e2e8f0" />
-                <PolarAngleAxis dataKey="subject" tick={{fontSize: 11, fill: '#64748b', fontWeight: 600}} />
-                <PolarRadiusAxis angle={30} domain={[0, 5]} tick={false} axisLine={false} />
-                <Radar name="Current" dataKey="Current" stroke="#0d9488" strokeWidth={2} fill="#0d9488" fillOpacity={0.4} />
-                <Radar name="Required" dataKey="Required" stroke="#0f172a" strokeWidth={2} fill="transparent" strokeDasharray="4 4" />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend iconType="circle" wrapperStyle={{paddingTop: '10px', fontSize: '12px'}} />
-              </RadarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Detailed Gap Bar Chart */}
-        <div className="bg-white p-6 rounded-lg shadow-panel border border-slate-100">
-           <div className="flex items-center justify-between mb-6">
-             <h4 className="font-bold text-brand-900 flex items-center gap-2">
-                <TrendingUp size={18} className="text-energy-teal"/> Gap Analysis Detail
-             </h4>
-          </div>
-          <div className="h-80 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} layout="vertical" margin={{ left: 10, right: 10 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
-                <XAxis type="number" domain={[0, 5]} hide />
-                <YAxis dataKey="subject" type="category" width={120} tick={{fontSize: 11, fill: '#475569', fontWeight: 500}} interval={0} />
-                <Tooltip content={<CustomTooltip />} />
-                <Legend iconType="circle" wrapperStyle={{paddingTop: '10px', fontSize: '12px'}} />
-                <Bar dataKey="Current" fill="#0d9488" name="Current Level" barSize={12} radius={[0, 4, 4, 0]} />
-                <Bar dataKey="Required" fill="#cbd5e1" name="Target Level" barSize={12} radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
         </div>
       </div>
 
       {/* Recommendations List */}
       <div className="bg-white rounded-lg shadow-panel border border-slate-100 overflow-hidden">
         <div className="p-5 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
-          <h4 className="font-bold text-brand-900">Action Plan & Recommendations</h4>
+          <h4 className="font-bold text-slate-900">Action Plan & Recommendations</h4>
           <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Generated by ERPOM Engine</span>
         </div>
         <div className="divide-y divide-slate-100">
           {recommendations.length > 0 ? (
             recommendations.map((rec, idx) => (
-              <div key={idx} className="p-5 flex flex-col md:flex-row gap-6 hover:bg-slate-50 transition-colors group">
-                 <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                       <span className="bg-red-50 text-red-700 border border-red-100 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wide">Gap Detected</span>
-                       <h5 className="font-bold text-brand-900 text-sm group-hover:text-energy-teal transition-colors">{rec.skillName}</h5>
-                    </div>
-                    <p className="text-sm text-slate-600 mb-3 leading-relaxed">Targeting Level {rec.targetLevel}: {rec.description}</p>
-                    <div className="flex flex-wrap gap-2">
-                      {rec.certs.map((cert, cIdx) => (
-                        <span key={cIdx} className="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200">
-                          <Award size={12} className="text-energy-gold" />
-                          {cert}
-                        </span>
-                      ))}
-                    </div>
+              <div key={idx} className="p-6 hover:bg-slate-50 transition-colors group">
+                 <div className="flex flex-col md:flex-row gap-6 mb-4">
+                     <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                           {rec.isCritical ? (
+                               <span className="bg-red-50 text-red-700 border border-red-100 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wide flex items-center gap-1">
+                                   <AlertCircle size={10} /> Critical Gap
+                               </span>
+                           ) : (
+                               <span className="bg-amber-50 text-amber-700 border border-amber-100 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wide flex items-center gap-1">
+                                   <TrendingUp size={10} /> Development Area
+                               </span>
+                           )}
+                           <span className="text-slate-300">|</span>
+                           <h5 className="font-bold text-slate-900 text-base group-hover:text-teal-600 transition-colors">{rec.skillName}</h5>
+                        </div>
+                        <p className="text-sm text-slate-600 mb-4 leading-relaxed max-w-3xl">
+                            <span className="font-semibold text-slate-900">Goal:</span> Reach Level {rec.targetLevel} - {rec.description}
+                        </p>
+                        
+                        {rec.certs.length > 0 && (
+                            <div className="flex flex-wrap gap-2 mb-4">
+                              {rec.certs.map((cert, cIdx) => (
+                                <span key={cIdx} className="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200">
+                                  <Award size={12} className="text-amber-500" />
+                                  {cert}
+                                </span>
+                              ))}
+                            </div>
+                        )}
+                     </div>
+                     <div className="flex items-start justify-end">
+                        <div className="text-right">
+                            <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Gap Size</div>
+                            <div className="text-2xl font-bold text-slate-900">{rec.gapSize} <span className="text-sm font-normal text-slate-400">Levels</span></div>
+                        </div>
+                     </div>
                  </div>
-                 <div className="flex items-center">
-                    <button className="bg-white hover:bg-brand-900 hover:text-white border border-slate-300 text-slate-700 px-4 py-2 rounded text-xs font-bold uppercase tracking-wide transition-all shadow-sm">
-                      Enroll Module
-                    </button>
+
+                 {/* Action Items */}
+                 <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
+                    <h6 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                        <Activity size={12} /> Recommended Actions
+                    </h6>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {rec.suggestedActions.map((action, aIdx) => (
+                            <div key={aIdx} className="bg-white p-3 rounded border border-slate-200 flex items-center justify-between hover:border-teal-300 transition-colors cursor-pointer group/action">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded bg-teal-50 text-teal-600 flex items-center justify-center group-hover/action:bg-teal-600 group-hover/action:text-white transition-colors">
+                                        <action.icon size={16} />
+                                    </div>
+                                    <div>
+                                        <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">{action.type}</div>
+                                        <div className="text-sm font-semibold text-slate-700">{action.label}</div>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <span className="text-xs font-medium text-slate-400 bg-slate-50 px-2 py-1 rounded border border-slate-100 flex items-center gap-1">
+                                        <Calendar size={10} /> {action.duration}
+                                    </span>
+                                    <ArrowRight size={14} className="text-slate-300 group-hover/action:text-teal-500" />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                  </div>
               </div>
             ))
@@ -257,7 +337,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user }) =>
               <div className="mx-auto w-12 h-12 bg-green-50 text-green-600 rounded-full flex items-center justify-center mb-4 border border-green-100">
                 <CheckCircle size={24} />
               </div>
-              <h3 className="text-lg font-bold text-brand-900">100% Compliant</h3>
+              <h3 className="text-lg font-bold text-slate-900">100% Compliant</h3>
               <p className="text-slate-500 text-sm mt-1">Excellent work. You meet all competency requirements for your current role.</p>
             </div>
           )}

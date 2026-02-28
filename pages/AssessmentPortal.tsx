@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, JobProfile } from '../types';
+import { User, JobProfile, PROFICIENCY_LABELS } from '../types';
 import { dataService } from '../services/store';
 import { UserCircle, Send, Star, Info, ChevronUp, ChevronDown, Check, Clock, History, FileText } from 'lucide-react';
 
@@ -247,7 +247,7 @@ export const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ currentUser 
                                                     />
                                                     <div className="flex-1">
                                                         <div className="flex justify-between">
-                                                            <span className={`text-sm font-bold ${isSelected ? 'text-teal-800' : 'text-slate-700'}`}>Level {level}</span>
+                                                            <span className={`text-sm font-bold ${isSelected ? 'text-teal-800' : 'text-slate-700'}`}>Level {level}: {PROFICIENCY_LABELS[level]}</span>
                                                             {isTarget && <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded uppercase">Target</span>}
                                                         </div>
                                                         <p className={`text-sm mt-1 ${isSelected ? 'text-teal-700' : 'text-slate-500'}`}>

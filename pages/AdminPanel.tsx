@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { dataService } from '../services/store';
-import { User, Role, JobProfile, Skill, JobProfileSkill, OrgLevel, ORG_LEVEL_LABELS, Department, ORG_HIERARCHY_ORDER } from '../types';
+import { User, Role, JobProfile, Skill, JobProfileSkill, OrgLevel, ORG_LEVEL_LABELS, Department, ORG_HIERARCHY_ORDER, PROFICIENCY_LABELS } from '../types';
+import { PROFICIENCY_DEFINITIONS } from '../constants';
 import { Plus, Users, Briefcase, ChevronRight, CheckCircle, Shield, ShieldCheck, X, Save, Trash2, ArrowLeft, UserPlus, Building2, Search, Edit2, UserCheck, AlertCircle, Layers, BookOpen, MoreHorizontal, LayoutGrid, Activity, Eye } from 'lucide-react';
 import { SearchableSelect, Option } from '../components/SearchableSelect';
 
@@ -12,7 +13,7 @@ const FormPage: React.FC<{ title: string; onBack: () => void; children: React.Re
         <button onClick={onBack} className="p-2 rounded-full hover:bg-slate-200 text-slate-500 transition-colors">
           <ArrowLeft size={20} />
         </button>
-        <h2 className="text-2xl font-bold text-brand-900">{title}</h2>
+        <h2 className="text-2xl font-bold text-slate-900">{title}</h2>
       </div>
       <div className="bg-white rounded-lg shadow-panel border border-slate-200 overflow-hidden">
          {children}
@@ -25,12 +26,12 @@ const FormPage: React.FC<{ title: string; onBack: () => void; children: React.Re
 const SkillDetailsModal: React.FC<{ skill: Skill; onClose: () => void }> = ({ skill, onClose }) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-        <div className="p-6 border-b border-slate-100 flex justify-between items-start bg-slate-50/50">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+        <div className="p-6 border-b border-slate-100 flex justify-between items-start bg-slate-50/50 shrink-0">
           <div>
             <div className="flex items-center gap-3 mb-2">
-                <h3 className="text-2xl font-bold text-brand-900">{skill.name}</h3>
-                <span className="px-2 py-1 bg-brand-100 text-brand-700 text-[10px] font-bold uppercase tracking-wide rounded border border-brand-200">
+                <h3 className="text-2xl font-bold text-slate-900">{skill.name}</h3>
+                <span className="px-2 py-1 bg-teal-50 text-teal-700 text-[10px] font-bold uppercase tracking-wide rounded border border-teal-100">
                     {skill.category}
                 </span>
             </div>
@@ -41,7 +42,7 @@ const SkillDetailsModal: React.FC<{ skill: Skill; onClose: () => void }> = ({ sk
           </button>
         </div>
         
-        <div className="p-6 max-h-[60vh] overflow-y-auto custom-scrollbar space-y-6">
+        <div className="p-6 overflow-y-auto custom-scrollbar space-y-6 flex-1">
             <div className="space-y-4">
                 <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
                     <Layers size={14} /> Proficiency Levels
@@ -49,16 +50,21 @@ const SkillDetailsModal: React.FC<{ skill: Skill; onClose: () => void }> = ({ sk
                 <div className="grid gap-4">
                     {[1, 2, 3, 4, 5].map((level) => {
                         const lvlData = skill.levels[level];
+                        // @ts-ignore
+                        const genericDef = PROFICIENCY_DEFINITIONS[level];
                         return (
-                            <div key={level} className="relative pl-6 border-l-2 border-slate-200 hover:border-energy-teal transition-colors group">
-                                <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-white border-2 border-slate-300 group-hover:border-energy-teal flex items-center justify-center text-[8px] font-bold text-slate-500 group-hover:text-energy-teal transition-colors">
+                            <div key={level} className="relative pl-6 border-l-2 border-slate-200 hover:border-teal-500 transition-colors group">
+                                <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-white border-2 border-slate-300 group-hover:border-teal-500 flex items-center justify-center text-[8px] font-bold text-slate-500 group-hover:text-teal-500 transition-colors">
                                     {level}
                                 </div>
                                 <div className="mb-1">
-                                    <span className="text-sm font-bold text-brand-900">Level {level}</span>
+                                    <span className="text-sm font-bold text-slate-900">Level {level}: {PROFICIENCY_LABELS[level]}</span>
                                 </div>
+                                <p className="text-xs text-slate-400 mb-2 italic border-l-2 border-slate-100 pl-2">
+                                    {genericDef?.description}
+                                </p>
                                 <p className="text-sm text-slate-600 mb-2 leading-relaxed">
-                                    {lvlData?.description || <span className="text-slate-400 italic">No description provided.</span>}
+                                    {lvlData?.description || <span className="text-slate-400 italic">No specific description provided.</span>}
                                 </p>
                                 {lvlData?.requiredCertificates && lvlData.requiredCertificates.length > 0 && (
                                     <div className="flex flex-wrap gap-2 mt-2">
@@ -76,7 +82,7 @@ const SkillDetailsModal: React.FC<{ skill: Skill; onClose: () => void }> = ({ sk
             </div>
         </div>
 
-        <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+        <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end shrink-0">
             <button onClick={onClose} className="px-4 py-2 bg-white border border-slate-200 text-slate-600 font-bold text-xs uppercase tracking-wide rounded hover:bg-slate-50 hover:text-slate-800 transition-colors shadow-sm">
                 Close
             </button>
@@ -159,7 +165,7 @@ const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void,
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Full Name</label>
-                    <input required type="text" className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-md focus:ring-2 focus:ring-energy-teal focus:border-transparent outline-none transition-all placeholder:text-slate-400" 
+                    <input required type="text" className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-md focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition-all placeholder:text-slate-400" 
                         value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="e.g. John Doe"/>
                 </div>
                 <div>
@@ -167,7 +173,7 @@ const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void,
                     <input 
                         required 
                         type="email" 
-                        className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-energy-teal outline-none transition-all placeholder:text-slate-400 ${!isNewUser ? 'bg-slate-50 text-slate-500 border-slate-200' : 'bg-white text-slate-900 border-slate-200'}`} 
+                        className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-teal-500 outline-none transition-all placeholder:text-slate-400 ${!isNewUser ? 'bg-slate-50 text-slate-500 border-slate-200' : 'bg-white text-slate-900 border-slate-200'}`} 
                         value={formData.email || ''} 
                         onChange={e => isNewUser && setFormData({...formData, email: e.target.value})}
                         readOnly={!isNewUser} 
@@ -177,14 +183,14 @@ const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void,
             </div>
             
             <div className="p-6 bg-slate-50 rounded-lg border border-slate-100 space-y-6">
-                <h4 className="font-bold text-brand-900 flex items-center gap-2 border-b border-slate-200 pb-2">
-                    <Shield size={16} className="text-energy-teal"/>
+                <h4 className="font-bold text-slate-900 flex items-center gap-2 border-b border-slate-200 pb-2">
+                    <Shield size={16} className="text-teal-600"/>
                     Organizational Role
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">System Role</label>
-                        <select className="w-full px-3 py-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-energy-teal outline-none bg-white text-slate-900"
+                        <select className="w-full px-3 py-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-teal-500 outline-none bg-white text-slate-900"
                             value={formData.role} onChange={e => setFormData({...formData, role: e.target.value as Role})}>
                             <option value={Role.EMPLOYEE}>Employee</option>
                             <option value={Role.MANAGER}>Manager</option>
@@ -202,7 +208,7 @@ const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void,
                         <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Hierarchy Level</label>
                         <select 
                             required
-                            className="w-full px-3 py-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-energy-teal outline-none bg-white text-slate-900"
+                            className="w-full px-3 py-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-teal-500 outline-none bg-white text-slate-900"
                             value={formData.orgLevel || ''} 
                             onChange={e => setFormData({...formData, orgLevel: e.target.value as OrgLevel})}
                         >
@@ -217,8 +223,8 @@ const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void,
             </div>
 
             <div className="p-6 bg-slate-50 rounded-lg border border-slate-100 space-y-6">
-                <h4 className="font-bold text-brand-900 flex items-center gap-2 border-b border-slate-200 pb-2">
-                    <Briefcase size={16} className="text-energy-teal"/>
+                <h4 className="font-bold text-slate-900 flex items-center gap-2 border-b border-slate-200 pb-2">
+                    <Briefcase size={16} className="text-teal-600"/>
                     Job & Reporting
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -241,7 +247,7 @@ const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void,
 
             <div className="pt-6 flex justify-end gap-3 border-t border-slate-100">
                 <button type="button" onClick={onCancel} className="px-6 py-2 text-slate-600 hover:bg-slate-100 rounded-md transition-colors font-bold uppercase tracking-wide text-xs">Cancel</button>
-                <button type="submit" className={`px-6 py-2 text-white rounded-md transition-all flex items-center gap-2 font-bold uppercase tracking-wide text-xs shadow-md hover:shadow-lg ${isPending ? 'bg-energy-teal hover:bg-teal-700' : 'bg-brand-900 hover:bg-brand-800'}`}>
+                <button type="submit" className={`px-6 py-2 text-white rounded-md transition-all flex items-center gap-2 font-bold uppercase tracking-wide text-xs shadow-md hover:shadow-lg ${isPending ? 'bg-teal-600 hover:bg-teal-700' : 'bg-slate-900 hover:bg-slate-800'}`}>
                     {isPending ? <UserCheck size={16} /> : <Save size={16} />} 
                     {isPending ? 'Approve & Activate' : 'Save Employee'}
                 </button>
@@ -309,20 +315,20 @@ const JobForm: React.FC<{ initialData?: JobProfile | null, onSave: (j: JobProfil
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Job Title</label>
-          <input required className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-md focus:ring-2 focus:ring-energy-teal outline-none" 
+          <input required className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-md focus:ring-2 focus:ring-teal-500 outline-none" 
             value={formData.title || ''} onChange={e => setFormData({...formData, title: e.target.value})} />
         </div>
         <SearchableSelect label="Department" options={deptOptions} value={formData.departmentId || ''} onChange={val => setFormData({...formData, departmentId: val})} />
         <div className="md:col-span-2">
           <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Description</label>
-          <textarea className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-md focus:ring-2 focus:ring-energy-teal outline-none" rows={2}
+          <textarea className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-md focus:ring-2 focus:ring-teal-500 outline-none" rows={2}
             value={formData.description || ''} onChange={e => setFormData({...formData, description: e.target.value})} />
         </div>
       </div>
 
       <div className="border-t border-slate-200 pt-6">
-        <h4 className="font-bold text-brand-900 mb-4 flex items-center gap-2">
-            <Layers size={18} className="text-energy-teal"/> 
+        <h4 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
+            <Layers size={18} className="text-teal-600"/> 
             Competency Matrix Configuration
         </h4>
         
@@ -332,7 +338,7 @@ const JobForm: React.FC<{ initialData?: JobProfile | null, onSave: (j: JobProfil
              <div className="space-y-1">
                {ORG_HIERARCHY_ORDER.map(level => (
                  <button type="button" key={level} onClick={() => setActiveLevel(level)}
-                   className={`w-full flex justify-between items-center px-4 py-3 rounded-md text-xs font-bold transition-all border ${activeLevel === level ? 'bg-brand-900 text-white border-brand-900 shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}>
+                   className={`w-full flex justify-between items-center px-4 py-3 rounded-md text-xs font-bold transition-all border ${activeLevel === level ? 'bg-slate-900 text-white border-slate-900 shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'}`}>
                     <span>{ORG_LEVEL_LABELS[level]}</span>
                     <span className={`text-[10px] px-1.5 py-0.5 rounded ${activeLevel === level ? 'bg-white/20' : 'bg-slate-100'}`}>{level}</span>
                  </button>
@@ -343,7 +349,7 @@ const JobForm: React.FC<{ initialData?: JobProfile | null, onSave: (j: JobProfil
           <div className="flex-1 bg-slate-50 rounded-lg border border-slate-200 p-6">
              <div className="flex justify-between items-center mb-4">
                <div>
-                  <h5 className="font-bold text-brand-900">Requirements: {ORG_LEVEL_LABELS[activeLevel]}</h5>
+                  <h5 className="font-bold text-slate-900">Requirements: {ORG_LEVEL_LABELS[activeLevel]}</h5>
                   <p className="text-xs text-slate-500">Define mandatory skills for this position level.</p>
                </div>
              </div>
@@ -361,12 +367,12 @@ const JobForm: React.FC<{ initialData?: JobProfile | null, onSave: (j: JobProfil
                    return (
                      <div key={req.skillId} className="bg-white p-3 rounded border border-slate-200 shadow-sm flex items-center gap-4">
                         <div className="flex-1">
-                           <p className="font-bold text-brand-900 text-sm">{skill?.name}</p>
+                           <p className="font-bold text-slate-900 text-sm">{skill?.name}</p>
                            <p className="text-[10px] text-slate-500 uppercase tracking-wide">{skill?.category}</p>
                         </div>
                         <div className="flex items-center gap-2">
                             <span className="text-[10px] font-bold text-slate-400 uppercase">Target Level</span>
-                            <select className="px-2 py-1 bg-slate-100 border border-slate-200 rounded text-sm font-bold text-brand-900 outline-none focus:ring-2 focus:ring-energy-teal"
+                            <select className="px-2 py-1 bg-slate-100 border border-slate-200 rounded text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-teal-500"
                               value={req.requiredLevel} onChange={(e) => handleUpdateReq(req.skillId, parseInt(e.target.value))}>
                                {[1,2,3,4,5].map(v => <option key={v} value={v}>{v}</option>)}
                             </select>
@@ -382,7 +388,7 @@ const JobForm: React.FC<{ initialData?: JobProfile | null, onSave: (j: JobProfil
 
       <div className="pt-6 flex justify-end gap-3 border-t border-slate-100">
           <button type="button" onClick={onCancel} className="px-6 py-2 text-slate-600 hover:bg-slate-100 rounded-md font-bold uppercase tracking-wide text-xs transition-colors">Cancel</button>
-          <button type="submit" className="px-6 py-2 bg-brand-900 text-white rounded-md font-bold uppercase tracking-wide text-xs shadow-md hover:bg-brand-800 flex items-center gap-2 transition-all">
+          <button type="submit" className="px-6 py-2 bg-slate-900 text-white rounded-md font-bold uppercase tracking-wide text-xs shadow-md hover:bg-slate-800 flex items-center gap-2 transition-all">
              <Save size={16} /> Save Profile
           </button>
       </div>
@@ -430,12 +436,12 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
          <div>
             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Skill Name</label>
-            <input required className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-md focus:ring-2 focus:ring-energy-teal outline-none"
+            <input required className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-md focus:ring-2 focus:ring-teal-500 outline-none"
                value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
          </div>
          <div>
             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Category</label>
-            <select className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-md focus:ring-2 focus:ring-energy-teal outline-none"
+            <select className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-md focus:ring-2 focus:ring-teal-500 outline-none"
                value={formData.category || ''} onChange={e => setFormData({...formData, category: e.target.value})}>
                 <option value="">Select...</option>
                 <option value="Technical">Technical</option>
@@ -446,38 +452,39 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
          </div>
          <div className="md:col-span-2">
             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Assessment Question</label>
-            <input className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-md focus:ring-2 focus:ring-energy-teal outline-none"
+            <input className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-md focus:ring-2 focus:ring-teal-500 outline-none"
                placeholder="e.g. How effectively does the employee..."
                value={formData.assessmentQuestion || ''} onChange={e => setFormData({...formData, assessmentQuestion: e.target.value})} />
          </div>
        </div>
 
        <div className="border-t border-slate-200 pt-6">
-          <h4 className="font-bold text-brand-900 mb-4 flex items-center gap-2">
-             <BookOpen size={18} className="text-energy-teal"/> Proficiency Definition
+          <h4 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
+             <BookOpen size={18} className="text-teal-600"/> Proficiency Definition
           </h4>
           
           <div className="bg-slate-100 p-1 rounded flex mb-6">
              {[1,2,3,4,5].map(lvl => (
                 <button key={lvl} type="button" onClick={() => setActiveTab(lvl)}
-                   className={`flex-1 py-2 text-xs font-bold rounded shadow-sm transition-all ${activeTab === lvl ? 'bg-white text-brand-900' : 'text-slate-500 hover:text-slate-700'}`}>
-                   Level {lvl}
+                   className={`flex-1 py-2 text-xs font-bold rounded shadow-sm transition-all ${activeTab === lvl ? 'bg-white text-slate-900' : 'text-slate-500 hover:text-slate-700'}`}>
+                   Level {lvl}: {PROFICIENCY_LABELS[lvl]}
                 </button>
              ))}
           </div>
 
           <div className="bg-slate-50 p-6 rounded-lg border border-slate-200">
              <div className="mb-4">
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Description</label>
-                <textarea className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-md focus:ring-2 focus:ring-energy-teal outline-none" rows={3}
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Description ({PROFICIENCY_LABELS[activeTab]})</label>
+                <textarea className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-md focus:ring-2 focus:ring-teal-500 outline-none" rows={3}
                    value={formData.levels?.[activeTab as any]?.description || ''}
                    onChange={e => updateLevel(activeTab, 'description', e.target.value)}
-                   placeholder={`Describe what a Level ${activeTab} employee can do...`}
+                   // @ts-ignore
+                   placeholder={PROFICIENCY_DEFINITIONS[activeTab]?.description || `Describe what a Level ${activeTab} (${PROFICIENCY_LABELS[activeTab]}) employee can do...`}
                 />
              </div>
              <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Required Certificates (Comma Separated)</label>
-                <input className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-md focus:ring-2 focus:ring-energy-teal outline-none"
+                <input className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-md focus:ring-2 focus:ring-teal-500 outline-none"
                    placeholder="e.g. PMP, NEBOSH"
                    value={formData.levels?.[activeTab as any]?.requiredCertificates?.join(', ') || ''}
                    onChange={e => updateLevel(activeTab, 'requiredCertificates', e.target.value.split(',').map((s: string) => s.trim()).filter(Boolean))}
@@ -488,7 +495,7 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
 
        <div className="pt-6 flex justify-end gap-3 border-t border-slate-100">
           <button type="button" onClick={onCancel} className="px-6 py-2 text-slate-600 hover:bg-slate-100 rounded-md font-bold uppercase tracking-wide text-xs transition-colors">Cancel</button>
-          <button type="submit" className="px-6 py-2 bg-brand-900 text-white rounded-md font-bold uppercase tracking-wide text-xs shadow-md hover:bg-brand-800 flex items-center gap-2 transition-all">
+          <button type="submit" className="px-6 py-2 bg-slate-900 text-white rounded-md font-bold uppercase tracking-wide text-xs shadow-md hover:bg-slate-800 flex items-center gap-2 transition-all">
              <Save size={16} /> Save Definition
           </button>
       </div>
@@ -512,14 +519,14 @@ const DepartmentForm: React.FC<{ initialData?: Department | null, onSave: (d: De
         <form onSubmit={handleSubmit} className="p-8 space-y-6 bg-white text-sm">
             <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Department Name</label>
-                <input required className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-md focus:ring-2 focus:ring-energy-teal outline-none"
+                <input required className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-md focus:ring-2 focus:ring-teal-500 outline-none"
                     value={name} onChange={e => setName(e.target.value)} />
             </div>
             <SearchableSelect label="Department Head (Optional)" options={managerOptions} value={managerId} onChange={setManagerId} placeholder="Select Manager..." />
             
             <div className="pt-6 flex justify-end gap-3 border-t border-slate-100">
                 <button type="button" onClick={onCancel} className="px-6 py-2 text-slate-600 hover:bg-slate-100 rounded-md font-bold uppercase tracking-wide text-xs transition-colors">Cancel</button>
-                <button type="submit" className="px-6 py-2 bg-brand-900 text-white rounded-md font-bold uppercase tracking-wide text-xs shadow-md hover:bg-brand-800 flex items-center gap-2 transition-all">
+                <button type="submit" className="px-6 py-2 bg-slate-900 text-white rounded-md font-bold uppercase tracking-wide text-xs shadow-md hover:bg-slate-800 flex items-center gap-2 transition-all">
                     <Save size={16} /> Save Dept
                 </button>
             </div>
@@ -655,8 +662,8 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
   if (view === 'OVERVIEW') {
       return (
         <div className="space-y-8">
-            <div className="relative overflow-hidden rounded-2xl bg-brand-900 p-8 shadow-2xl">
-                <div className="absolute top-0 right-0 -mt-10 -mr-10 h-64 w-64 rounded-full bg-energy-teal/10 blur-3xl"></div>
+            <div className="relative overflow-hidden rounded-2xl bg-slate-900 p-8 shadow-2xl">
+                <div className="absolute top-0 right-0 -mt-10 -mr-10 h-64 w-64 rounded-full bg-teal-500/10 blur-3xl"></div>
                 <div className="absolute bottom-0 left-0 -mb-10 -ml-10 h-64 w-64 rounded-full bg-blue-500/10 blur-3xl"></div>
                 
                 <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
@@ -690,11 +697,11 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                             </div>
                             <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded uppercase">Active</span>
                         </div>
-                        <h3 className="font-bold text-brand-900 text-lg">Workforce Directory</h3>
+                        <h3 className="font-bold text-slate-900 text-lg">Workforce Directory</h3>
                         <p className="text-sm text-slate-500 mt-1">Manage employees & hierarchy</p>
                         
                         <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
-                            <span className="text-2xl font-bold text-brand-900">{users.length}</span>
+                            <span className="text-2xl font-bold text-slate-900">{users.length}</span>
                             <span className="text-xs font-semibold text-blue-600 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
                                 View Records <ChevronRight size={14} />
                             </span>
@@ -711,11 +718,11 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                             </div>
                              <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded uppercase">Defined</span>
                         </div>
-                        <h3 className="font-bold text-brand-900 text-lg">Job Profiles</h3>
+                        <h3 className="font-bold text-slate-900 text-lg">Job Profiles</h3>
                         <p className="text-sm text-slate-500 mt-1">Competency requirements</p>
                         
                         <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
-                            <span className="text-2xl font-bold text-brand-900">{jobs.length}</span>
+                            <span className="text-2xl font-bold text-slate-900">{jobs.length}</span>
                             <span className="text-xs font-semibold text-purple-600 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
                                 Configure <ChevronRight size={14} />
                             </span>
@@ -732,11 +739,11 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                             </div>
                              <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded uppercase">Library</span>
                         </div>
-                        <h3 className="font-bold text-brand-900 text-lg">Skill Standards</h3>
+                        <h3 className="font-bold text-slate-900 text-lg">Skill Standards</h3>
                         <p className="text-sm text-slate-500 mt-1">Proficiency levels & certs</p>
                         
                         <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
-                            <span className="text-2xl font-bold text-brand-900">{skills.length}</span>
+                            <span className="text-2xl font-bold text-slate-900">{skills.length}</span>
                             <span className="text-xs font-semibold text-emerald-600 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
                                 Manage <ChevronRight size={14} />
                             </span>
@@ -753,11 +760,11 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                             </div>
                              <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded uppercase">Units</span>
                         </div>
-                        <h3 className="font-bold text-brand-900 text-lg">Departments</h3>
+                        <h3 className="font-bold text-slate-900 text-lg">Departments</h3>
                         <p className="text-sm text-slate-500 mt-1">Org structure</p>
                         
                         <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
-                            <span className="text-2xl font-bold text-brand-900">{depts.length}</span>
+                            <span className="text-2xl font-bold text-slate-900">{depts.length}</span>
                             <span className="text-xs font-semibold text-orange-600 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
                                 Edit Structure <ChevronRight size={14} />
                             </span>
@@ -770,8 +777,8 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
             {/* Quick Actions or Analytics Row */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                    <h3 className="font-bold text-brand-900 mb-4 flex items-center gap-2">
-                        <Activity size={18} className="text-energy-teal"/> System Activity Log
+                    <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
+                        <Activity size={18} className="text-teal-600"/> System Activity Log
                     </h3>
                     <div className="space-y-4 max-h-80 overflow-y-auto custom-scrollbar">
                         {logs.length > 0 ? logs.map(log => (
@@ -788,19 +795,19 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                     </div>
                 </div>
                 
-                <div className="bg-brand-900 rounded-xl shadow-sm border border-brand-800 p-6 text-white relative overflow-hidden">
-                     <div className="absolute top-0 right-0 -mt-4 -mr-4 h-32 w-32 rounded-full bg-energy-gold/20 blur-2xl"></div>
+                <div className="bg-slate-900 rounded-xl shadow-sm border border-slate-800 p-6 text-white relative overflow-hidden">
+                     <div className="absolute top-0 right-0 -mt-4 -mr-4 h-32 w-32 rounded-full bg-amber-500/20 blur-2xl"></div>
                      <h3 className="font-bold text-white mb-2 relative z-10">Pending Actions</h3>
-                     <p className="text-brand-200 text-sm mb-6 relative z-10">There are pending user registrations requiring approval.</p>
+                     <p className="text-slate-300 text-sm mb-6 relative z-10">There are pending user registrations requiring approval.</p>
                      
                      <div className="flex items-center justify-between bg-white/10 rounded-lg p-4 backdrop-blur relative z-10">
                         <div className="flex items-center gap-3">
-                            <UserPlus size={20} className="text-energy-gold" />
+                            <UserPlus size={20} className="text-amber-500" />
                             <span className="font-bold text-xl">
                                 {users.filter(u => u.status === 'PENDING').length}
                             </span>
                         </div>
-                        <button onClick={() => onNavigate('admin-users')} className="text-xs font-bold uppercase tracking-wider bg-white text-brand-900 px-3 py-1.5 rounded hover:bg-slate-100 transition-colors">
+                        <button onClick={() => onNavigate('admin-users')} className="text-xs font-bold uppercase tracking-wider bg-white text-slate-900 px-3 py-1.5 rounded hover:bg-slate-100 transition-colors">
                             Review
                         </button>
                      </div>
@@ -815,7 +822,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
     <div className="space-y-6">
        <div className="flex justify-between items-center pb-6 border-b border-slate-200">
            <div>
-              <h2 className="text-3xl font-bold text-brand-900 tracking-tight">
+              <h2 className="text-3xl font-bold text-slate-900 tracking-tight">
                 {view === 'USERS' ? 'Workforce Management' : 
                  view === 'JOBS' ? 'Job Profiles' :
                  view === 'SKILLS' ? 'Skill Library' : 'Departments'}
@@ -833,13 +840,13 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                    <input 
                       type="text" 
                       placeholder="Search records..." 
-                      className="w-full pl-9 pr-4 py-2 text-sm bg-white text-slate-900 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-energy-teal transition-all" 
+                      className="w-full pl-9 pr-4 py-2 text-sm bg-white text-slate-900 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all" 
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                    />
                </div>
                <button onClick={() => handleAdd(view === 'USERS' ? 'USER' : view === 'JOBS' ? 'JOB' : view === 'SKILLS' ? 'SKILL' : 'DEPT')}
-                   className="bg-brand-900 hover:bg-brand-800 text-white px-4 py-2 rounded-md text-xs font-bold uppercase tracking-wide shadow-sm flex items-center gap-2 transition-all">
+                   className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-md text-xs font-bold uppercase tracking-wide shadow-sm flex items-center gap-2 transition-all">
                    <Plus size={16} /> Add {view === 'USERS' ? 'Employee' : view === 'JOBS' ? 'Profile' : view === 'SKILLS' ? 'Skill' : 'Department'}
                </button>
            </div>
@@ -861,11 +868,11 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                            <tr key={user.id} className="hover:bg-slate-50 transition-colors group">
                                <td className="p-4 pl-6">
                                    <div className="flex items-center gap-3">
-                                       <div className="w-9 h-9 rounded bg-brand-100 flex items-center justify-center text-brand-700 font-bold shadow-sm">
+                                       <div className="w-9 h-9 rounded bg-teal-50 flex items-center justify-center text-teal-700 font-bold shadow-sm">
                                            {user.avatarUrl ? <img src={user.avatarUrl} alt="" className="w-full h-full object-cover rounded"/> : user.name[0]}
                                        </div>
                                        <div>
-                                           <div className="font-bold text-brand-900 group-hover:text-energy-teal transition-colors">{user.name}</div>
+                                           <div className="font-bold text-slate-900 group-hover:text-teal-600 transition-colors">{user.name}</div>
                                            <div className="text-slate-400 text-xs">{user.email}</div>
                                        </div>
                                    </div>
@@ -897,7 +904,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                            </tr>
                        ))}{view === 'JOBS' && filteredJobs.map(job => (
                            <tr key={job.id} className="hover:bg-slate-50 transition-colors group">
-                               <td className="p-4 pl-6 font-bold text-brand-900 group-hover:text-energy-teal">{job.title}</td>
+                               <td className="p-4 pl-6 font-bold text-slate-900 group-hover:text-teal-600">{job.title}</td>
                                <td className="p-4 text-slate-600">{depts.find(d => d.id === job.departmentId)?.name}</td>
                                <td className="p-4">
                                    <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded text-[10px] font-bold uppercase tracking-wide">{Object.keys(job.requirements).length} Levels Configured</span>
@@ -911,14 +918,16 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                            </tr>
                        ))}{view === 'SKILLS' && filteredSkills.map(skill => (
                            <tr key={skill.id} className="hover:bg-slate-50 transition-colors group">
-                               <td className="p-4 pl-6 font-bold text-brand-900 group-hover:text-energy-teal">{skill.name}</td>
+                               <td className="p-4 pl-6 font-bold text-slate-900 group-hover:text-teal-600">{skill.name}</td>
                                <td className="p-4">
-                                   <span className="px-2 py-1 bg-brand-50 text-brand-700 border border-brand-100 rounded text-[10px] font-bold uppercase tracking-wide">{skill.category}</span>
+                                   <span className="px-2 py-1 bg-teal-50 text-teal-700 border border-teal-100 rounded text-[10px] font-bold uppercase tracking-wide">{skill.category}</span>
                                </td>
                                <td className="p-4 text-slate-500 truncate max-w-xs text-xs">{skill.assessmentQuestion || '-'}</td>
                                <td className="p-4 text-right pr-6">
                                    <div className="flex items-center justify-end gap-2">
-                                       <button onClick={() => setViewSkill(skill)} className="text-slate-400 hover:text-energy-teal p-2 transition-colors" title="View Details"><Eye size={16}/></button>
+                                       <button onClick={() => setViewSkill(skill)} className="text-slate-400 hover:text-teal-600 p-2 transition-colors flex items-center gap-1" title="View Details">
+                                           <Eye size={16}/> <span className="text-xs font-bold uppercase">View</span>
+                                       </button>
                                        <button onClick={() => handleEdit('SKILL', skill)} className="text-slate-400 hover:text-blue-600 p-2" title="Edit"><Edit2 size={16}/></button>
                                        <button onClick={() => handleDelete('SKILL', skill.id)} className="text-slate-400 hover:text-red-600 p-2" title="Delete"><Trash2 size={16}/></button>
                                    </div>
@@ -926,7 +935,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                            </tr>
                        ))}{view === 'DEPTS' && filteredDepts.map(d => (
                            <tr key={d.id} className="hover:bg-slate-50 transition-colors group">
-                               <td className="p-4 pl-6 font-bold text-brand-900 group-hover:text-energy-teal">{d.name}</td>
+                               <td className="p-4 pl-6 font-bold text-slate-900 group-hover:text-teal-600">{d.name}</td>
                                <td className="p-4 text-slate-600">
                                    {users.find(u => u.id === d.managerId)?.name || <span className="text-slate-400 italic text-xs">Vacant Position</span>}
                                </td>

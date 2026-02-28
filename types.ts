@@ -23,6 +23,14 @@ export const ORG_LEVEL_LABELS: Record<OrgLevel, string> = {
 // Strict Hierarchy Order (Top to Bottom)
 export const ORG_HIERARCHY_ORDER: OrgLevel[] = ['GM', 'GAM', 'DM', 'DH', 'EX', 'FP', 'FR'];
 
+export const PROFICIENCY_LABELS: Record<number, string> = {
+  1: 'Awareness',
+  2: 'Knowledge',
+  3: 'Skill',
+  4: 'Advanced',
+  5: 'Expert'
+};
+
 export interface SkillLevel {
   level: number;
   description: string;

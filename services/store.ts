@@ -18,93 +18,219 @@ export const CONFIG = {
 };
 
 // ==========================================
-// 📦 MOCK DATA (Default)
+// 📦 MOCK DATA (Egypt Oil & Gas Context)
 // ==========================================
 
 const MOCK_SKILLS: Skill[] = [
   {
-    id: 's1',
-    name: 'HSE Risk Assessment',
+    id: 's_hse_01',
+    name: 'Permit to Work (PTW) - ISSOW',
     category: 'Safety',
-    assessmentQuestion: 'How effectively does the employee identify, evaluate, and mitigate safety risks in their daily work?',
+    assessmentQuestion: 'Does the employee correctly apply the Integrated Safe System of Work (ISSOW) standards for Cold, Hot, and Confined Space permits?',
     levels: {
-      1: { level: 1, description: 'Has basic awareness of safety protocols but requires guidance.', requiredCertificates: ['HSE Intro'] },
-      2: { level: 2, description: 'Can perform standard risk assessments with supervision.', requiredCertificates: ['Risk Level 1'] },
-      3: { level: 3, description: 'Independently executes risk assessments and identifies hazards.', requiredCertificates: ['NEBOSH IGC'] },
-      4: { level: 4, description: 'Acts as a safety trainer/expert; leads safety audits.', requiredCertificates: ['Advanced Safety Audit'] },
-      5: { level: 5, description: 'Develops strategic safety policies and industry-wide standards.', requiredCertificates: ['Master Safety Director'] },
+      1: { level: 1, description: 'Can identify permit types but requires supervision to complete forms.', requiredCertificates: ['HSE Induction'] },
+      2: { level: 2, description: 'Prepares permits correctly for standard low-risk activities.', requiredCertificates: ['PTW Level 1'] },
+      3: { level: 3, description: 'Authorized Permit Applicant; identifies isolations and gas test requirements.', requiredCertificates: ['PTW Applicant License'] },
+      4: { level: 4, description: 'Permit Holder/Issuer; authorizes work and audits compliance.', requiredCertificates: ['Authorized Gas Tester (AGT)'] },
+      5: { level: 5, description: 'Site Authority; manages simultaneous operations (SIMOPS) and emergency suspensions.', requiredCertificates: ['Site Controller Cert'] },
     }
   },
   {
-    id: 's2',
-    name: 'Process Engineering',
+    id: 's_tech_01',
+    name: 'Gas Dehydration (TEG Unit)',
     category: 'Technical',
-    assessmentQuestion: 'What is the employee\'s capability regarding chemical process design, simulation, and optimization?',
+    assessmentQuestion: 'Can the employee operate and troubleshoot the Tri-Ethylene Glycol (TEG) dehydration unit to meet dew point specs?',
     levels: {
-      1: { level: 1, description: 'Understands basic concepts but cannot apply them independently.', requiredCertificates: [] },
-      2: { level: 2, description: 'Performs basic calculations and follows established procedures.', requiredCertificates: ['ChemEng 101'] },
-      3: { level: 3, description: 'Designs systems and runs simulations for standard projects.', requiredCertificates: ['Process Simulation Cert'] },
-      4: { level: 4, description: 'Troubleshoots complex system failures and optimizes plant performance.', requiredCertificates: ['Senior Process Eng License'] },
-      5: { level: 5, description: 'Innovates new processing technologies for the industry.', requiredCertificates: ['PhD or Equivalent'] },
+      1: { level: 1, description: 'Identifies main components (Contactor, Reboiler, Flash Tank).', requiredCertificates: [] },
+      2: { level: 2, description: 'Monitors key parameters (Temp, Pressure, Glycol Level) and logs data.', requiredCertificates: ['Field Operator I'] },
+      3: { level: 3, description: 'Adjusts circulation rates and reboiler temperature to maintain spec.', requiredCertificates: ['Gas Processing Basics'] },
+      4: { level: 4, description: 'Troubleshoots foaming, glycol losses, and pump failures.', requiredCertificates: ['Advanced Gas Conditioning'] },
+      5: { level: 5, description: 'Optimizes unit efficiency and leads turnaround maintenance planning.', requiredCertificates: ['Process Specialist'] },
     }
   },
   {
-    id: 's3',
-    name: 'Project Management',
-    category: 'Management',
-    assessmentQuestion: 'How does the employee demonstrate ability in managing project scope, timelines, and resources?',
+    id: 's_maint_01',
+    name: 'Centrifugal Compressor Maintenance',
+    category: 'Technical',
+    assessmentQuestion: 'Demonstrates proficiency in maintaining and overhauling centrifugal compressors (e.g., Nuovo Pignone, Siemens).',
     levels: {
-      1: { level: 1, description: 'Tracks personal tasks and reports progress accurately.', requiredCertificates: [] },
-      2: { level: 2, description: 'Leads small projects or workstreams with defined scope.', requiredCertificates: ['CAPM'] },
-      3: { level: 3, description: 'Manages large projects involving cross-functional teams.', requiredCertificates: ['PMP'] },
-      4: { level: 4, description: 'Oversees multiple related projects (Program Management).', requiredCertificates: ['PgMP'] },
-      5: { level: 5, description: 'Defines portfolio strategy aligned with organizational goals.', requiredCertificates: ['PfMP'] },
+      1: { level: 1, description: 'Assists in basic preventive maintenance (lube oil checks, filter changes).', requiredCertificates: [] },
+      2: { level: 2, description: 'Performs seal gas panel inspections and vibration readings.', requiredCertificates: ['Level 1 Vibration'] },
+      3: { level: 3, description: 'Executes dry gas seal replacement and coupling alignment.', requiredCertificates: ['Rotating Eq. Specialist'] },
+      4: { level: 4, description: 'Leads major overhaul; diagnoses complex surge/stonewall issues.', requiredCertificates: ['OEM Certified Expert'] },
+      5: { level: 5, description: 'Develops reliability strategies and RCM studies for critical compressors.', requiredCertificates: ['CMRP'] },
+    }
+  },
+  {
+    id: 's_mgt_01',
+    name: 'Emergency Crisis Management',
+    category: 'Management',
+    assessmentQuestion: 'Ability to lead and coordinate response during major incidents (Fire, Gas Leak, Medical Evac).',
+    levels: {
+      1: { level: 1, description: 'Follows muster procedures and reports status.', requiredCertificates: [] },
+      2: { level: 2, description: 'Acts as Fire Warden or First Aider for the area.', requiredCertificates: ['First Aid', 'Fire Warden'] },
+      3: { level: 3, description: 'On-Scene Commander; directs local response team.', requiredCertificates: ['Incident Command System (ICS-100)'] },
+      4: { level: 4, description: 'Emergency Manager; coordinates with external authorities and HQ.', requiredCertificates: ['Major Emergency Management (MEM)'] },
+      5: { level: 5, description: 'Crisis Director; manages reputation, legal, and business continuity.', requiredCertificates: ['Crisis Leadership'] },
+    }
+  },
+  {
+    id: 's_tech_02',
+    name: 'DCS Operation (Honeywell/Yokogawa)',
+    category: 'Technical',
+    assessmentQuestion: 'Proficiency in operating the Distributed Control System for plant stability and alarm management.',
+    levels: {
+      1: { level: 1, description: 'Navigates HMI screens and identifies tag locations.', requiredCertificates: [] },
+      2: { level: 2, description: 'Makes basic setpoint changes and acknowledges alarms.', requiredCertificates: ['DCS Basics'] },
+      3: { level: 3, description: 'Manages unit startup/shutdown and PID loop tuning.', requiredCertificates: ['Advanced Process Control'] },
+      4: { level: 4, description: 'Handles plant upsets and performs rationalization of alarm floods.', requiredCertificates: ['Alarm Management'] },
+      5: { level: 5, description: 'Configures logic changes and optimizes control strategies.', requiredCertificates: ['DCS Engineering'] },
+    }
+  },
+  {
+    id: 's_mech_01',
+    name: 'Centrifugal Pump Maintenance',
+    category: 'Technical',
+    assessmentQuestion: 'Can the employee perform alignment, seal replacement, and troubleshooting on centrifugal pumps?',
+    levels: {
+      1: { level: 1, description: 'Identifies pump components and checks oil levels.', requiredCertificates: [] },
+      2: { level: 2, description: 'Performs basic PMs and assists in seal changes.', requiredCertificates: ['Basic Mechanical Skills'] },
+      3: { level: 3, description: 'Independently changes mechanical seals and bearings.', requiredCertificates: ['Pump Maintenance Level 2'] },
+      4: { level: 4, description: 'Troubleshoots cavitation and vibration issues; performs laser alignment.', requiredCertificates: ['Laser Alignment Cert'] },
+      5: { level: 5, description: 'Analyzes pump performance curves and re-rates pumps for new conditions.', requiredCertificates: ['Rotating Eq. Specialist'] },
+    }
+  },
+  {
+    id: 's_inst_01',
+    name: 'Control Valve Calibration',
+    category: 'Technical',
+    assessmentQuestion: 'Demonstrates ability to calibrate, stroke test, and troubleshoot pneumatic and digital control valves.',
+    levels: {
+      1: { level: 1, description: 'Identifies valve types and basic accessories (positioner, regulator).', requiredCertificates: [] },
+      2: { level: 2, description: 'Performs stroke checks and zero/span adjustments.', requiredCertificates: ['Instrumentation Basics'] },
+      3: { level: 3, description: 'Calibrates smart positioners (Fisher/Samson) using HART communicators.', requiredCertificates: ['Control Valve Technician'] },
+      4: { level: 4, description: 'Diagnoses stick-slip, hysteresis, and sizing issues.', requiredCertificates: ['Valve Diagnostics'] },
+      5: { level: 5, description: 'Selects and sizes valves for severe service applications.', requiredCertificates: ['ISA Control Systems'] },
+    }
+  },
+  {
+    id: 's_proc_01',
+    name: 'Process Simulation (HYSYS)',
+    category: 'Technical',
+    assessmentQuestion: 'Proficiency in using Aspen HYSYS for steady-state and dynamic process modeling.',
+    levels: {
+      1: { level: 1, description: 'Can open and view existing simulation files.', requiredCertificates: [] },
+      2: { level: 2, description: 'Updates stream data and runs basic heat & material balance.', requiredCertificates: ['HYSYS Fundamentals'] },
+      3: { level: 3, description: 'Builds unit operation models (Columns, Exchangers) from scratch.', requiredCertificates: ['Advanced HYSYS'] },
+      4: { level: 4, description: 'Performs dynamic simulation for relief load and control studies.', requiredCertificates: ['Dynamic Simulation'] },
+      5: { level: 5, description: 'Optimizes entire plant wide models for energy and yield.', requiredCertificates: ['Process Optimization Expert'] },
+    }
+  },
+  {
+    id: 's_gen_01',
+    name: 'Root Cause Analysis (RCA)',
+    category: 'Management',
+    assessmentQuestion: 'Ability to lead investigations into failures using standard RCA methodologies (5 Whys, Fishbone, TapRooT).',
+    levels: {
+      1: { level: 1, description: 'Participates in RCA meetings as a team member.', requiredCertificates: [] },
+      2: { level: 2, description: 'Collects data and evidence for investigations.', requiredCertificates: ['RCA Basics'] },
+      3: { level: 3, description: 'Facilitates 5-Whys and Fishbone sessions for minor incidents.', requiredCertificates: ['RCA Facilitator'] },
+      4: { level: 4, description: 'Leads complex investigations using TapRooT or Logic Tree.', requiredCertificates: ['Lead Investigator'] },
+      5: { level: 5, description: 'Manages the defect elimination program and tracks systemic issues.', requiredCertificates: ['Reliability Leader'] },
     }
   }
 ];
 
 const MOCK_DEPTS: Department[] = [
-  { id: 'd1', name: 'Operations' },
-  { id: 'd2', name: 'Engineering' },
-  { id: 'd3', name: 'HR' }
+  { id: 'd_zohr', name: 'Zohr Field Operations (Port Said)' },
+  { id: 'd_midor', name: 'MIDOR Refinery Maintenance (Alexandria)' },
+  { id: 'd_hq_tech', name: 'Technical Support (Cairo HQ)' },
+  { id: 'd_hse', name: 'QHSE Corporate' }
 ];
 
 const MOCK_JOBS: JobProfile[] = [
   {
-    id: 'j1',
-    title: 'Process Engineer Track',
-    description: 'Career path for process engineering from Fresh to Manager.',
-    departmentId: 'd2',
+    id: 'j_dcs_op',
+    title: 'Senior DCS Operator',
+    description: 'Responsible for monitoring and controlling plant process parameters via DCS in Zohr Central Control Room.',
+    departmentId: 'd_zohr',
     requirements: {
-      'DM': [ // Department Manager
-        { skillId: 's1', requiredLevel: 4 },
-        { skillId: 's2', requiredLevel: 5 },
-        { skillId: 's3', requiredLevel: 4 },
+      'FP': [ // First Position (Senior Operator)
+        { skillId: 's_tech_02', requiredLevel: 4 },
+        { skillId: 's_tech_01', requiredLevel: 3 },
+        { skillId: 's_hse_01', requiredLevel: 3 },
+        { skillId: 's_gen_01', requiredLevel: 2 }, // RCA
       ],
-      'FP': [ // First Position
-        { skillId: 's1', requiredLevel: 3 },
-        { skillId: 's2', requiredLevel: 4 },
-        { skillId: 's3', requiredLevel: 2 },
-      ],
-      'FR': [ // Fresh
-        { skillId: 's1', requiredLevel: 2 },
-        { skillId: 's2', requiredLevel: 2 },
-        { skillId: 's3', requiredLevel: 1 },
+      'FR': [ // Fresh (Junior Operator)
+        { skillId: 's_tech_02', requiredLevel: 2 },
+        { skillId: 's_tech_01', requiredLevel: 1 },
+        { skillId: 's_hse_01', requiredLevel: 2 },
       ]
     }
   },
   {
-    id: 'j2',
-    title: 'Safety Specialist Track',
-    description: 'Ensures workplace safety compliance.',
-    departmentId: 'd1',
+    id: 'j_rot_eng',
+    title: 'Rotating Equipment Engineer',
+    description: 'Ensures reliability of pumps, compressors, and turbines at MIDOR Refinery.',
+    departmentId: 'd_midor',
     requirements: {
-      'DH': [
-         { skillId: 's1', requiredLevel: 5 },
-         { skillId: 's3', requiredLevel: 3 },
+      'DM': [ // Dept Manager
+        { skillId: 's_maint_01', requiredLevel: 5 },
+        { skillId: 's_mech_01', requiredLevel: 5 },
+        { skillId: 's_mgt_01', requiredLevel: 4 },
+        { skillId: 's_gen_01', requiredLevel: 5 },
+      ],
+      'EX': [ // Excellent Position (Senior Eng)
+        { skillId: 's_maint_01', requiredLevel: 4 },
+        { skillId: 's_mech_01', requiredLevel: 4 },
+        { skillId: 's_hse_01', requiredLevel: 3 },
+        { skillId: 's_gen_01', requiredLevel: 3 },
+      ]
+    }
+  },
+  {
+    id: 'j_hse_sup',
+    title: 'Site HSE Supervisor',
+    description: 'Oversees field safety compliance and permit issuance.',
+    departmentId: 'd_hse',
+    requirements: {
+      'DH': [ // Dept Head
+        { skillId: 's_hse_01', requiredLevel: 5 },
+        { skillId: 's_mgt_01', requiredLevel: 4 },
+        { skillId: 's_gen_01', requiredLevel: 4 },
+      ]
+    }
+  },
+  {
+    id: 'j_prod_eng',
+    title: 'Production Engineer',
+    description: 'Optimizes daily production targets and monitors well performance at Zohr.',
+    departmentId: 'd_zohr',
+    requirements: {
+      'FP': [
+        { skillId: 's_tech_01', requiredLevel: 4 },
+        { skillId: 's_proc_01', requiredLevel: 3 }, // HYSYS
+        { skillId: 's_hse_01', requiredLevel: 3 },
       ],
       'FR': [
-         { skillId: 's1', requiredLevel: 2 },
+        { skillId: 's_tech_01', requiredLevel: 2 },
+        { skillId: 's_proc_01', requiredLevel: 1 },
+      ]
+    }
+  },
+  {
+    id: 'j_inst_tech',
+    title: 'Instrument Technician',
+    description: 'Maintains field instrumentation and control valves.',
+    departmentId: 'd_zohr',
+    requirements: {
+      'FP': [
+        { skillId: 's_inst_01', requiredLevel: 4 }, // Valves
+        { skillId: 's_hse_01', requiredLevel: 3 },
+      ],
+      'FR': [
+        { skillId: 's_inst_01', requiredLevel: 2 },
+        { skillId: 's_hse_01', requiredLevel: 2 },
       ]
     }
   }
@@ -112,70 +238,96 @@ const MOCK_JOBS: JobProfile[] = [
 
 const MOCK_USERS: User[] = [
   {
-    id: 'u1',
-    name: 'Admin User',
-    email: 'admin@erpom.com',
+    id: 'u_admin',
+    name: 'Eng. Tarek El-Molla',
+    email: 'admin@egpc.com.eg',
     role: Role.ADMIN,
     status: 'ACTIVE',
-    departmentId: 'd3',
-    orgLevel: 'GM'
+    departmentId: 'd_hq_tech',
+    orgLevel: 'GM',
+    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Tarek'
   },
   {
-    id: 'u2',
-    name: 'Ahmed Manager',
-    email: 'ahmed@erpom.com',
+    id: 'u_mgr_zohr',
+    name: 'Eng. Khaled Mowafy',
+    email: 'khaled.m@zohr.com.eg',
     role: Role.MANAGER,
     status: 'ACTIVE',
-    departmentId: 'd2',
-    jobProfileId: 'j1',
-    orgLevel: 'DM', // Department Manager
-    avatarUrl: 'https://api.dicebear.com/9.x/rings/svg?seed=Sara'
+    departmentId: 'd_zohr',
+    jobProfileId: 'j_dcs_op', // Technically manages them
+    orgLevel: 'DM',
+    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Khaled'
   },
   {
-    id: 'u3',
-    name: 'Sara Engineer',
-    email: 'sara@erpom.com',
+    id: 'u_emp_sarah',
+    name: 'Eng. Sarah Ahmed',
+    email: 'sarah.ahmed@midor.com.eg',
     role: Role.EMPLOYEE,
     status: 'ACTIVE',
-    departmentId: 'd2',
-    managerId: 'u2',
-    jobProfileId: 'j1',
-    orgLevel: 'FP', // First Position
-    avatarUrl: 'https://api.dicebear.com/9.x/rings/svg?seed=Sara'
+    departmentId: 'd_midor',
+    managerId: 'u_mgr_zohr', // For demo purposes
+    jobProfileId: 'j_rot_eng',
+    orgLevel: 'EX',
+    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Sarah'
   },
   {
-    id: 'u4',
-    name: 'Khaled Technician',
-    email: 'khaled@erpom.com',
+    id: 'u_emp_ali',
+    name: 'Tech. Ali Hassan',
+    email: 'ali.hassan@zohr.com.eg',
     role: Role.EMPLOYEE,
     status: 'ACTIVE',
-    departmentId: 'd1',
-    managerId: 'u2',
-    jobProfileId: 'j2',
-    orgLevel: 'FR', // Fresh
-    avatarUrl: 'https://api.dicebear.com/9.x/rings/svg?seed=Chase'
+    departmentId: 'd_zohr',
+    managerId: 'u_mgr_zohr',
+    jobProfileId: 'j_dcs_op',
+    orgLevel: 'FP',
+    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Ali'
   },
   {
-    id: 'u5',
-    name: 'New Pending User',
-    email: 'new@erpom.com',
+    id: 'u_emp_ahmed',
+    name: 'Eng. Ahmed Hassan',
+    email: 'ahmed.h@zohr.com.eg',
+    role: Role.EMPLOYEE,
+    status: 'ACTIVE',
+    departmentId: 'd_zohr',
+    managerId: 'u_mgr_zohr',
+    jobProfileId: 'j_prod_eng',
+    orgLevel: 'FP',
+    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Ahmed'
+  },
+  {
+    id: 'u_emp_mahmoud',
+    name: 'Tech. Mahmoud Ibrahim',
+    email: 'm.ibrahim@zohr.com.eg',
+    role: Role.EMPLOYEE,
+    status: 'ACTIVE',
+    departmentId: 'd_zohr',
+    managerId: 'u_mgr_zohr',
+    jobProfileId: 'j_inst_tech',
+    orgLevel: 'FR',
+    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Mahmoud'
+  },
+  {
+    id: 'u_pending',
+    name: 'Eng. Omar Youssef',
+    email: 'omar.y@petrobel.com.eg',
     role: Role.EMPLOYEE,
     status: 'PENDING',
     departmentId: '',
-    avatarUrl: 'https://api.dicebear.com/9.x/rings/svg?seed=Chase'
+    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Omar'
   }
 ];
 
 const MOCK_ASSESSMENTS: Assessment[] = [
-  { id: 'a1', raterId: 'u3', subjectId: 'u3', skillId: 's1', score: 2, comment: 'Need more training', date: '2023-10-01', type: 'SELF' },
-  { id: 'a2', raterId: 'u2', subjectId: 'u3', skillId: 's1', score: 3, comment: 'Good progress', date: '2023-10-05', type: 'MANAGER' },
-  { id: 'a3', raterId: 'u3', subjectId: 'u3', skillId: 's2', score: 3, comment: 'Solid understanding', date: '2023-10-01', type: 'SELF' },
+  { id: 'a1', raterId: 'u_emp_ali', subjectId: 'u_emp_ali', skillId: 's_tech_02', score: 3, comment: 'Completed advanced Yokogawa training course.', date: '2024-02-10', type: 'SELF' },
+  { id: 'a2', raterId: 'u_mgr_zohr', subjectId: 'u_emp_ali', skillId: 's_tech_02', score: 4, comment: 'Demonstrated excellent handling of the slug catcher upset last week.', date: '2024-02-12', type: 'MANAGER' },
+  { id: 'a3', raterId: 'u_emp_sarah', subjectId: 'u_emp_sarah', skillId: 's_maint_01', score: 4, comment: 'Successfully led the compressor K-101 overhaul.', date: '2024-01-20', type: 'SELF' },
 ];
 
 const MOCK_LOGS: ActivityLog[] = [
-    { id: 'l1', action: 'Modified Skill Requirements', target: 'Process Engineer Track', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString() },
-    { id: 'l2', action: 'Onboarded Employee', target: 'Sarah Connor', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString() },
-    { id: 'l3', action: 'System Initialization', target: 'Core Modules', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString() }
+    { id: 'l1', action: 'Updated Competency Matrix', target: 'Rotating Equipment Engineer', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString() },
+    { id: 'l2', action: 'Approved Permit to Work Cert', target: 'Ali Hassan', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString() },
+    { id: 'l3', action: 'System Audit', target: 'Zohr Field Operations', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString() },
+    { id: 'l4', action: 'New Employee Registration', target: 'Omar Youssef', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString() }
 ];
 
 // ==========================================
