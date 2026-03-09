@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Layout } from './components/Layout';
 import { EmployeeDashboard } from './pages/EmployeeDashboard';
 import { ManagerDashboard } from './pages/ManagerDashboard';
@@ -32,7 +32,7 @@ const App: React.FC = () => {
     init();
   }, []);
 
-  const handleAuth = async (e: React.FormEvent) => {
+  const handleAuth = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setAuthLoading(true);
@@ -70,19 +70,23 @@ const App: React.FC = () => {
     } finally {
         setAuthLoading(false);
     }
-  };
+  }, [isLoginMode, email, password, fullName]);
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     await dataService.signOut();
     setUser(null);
     setEmail('');
     setPassword('');
-  };
+  }, []);
+
+  const handleSwitchTab = useCallback((tab: string) => {
+    setActiveTab(tab);
+  }, []);
 
   if (isLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-slate-400 gap-4">
-        <Loader2 className="animate-spin text-teal-500" size={48} />
+        <Loader2 className="animate-spin text-blue-500" size={48} />
         <p className="font-bold tracking-widest text-xs uppercase animate-pulse">Initializing System...</p>
       </div>
     );
@@ -91,22 +95,22 @@ const App: React.FC = () => {
   // --- LOGIN ---
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 relative p-4">
+      <div className="min-h-screen flex items-center justify-center bg-slate-100 relative p-4">
         {/* Background Elements */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-teal-400/10 rounded-full blur-[100px]"></div>
+            <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-blue-400/10 rounded-full blur-[100px]"></div>
             <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-sky-400/10 rounded-full blur-[100px]"></div>
         </div>
 
-        <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-2xl border border-slate-100 relative z-10 animate-in zoom-in-95 duration-300">
+        <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-2xl border border-slate-200 relative z-10 animate-in zoom-in-95 duration-300">
             <div className="text-center mb-8">
-                <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-teal-50 text-teal-600 mb-4 border border-teal-100">
-                    <Activity size={24} />
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded overflow-hidden mb-4">
+                    <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRTk3oTrPWYW9cwmL9Wu21gBh0borRXsDUFsw&s" alt="Logo" className="w-full h-full object-contain" />
                 </div>
                 <h2 className="text-2xl font-bold text-slate-900">
                     {isLoginMode ? 'Welcome Back' : 'Join ERPOM OS'}
                 </h2>
-                <p className="text-slate-500 text-sm mt-2">
+                <p className="text-slate-600 text-sm mt-2">
                     {isLoginMode ? 'Enter your credentials to access the dashboard' : 'Create your professional profile'}
                 </p>
             </div>
@@ -131,7 +135,7 @@ const App: React.FC = () => {
                                 type="text" 
                                 value={fullName}
                                 onChange={(e) => setFullName(e.target.value)}
-                                className="w-full pl-10 pr-4 py-3 rounded-lg border border-slate-200 bg-white focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition-all text-slate-800 placeholder:text-slate-400"
+                                className="w-full pl-10 pr-4 py-3 rounded-lg border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-slate-800 placeholder:text-slate-400"
                                 placeholder="e.g. John Smith"
                                 required={!isLoginMode}
                             />
@@ -147,7 +151,7 @@ const App: React.FC = () => {
                             type="email" 
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            className="w-full pl-10 pr-4 py-3 rounded-lg border border-slate-200 bg-white focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition-all text-slate-800 placeholder:text-slate-400"
+                            className="w-full pl-10 pr-4 py-3 rounded-lg border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-slate-800 placeholder:text-slate-400"
                             placeholder="username@eprom.com"
                             required
                         />
@@ -162,19 +166,19 @@ const App: React.FC = () => {
                             type="password" 
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            className="w-full pl-10 pr-4 py-3 rounded-lg border border-slate-200 bg-white focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition-all text-slate-800 placeholder:text-slate-400"
+                            className="w-full pl-10 pr-4 py-3 rounded-lg border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-slate-800 placeholder:text-slate-400"
                             placeholder="••••••••"
                             required
                         />
                     </div>
                 </div>
                 
-                {error && <p className="text-red-600 text-xs bg-red-50 p-3 rounded-lg border border-red-100 flex items-center gap-2 font-medium"><ShieldCheck size={14}/> {error}</p>}
+                {error && <p className="text-emerald-600 text-xs bg-emerald-50 p-3 rounded-lg border border-emerald-100 flex items-center gap-2 font-medium"><ShieldCheck size={14}/> {error}</p>}
 
                 <button 
                     type="submit" 
                     disabled={authLoading}
-                    className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg shadow-teal-500/20 mt-4 group"
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 mt-4 group"
                 >
                     {authLoading ? <Loader2 className="animate-spin" size={20} /> : (
                         <>
@@ -188,7 +192,7 @@ const App: React.FC = () => {
                     <button 
                             type="button"
                             onClick={() => { setIsLoginMode(!isLoginMode); setError(''); }}
-                            className="text-sm text-teal-600 hover:text-teal-800 font-medium hover:underline"
+                            className="text-sm text-blue-600 hover:text-blue-800 font-medium hover:underline"
                     >
                             {isLoginMode ? 'Need an account?' : 'Already have an account?'}
                     </button>
@@ -197,12 +201,12 @@ const App: React.FC = () => {
             </form>
 
             {CONFIG.SOURCE === 'MOCK' && isLoginMode && (
-                <div className="mt-8 p-4 bg-slate-50 rounded-lg border border-slate-100 text-center">
+                <div className="mt-8 p-4 bg-slate-100 rounded-lg border border-slate-200 text-center">
                     <p className="text-[10px] text-slate-400 mb-3 font-bold uppercase tracking-widest">Development Access</p>
                     <div className="flex flex-wrap gap-2 justify-center">
-                        <button onClick={() => { setEmail('sarah.ahmed@midor.com.eg'); setPassword('any'); }} className="px-3 py-1 bg-white border border-slate-200 rounded shadow-sm text-xs font-semibold text-slate-600 hover:border-teal-500 hover:text-teal-600 transition-all">Employee (Sarah)</button>
-                        <button onClick={() => { setEmail('khaled.m@zohr.com.eg'); setPassword('any'); }} className="px-3 py-1 bg-white border border-slate-200 rounded shadow-sm text-xs font-semibold text-slate-600 hover:border-teal-500 hover:text-teal-600 transition-all">Manager (Khaled)</button>
-                        <button onClick={() => { setEmail('admin@egpc.com.eg'); setPassword('any'); }} className="px-3 py-1 bg-white border border-slate-200 rounded shadow-sm text-xs font-semibold text-slate-600 hover:border-teal-500 hover:text-teal-600 transition-all">Admin (Tarek)</button>
+                        <button onClick={() => { setEmail('sarah.ahmed@midor.com.eg'); setPassword('any'); }} className="px-3 py-1 bg-white border border-slate-200 rounded shadow-sm text-xs font-semibold text-slate-600 hover:border-blue-500 hover:text-blue-600 transition-all">Employee (Sarah)</button>
+                        <button onClick={() => { setEmail('sameh.i@zohr.com.eg'); setPassword('any'); }} className="px-3 py-1 bg-white border border-slate-200 rounded shadow-sm text-xs font-semibold text-slate-600 hover:border-blue-500 hover:text-blue-600 transition-all">Manager (Sameh)</button>
+                        <button onClick={() => { setEmail('admin@egpc.com.eg'); setPassword('any'); }} className="px-3 py-1 bg-white border border-slate-200 rounded shadow-sm text-xs font-semibold text-slate-600 hover:border-blue-500 hover:text-blue-600 transition-all">Admin (Mahmoud)</button>
                     </div>
                 </div>
             )}
@@ -232,7 +236,7 @@ const App: React.FC = () => {
       user={user} 
       onLogout={handleLogout} 
       activeTab={activeTab} 
-      onSwitchTab={setActiveTab}
+      onSwitchTab={handleSwitchTab}
     >
       {renderContent()}
     </Layout>

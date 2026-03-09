@@ -52,8 +52,8 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({ options, val
       <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
       <div
         className={`w-full px-3 py-2 border rounded-lg bg-white flex items-center justify-between transition-all ${
-            disabled ? 'bg-slate-100 cursor-not-allowed border-slate-200' : 'cursor-pointer border-slate-300 hover:border-teal-500'
-        } ${isOpen ? 'ring-2 ring-teal-500 border-transparent' : ''}`}
+            disabled ? 'bg-slate-100 cursor-not-allowed border-slate-200' : 'cursor-pointer border-slate-300 hover:border-blue-500'
+        } ${isOpen ? 'ring-2 ring-blue-500 border-transparent' : ''}`}
         onClick={() => !disabled && setIsOpen(!isOpen)}
       >
         <div className="truncate flex-1">
@@ -71,13 +71,13 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({ options, val
 
       {isOpen && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-60 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-100">
-          <div className="p-2 border-b border-slate-100 bg-slate-50 sticky top-0">
+          <div className="p-2 border-b border-slate-200 bg-slate-100 sticky top-0">
              <div className="relative">
                 <Search size={14} className="absolute left-2.5 top-2.5 text-slate-400"/>
                 <input
                     ref={inputRef}
                     type="text"
-                    className="w-full pl-8 pr-3 py-1.5 text-sm bg-white text-slate-900 border border-slate-200 rounded-md focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                    className="w-full pl-8 pr-3 py-1.5 text-sm bg-white text-slate-900 border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                     placeholder="Type to search..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
@@ -92,7 +92,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({ options, val
                         key={option.value}
                         className={`px-4 py-2 text-sm cursor-pointer border-l-2 ${
                             option.value === value 
-                            ? 'bg-teal-50 text-teal-900 border-teal-600 font-medium' 
+                            ? 'bg-blue-50 text-blue-900 border-blue-600 font-medium' 
                             : 'text-slate-700 border-transparent hover:bg-slate-50 hover:border-slate-200'
                         }`}
                         onClick={() => {
@@ -101,7 +101,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({ options, val
                         }}
                     >
                         <div className="font-medium">{option.label}</div>
-                        {option.subLabel && <div className="text-xs text-slate-500">{option.subLabel}</div>}
+                        {option.subLabel && <div className="text-xs text-slate-600">{option.subLabel}</div>}
                     </div>
                 ))
             ) : (

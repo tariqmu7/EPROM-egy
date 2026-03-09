@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { User, JobProfile, Skill } from '../types';
 import { dataService } from '../services/store';
 import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Tooltip, BarChart, CartesianGrid, XAxis, YAxis, Bar, Legend, Cell } from 'recharts';
@@ -8,13 +8,13 @@ interface EmployeeDashboardProps {
   user: User;
 }
 
-export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user }) => {
-  const jobProfile = user.jobProfileId ? dataService.getJobProfile(user.jobProfileId) : null;
+export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({ user }) => {
+  const jobProfile = useMemo(() => user.jobProfileId ? dataService.getJobProfile(user.jobProfileId) : null, [user.jobProfileId]);
   const userLevel = user.orgLevel;
 
   if (!jobProfile) {
     return (
-      <div className="flex flex-col items-center justify-center h-[60vh] text-slate-500">
+      <div className="flex flex-col items-center justify-center h-[60vh] text-slate-600">
          <Activity size={48} className="mb-4 text-slate-300" />
          <p className="font-medium">No Job Profile assigned. Contact Administration.</p>
       </div>
@@ -42,7 +42,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user }) =>
   }
 
   // Calculate Gaps
-  const skillAnalysis = levelRequirements.map(req => {
+  const skillAnalysis = useMemo(() => levelRequirements.map(req => {
     const skillDetails = dataService.getSkill(req.skillId);
     const currentScore = dataService.getUserSkillScore(user.id, req.skillId);
     return {
@@ -51,19 +51,19 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user }) =>
       current: currentScore,
       gap: req.requiredLevel - currentScore
     };
-  });
+  }), [levelRequirements, user.id]);
 
-  const chartData = skillAnalysis.map(s => ({
+  const chartData = useMemo(() => skillAnalysis.map(s => ({
     subject: s.skill?.name || 'Unknown',
     Required: s.required,
     Current: s.current,
     fullMark: 5,
-  }));
+  })), [skillAnalysis]);
 
-  const gaps = skillAnalysis.filter(s => s.gap > 0);
-  const compliant = skillAnalysis.filter(s => s.gap <= 0);
+  const gaps = useMemo(() => skillAnalysis.filter(s => s.gap > 0), [skillAnalysis]);
+  const compliant = useMemo(() => skillAnalysis.filter(s => s.gap <= 0), [skillAnalysis]);
 
-  const recommendations = gaps.map(g => {
+  const recommendations = useMemo(() => gaps.map(g => {
     const nextLevel = g.current + 1;
     const levelDetails = g.skill?.levels[nextLevel <= 5 ? nextLevel : 5];
     const isCritical = g.gap > 1;
@@ -91,7 +91,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user }) =>
       description: levelDetails?.description,
       suggestedActions: actions
     };
-  });
+  }), [gaps]);
 
   // Export Handlers
   const handleExportReport = () => {
@@ -172,7 +172,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user }) =>
         <div>
           <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Competency Dashboard</h2>
           <div className="flex items-center gap-2 mt-2 text-sm text-slate-500">
-             <span className="bg-teal-50 text-teal-700 px-2 py-0.5 rounded font-bold uppercase text-[10px] tracking-wider">{userLevel}</span>
+             <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-bold uppercase text-[10px] tracking-wider">{userLevel}</span>
              <span>{jobProfile.title}</span>
              <span className="text-slate-300">•</span>
              <span>{dataService.getAllDepartments().find(d => d.id === user.departmentId)?.name}</span>
@@ -181,13 +181,13 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user }) =>
         <div className="flex gap-2">
             <button 
                 onClick={handleExportReport}
-                className="whitespace-nowrap bg-white border border-slate-200 hover:border-teal-500 text-slate-600 px-4 py-2 rounded shadow-sm text-sm font-medium transition-all flex items-center gap-2"
+                className="whitespace-nowrap bg-white border border-slate-200 hover:border-blue-500 text-slate-600 px-4 py-2 rounded shadow-sm text-sm font-medium transition-all flex items-center gap-2"
             >
                 <Download size={16} /> Export Report
             </button>
             <button 
                 onClick={handleExportPlan}
-                className="whitespace-nowrap bg-teal-600 text-white px-4 py-2 rounded shadow-sm text-sm font-bold hover:bg-teal-700 transition-all flex items-center gap-2"
+                className="whitespace-nowrap bg-blue-600 text-white px-4 py-2 rounded shadow-sm text-sm font-bold hover:bg-blue-700 transition-all flex items-center gap-2"
             >
                 <FileText size={16} /> Development Plan
             </button>
@@ -196,7 +196,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user }) =>
 
       {/* KPI Cards - Industrial Style */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-lg shadow-panel border-t-4 border-teal-500">
+        <div className="bg-white p-6 rounded-lg shadow-md border-t-4 border-blue-500">
           <div className="flex justify-between items-start mb-4">
             <div>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Compliance Rate</p>
@@ -204,37 +204,37 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user }) =>
                 {skillAnalysis.length > 0 ? Math.round((compliant.length / skillAnalysis.length) * 100) : 0}<span className="text-xl text-slate-400 font-normal">%</span>
               </h3>
             </div>
-            <div className="p-2 bg-slate-50 rounded-full text-teal-600">
+            <div className="p-2 bg-slate-100 rounded-full text-blue-600">
               <CheckCircle size={24} />
             </div>
           </div>
           <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-             <div className="bg-teal-500 h-full" style={{ width: `${skillAnalysis.length > 0 ? (compliant.length / skillAnalysis.length) * 100 : 0}%` }}></div>
+             <div className="bg-blue-500 h-full" style={{ width: `${skillAnalysis.length > 0 ? (compliant.length / skillAnalysis.length) * 100 : 0}%` }}></div>
           </div>
           <p className="text-xs text-slate-500 mt-3 font-medium flex items-center gap-1">
-             <span className="text-teal-600">●</span> {compliant.length} skills fully compliant
+             <span className="text-blue-600">●</span> {compliant.length} skills fully compliant
           </p>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-panel border-t-4 border-red-500">
+        <div className="bg-white p-6 rounded-lg shadow-panel border-t-4 border-emerald-500">
           <div className="flex justify-between items-start mb-4">
             <div>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Critical Gaps</p>
               <h3 className="text-4xl font-bold text-slate-900 mt-1">{gaps.length}</h3>
             </div>
-            <div className="p-2 bg-slate-50 rounded-full text-red-500">
+            <div className="p-2 bg-slate-100 rounded-full text-emerald-500">
               <AlertCircle size={24} />
             </div>
           </div>
           <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-             <div className="bg-red-500 h-full" style={{ width: `${skillAnalysis.length > 0 ? (gaps.length / skillAnalysis.length) * 100 : 0}%` }}></div>
+             <div className="bg-emerald-500 h-full" style={{ width: `${skillAnalysis.length > 0 ? (gaps.length / skillAnalysis.length) * 100 : 0}%` }}></div>
           </div>
           <p className="text-xs text-slate-500 mt-3 font-medium flex items-center gap-1">
-             <span className="text-red-500">●</span> Requires immediate action
+             <span className="text-emerald-500">●</span> Requires immediate action
           </p>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-panel border-t-4 border-amber-400">
+        <div className="bg-white p-6 rounded-lg shadow-panel border-t-4 border-cyan-400">
           <div className="flex justify-between items-start mb-4">
             <div>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Certifications Needed</p>
@@ -242,21 +242,21 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user }) =>
                 {recommendations.reduce((acc, curr) => acc + curr.certs.length, 0)}
               </h3>
             </div>
-            <div className="p-2 bg-slate-50 rounded-full text-amber-400">
+            <div className="p-2 bg-slate-50 rounded-full text-cyan-400">
               <Award size={24} />
             </div>
           </div>
           <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-             <div className="bg-amber-400 h-full" style={{ width: `${Math.min(recommendations.reduce((acc, curr) => acc + curr.certs.length, 0) * 10, 100)}%` }}></div>
+             <div className="bg-cyan-400 h-full" style={{ width: `${Math.min(recommendations.reduce((acc, curr) => acc + curr.certs.length, 0) * 10, 100)}%` }}></div>
           </div>
            <p className="text-xs text-slate-500 mt-3 font-medium flex items-center gap-1">
-             <span className="text-amber-400">●</span> To reach next level
+             <span className="text-cyan-400">●</span> To reach next level
           </p>
         </div>
       </div>
 
       {/* Recommendations List */}
-      <div className="bg-white rounded-lg shadow-panel border border-slate-100 overflow-hidden">
+      <div className="bg-white rounded-lg shadow-panel border border-slate-200 overflow-hidden">
         <div className="p-5 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
           <h4 className="font-bold text-slate-900">Action Plan & Recommendations</h4>
           <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Generated by ERPOM Engine</span>
@@ -269,16 +269,16 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user }) =>
                      <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
                            {rec.isCritical ? (
-                               <span className="bg-red-50 text-red-700 border border-red-100 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wide flex items-center gap-1">
+                               <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wide flex items-center gap-1">
                                    <AlertCircle size={10} /> Critical Gap
                                </span>
                            ) : (
-                               <span className="bg-amber-50 text-amber-700 border border-amber-100 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wide flex items-center gap-1">
+                               <span className="bg-cyan-50 text-cyan-700 border border-cyan-100 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wide flex items-center gap-1">
                                    <TrendingUp size={10} /> Development Area
                                </span>
                            )}
                            <span className="text-slate-300">|</span>
-                           <h5 className="font-bold text-slate-900 text-base group-hover:text-teal-600 transition-colors">{rec.skillName}</h5>
+                           <h5 className="font-bold text-slate-900 text-base group-hover:text-blue-600 transition-colors">{rec.skillName}</h5>
                         </div>
                         <p className="text-sm text-slate-600 mb-4 leading-relaxed max-w-3xl">
                             <span className="font-semibold text-slate-900">Goal:</span> Reach Level {rec.targetLevel} - {rec.description}
@@ -288,7 +288,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user }) =>
                             <div className="flex flex-wrap gap-2 mb-4">
                               {rec.certs.map((cert, cIdx) => (
                                 <span key={cIdx} className="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200">
-                                  <Award size={12} className="text-amber-500" />
+                                  <Award size={12} className="text-cyan-500" />
                                   {cert}
                                 </span>
                               ))}
@@ -310,9 +310,9 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user }) =>
                     </h6>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {rec.suggestedActions.map((action, aIdx) => (
-                            <div key={aIdx} className="bg-white p-3 rounded border border-slate-200 flex items-center justify-between hover:border-teal-300 transition-colors cursor-pointer group/action">
+                            <div key={aIdx} className="bg-white p-3 rounded border border-slate-200 flex items-center justify-between hover:border-blue-300 transition-colors cursor-pointer group/action">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded bg-teal-50 text-teal-600 flex items-center justify-center group-hover/action:bg-teal-600 group-hover/action:text-white transition-colors">
+                                    <div className="w-8 h-8 rounded bg-blue-50 text-blue-600 flex items-center justify-center group-hover/action:bg-blue-600 group-hover/action:text-white transition-colors">
                                         <action.icon size={16} />
                                     </div>
                                     <div>
@@ -324,7 +324,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user }) =>
                                     <span className="text-xs font-medium text-slate-400 bg-slate-50 px-2 py-1 rounded border border-slate-100 flex items-center gap-1">
                                         <Calendar size={10} /> {action.duration}
                                     </span>
-                                    <ArrowRight size={14} className="text-slate-300 group-hover/action:text-teal-500" />
+                                    <ArrowRight size={14} className="text-slate-300 group-hover/action:text-blue-500" />
                                 </div>
                             </div>
                         ))}
@@ -345,4 +345,4 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = ({ user }) =>
       </div>
     </div>
   );
-};
+});

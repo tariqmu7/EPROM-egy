@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { User, JobProfile, PROFICIENCY_LABELS } from '../types';
 import { dataService } from '../services/store';
 import { UserCircle, Send, Star, Info, ChevronUp, ChevronDown, Check, Clock, History, FileText } from 'lucide-react';
@@ -7,7 +7,7 @@ interface AssessmentPortalProps {
   currentUser: User;
 }
 
-export const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ currentUser }) => {
+export const AssessmentPortal: React.FC<AssessmentPortalProps> = React.memo(({ currentUser }) => {
   const [activeTab, setActiveTab] = useState<'SELF' | 'PEER' | 'SUBORDINATE'>('SELF');
   const [viewMode, setViewMode] = useState<'ASSESS' | 'HISTORY'>('ASSESS');
   
@@ -16,19 +16,17 @@ export const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ currentUser 
   const [submitted, setSubmitted] = useState(false);
 
   // Determine selectable users based on tab
-  const getSubjects = () => {
+  const subjects = useMemo(() => {
     switch(activeTab) {
       case 'SELF': return [currentUser];
       case 'PEER': return dataService.getPeers(currentUser.id);
       case 'SUBORDINATE': return dataService.getSubordinates(currentUser.id);
       default: return [];
     }
-  };
-
-  const subjects = getSubjects();
+  }, [activeTab, currentUser]);
 
   // Reset when tab changes
-  React.useEffect(() => {
+  useEffect(() => {
     if (activeTab === 'SELF') {
       setSelectedSubject(currentUser);
     } else {
@@ -39,16 +37,16 @@ export const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ currentUser 
     setViewMode('ASSESS'); // Default to assessment view on tab switch
   }, [activeTab, currentUser]);
 
-  const subjectJobProfile = selectedSubject?.jobProfileId ? dataService.getJobProfile(selectedSubject.jobProfileId) : null;
+  const subjectJobProfile = useMemo(() => selectedSubject?.jobProfileId ? dataService.getJobProfile(selectedSubject.jobProfileId) : null, [selectedSubject?.jobProfileId]);
   const subjectLevel = selectedSubject?.orgLevel;
   
   // Get skills relevant to the subject's specific level
-  const applicableSkills = (subjectJobProfile && subjectLevel) 
+  const applicableSkills = useMemo(() => (subjectJobProfile && subjectLevel) 
     ? subjectJobProfile.requirements[subjectLevel] || [] 
-    : [];
+    : [], [subjectJobProfile, subjectLevel]);
 
   // Fetch History Logic
-  const getHistoryData = () => {
+  const historyData = useMemo(() => {
     if (activeTab === 'SELF') {
         // Show assessments received by me (from myself or managers)
         return dataService.getAssessments({ subjectId: currentUser.id });
@@ -60,15 +58,13 @@ export const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ currentUser 
             subjectId: selectedSubject?.id 
         });
     }
-  };
+  }, [activeTab, currentUser.id, selectedSubject?.id]);
 
-  const historyData = getHistoryData();
-
-  const handleRatingChange = (skillId: string, rating: number) => {
+  const handleRatingChange = useCallback((skillId: string, rating: number) => {
     setRatings(prev => ({ ...prev, [skillId]: rating }));
-  };
+  }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedSubject) return;
 
@@ -91,7 +87,7 @@ export const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ currentUser 
         if(activeTab !== 'SELF') setSelectedSubject(null);
         setViewMode('HISTORY'); // Switch to history to show the new record
     }, 2000);
-  };
+  }, [activeTab, currentUser.id, ratings, selectedSubject]);
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -100,7 +96,7 @@ export const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ currentUser 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Competency Assessment</h2>
-          <p className="text-slate-500 text-sm">Evaluate performance using behavioral questionnaires</p>
+          <p className="text-slate-600 text-sm">Evaluate performance using behavioral questionnaires</p>
         </div>
         <div className="flex gap-4">
              {/* Main Context Tabs */}
@@ -110,7 +106,7 @@ export const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ currentUser 
                 key={tab}
                 onClick={() => setActiveTab(tab)}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    activeTab === tab ? 'bg-teal-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'
+                    activeTab === tab ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100'
                 }`}
                 >
                 {tab === 'SELF' ? 'Self Review' : tab === 'PEER' ? 'Peer Review' : 'Subordinates'}
@@ -148,14 +144,14 @@ export const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ currentUser 
                   key={sub.id}
                   onClick={() => { setSelectedSubject(sub); setRatings({}); setSubmitted(false); }}
                   className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors text-left ${
-                    selectedSubject?.id === sub.id ? 'bg-teal-50 border border-teal-200' : 'hover:bg-slate-50 border border-transparent'
+                    selectedSubject?.id === sub.id ? 'bg-blue-50 border border-blue-200' : 'hover:bg-slate-100 border border-transparent'
                   }`}
                 >
                   <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center overflow-hidden flex-shrink-0">
                     {sub.avatarUrl ? <img src={sub.avatarUrl} alt="" className="w-full h-full object-cover"/> : <UserCircle size={20} className="text-slate-500"/>}
                   </div>
                   <div className="min-w-0">
-                    <p className={`text-sm font-medium truncate ${selectedSubject?.id === sub.id ? 'text-teal-900' : 'text-slate-700'}`}>{sub.name}</p>
+                    <p className={`text-sm font-medium truncate ${selectedSubject?.id === sub.id ? 'text-blue-900' : 'text-slate-700'}`}>{sub.name}</p>
                     <p className="text-xs text-slate-500 truncate">{sub.email}</p>
                   </div>
                 </button>
@@ -172,7 +168,7 @@ export const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ currentUser 
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 min-h-[500px]">
               
               {/* Header inside the card */}
-              <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+              <div className="p-6 border-b border-slate-200 flex justify-between items-center">
                 <div>
                     <h3 className="text-xl font-bold text-slate-900">
                         {viewMode === 'ASSESS' ? 'New Assessment for:' : 'Assessment History:'} {selectedSubject.name}
@@ -192,8 +188,8 @@ export const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ currentUser 
               {viewMode === 'ASSESS' && (
                   <div className="p-6">
                     {submitted ? (
-                        <div className="flex flex-col items-center justify-center py-12 text-teal-600 animate-fade-in">
-                        <div className="bg-teal-100 p-4 rounded-full mb-4">
+                        <div className="flex flex-col items-center justify-center py-12 text-blue-600 animate-fade-in">
+                        <div className="bg-blue-100 p-4 rounded-full mb-4">
                             <Send size={32} />
                         </div>
                         <h4 className="text-xl font-bold">Assessment Submitted Successfully!</h4>
@@ -217,7 +213,7 @@ export const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ currentUser 
                                             <span className="text-xs font-medium text-slate-400">Target Level: {req.requiredLevel}</span>
                                         </div>
                                         <h4 className="text-lg font-bold text-slate-800 flex items-start gap-2">
-                                            <span className="text-teal-600 mt-1">Q{idx+1}.</span> 
+                                            <span className="text-blue-600 mt-1">Q{idx+1}.</span> 
                                             {skillData.assessmentQuestion || `Select the statement that best matches the employee's proficiency in "${skillData.name}".`}
                                         </h4>
                                     </div>
@@ -233,8 +229,8 @@ export const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ currentUser 
                                                     key={level}
                                                     className={`relative flex items-start gap-3 p-4 rounded-lg border cursor-pointer transition-all hover:shadow-md ${
                                                         isSelected 
-                                                        ? 'bg-teal-50 border-teal-500 ring-1 ring-teal-500 z-10' 
-                                                        : 'bg-white border-slate-200 hover:border-teal-200'
+                                                        ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500 z-10' 
+                                                        : 'bg-white border-slate-200 hover:border-blue-200'
                                                     }`}
                                                 >
                                                     <input 
@@ -243,18 +239,18 @@ export const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ currentUser 
                                                         value={level}
                                                         checked={isSelected}
                                                         onChange={() => handleRatingChange(req.skillId, level)}
-                                                        className="mt-1 w-4 h-4 text-teal-600 focus:ring-teal-500 border-gray-300"
+                                                        className="mt-1 w-4 h-4 text-blue-600 focus:ring-blue-500 border-gray-300"
                                                     />
                                                     <div className="flex-1">
                                                         <div className="flex justify-between">
-                                                            <span className={`text-sm font-bold ${isSelected ? 'text-teal-800' : 'text-slate-700'}`}>Level {level}: {PROFICIENCY_LABELS[level]}</span>
+                                                            <span className={`text-sm font-bold ${isSelected ? 'text-blue-800' : 'text-slate-700'}`}>Level {level}: {PROFICIENCY_LABELS[level]}</span>
                                                             {isTarget && <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded uppercase">Target</span>}
                                                         </div>
-                                                        <p className={`text-sm mt-1 ${isSelected ? 'text-teal-700' : 'text-slate-500'}`}>
+                                                        <p className={`text-sm mt-1 ${isSelected ? 'text-blue-700' : 'text-slate-500'}`}>
                                                             {skillData.levels[level]?.description || 'No description available.'}
                                                         </p>
                                                     </div>
-                                                    {isSelected && <Check size={20} className="text-teal-600 absolute right-4 top-4" />}
+                                                    {isSelected && <Check size={20} className="text-blue-600 absolute right-4 top-4" />}
                                                 </label>
                                             );
                                         })}
@@ -267,7 +263,7 @@ export const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ currentUser 
                                 <button 
                                     type="submit"
                                     disabled={Object.keys(ratings).length !== applicableSkills.length}
-                                    className="bg-teal-600 hover:bg-teal-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white px-8 py-3 rounded-lg font-bold shadow-lg shadow-teal-200/50 transition-all flex items-center gap-2"
+                                    className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white px-8 py-3 rounded-lg font-bold shadow-lg shadow-blue-200/50 transition-all flex items-center gap-2"
                                 >
                                     <Send size={18} />
                                     Submit Evaluation
@@ -324,7 +320,7 @@ export const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ currentUser 
                                                     <span className={`inline-block w-8 h-8 rounded-full text-center leading-8 font-bold text-xs ${
                                                         record.score >= 4 ? 'bg-green-100 text-green-700' :
                                                         record.score >= 3 ? 'bg-blue-100 text-blue-700' :
-                                                        'bg-amber-100 text-amber-700'
+                                                        'bg-cyan-100 text-cyan-700'
                                                     }`}>
                                                         {record.score}
                                                     </span>
@@ -360,4 +356,4 @@ export const AssessmentPortal: React.FC<AssessmentPortalProps> = ({ currentUser 
       </div>
     </div>
   );
-};
+});
