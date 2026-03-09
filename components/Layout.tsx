@@ -42,7 +42,7 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
                     <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRTk3oTrPWYW9cwmL9Wu21gBh0borRXsDUFsw&s" alt="Logo" className="w-full h-full object-contain" />
                </div>
                <div className="hidden lg:flex flex-col">
-                 <span className="font-bold text-xl tracking-tight leading-none text-slate-900">ERPOM</span>
+                 <span className="font-bold text-xl tracking-tight leading-none text-slate-900">Oriens</span>
                  <span className="text-[10px] text-blue-600 font-bold uppercase tracking-widest mt-0.5">Competency OS</span>
                </div>
             </div>

@@ -95,121 +95,185 @@ const App: React.FC = () => {
   // --- LOGIN ---
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-100 relative p-4">
-        {/* Background Elements */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-blue-400/10 rounded-full blur-[100px]"></div>
-            <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-sky-400/10 rounded-full blur-[100px]"></div>
-        </div>
-
-        <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-2xl border border-slate-200 relative z-10 animate-in zoom-in-95 duration-300">
-            <div className="text-center mb-8">
-                <div className="inline-flex items-center justify-center w-16 h-16 rounded overflow-hidden mb-4">
-                    <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRTk3oTrPWYW9cwmL9Wu21gBh0borRXsDUFsw&s" alt="Logo" className="w-full h-full object-contain" />
-                </div>
-                <h2 className="text-2xl font-bold text-slate-900">
-                    {isLoginMode ? 'Welcome Back' : 'Join ERPOM OS'}
-                </h2>
-                <p className="text-slate-600 text-sm mt-2">
-                    {isLoginMode ? 'Enter your credentials to access the dashboard' : 'Create your professional profile'}
-                </p>
+      <div className="min-h-screen flex bg-slate-50">
+        {/* Left Side - Branding (Hidden on mobile) */}
+        <div className="hidden lg:flex lg:w-1/2 bg-slate-900 relative overflow-hidden flex-col justify-between p-12">
+            <div className="absolute inset-0 z-0">
+                <img src="https://images.unsplash.com/photo-1581094794329-c8112a89af12?q=80&w=2070&auto=format&fit=crop" alt="Industrial Background" className="w-full h-full object-cover opacity-20" />
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/60 to-transparent"></div>
             </div>
             
-            <form onSubmit={handleAuth} className="space-y-5">
-                {signupSuccess && (
-                    <div className="bg-green-50 border border-green-200 text-green-800 p-4 rounded-lg flex items-start gap-3">
-                        <CheckCircle size={20} className="mt-0.5 flex-shrink-0" />
-                        <div className="text-sm">
-                            <p className="font-bold">Registration Successful</p>
-                            <p>Your profile is pending approval.</p>
-                        </div>
-                    </div>
-                )}
+            <div className="relative z-10">
+                <div className="flex items-center gap-3 mb-12">
+                   <div className="w-12 h-12 rounded overflow-hidden flex items-center justify-center bg-white">
+                        <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRTk3oTrPWYW9cwmL9Wu21gBh0borRXsDUFsw&s" alt="Logo" className="w-full h-full object-contain" />
+                   </div>
+                   <div className="flex flex-col">
+                     <span className="font-bold text-2xl tracking-tight leading-none text-white">ORIENS</span>
+                     <span className="text-[10px] text-blue-400 font-bold uppercase tracking-widest mt-0.5">Competency OS</span>
+                   </div>
+                </div>
+            </div>
 
-                {!isLoginMode && (
+            <div className="relative z-10 max-w-lg">
+                <h1 className="text-4xl font-bold text-white mb-6 leading-tight">
+                    Empowering the Energy Sector Workforce
+                </h1>
+                <p className="text-slate-300 text-lg mb-8 leading-relaxed">
+                    A comprehensive competency management system featuring skill gap analysis dashboards, 360-degree assessments, and intelligent job profiling.
+                </p>
+                <div className="flex items-center gap-4 text-sm font-medium text-slate-400">
+                    <div className="flex items-center gap-2">
+                        <CheckCircle size={16} className="text-blue-400" />
+                        <span>Skill Gap Analysis</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <CheckCircle size={16} className="text-blue-400" />
+                        <span>360° Assessments</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {/* Right Side - Auth Form */}
+        <div className="w-full lg:w-1/2 flex items-center justify-center p-8 sm:p-12 relative">
+            <div className="w-full max-w-md animate-in fade-in slide-in-from-bottom-4 duration-500">
+                {/* Mobile Logo */}
+                <div className="flex lg:hidden items-center gap-3 mb-10 justify-center">
+                   <div className="w-12 h-12 rounded overflow-hidden flex items-center justify-center bg-white shadow-sm border border-slate-200">
+                        <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRTk3oTrPWYW9cwmL9Wu21gBh0borRXsDUFsw&s" alt="Logo" className="w-full h-full object-contain" />
+                   </div>
+                   <div className="flex flex-col">
+                     <span className="font-bold text-2xl tracking-tight leading-none text-slate-900">ORIENS</span>
+                     <span className="text-[10px] text-blue-600 font-bold uppercase tracking-widest mt-0.5">Competency OS</span>
+                   </div>
+                </div>
+
+                <div className="mb-10">
+                    <h2 className="text-3xl font-bold text-slate-900 tracking-tight">
+                        {isLoginMode ? 'Welcome back' : 'Create an account'}
+                    </h2>
+                    <p className="text-slate-500 mt-2">
+                        {isLoginMode ? 'Enter your details to access your dashboard.' : 'Join Oriens OS to manage your professional profile.'}
+                    </p>
+                </div>
+                
+                <form onSubmit={handleAuth} className="space-y-5">
+                    {signupSuccess && (
+                        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-xl flex items-start gap-3">
+                            <CheckCircle size={20} className="mt-0.5 flex-shrink-0 text-emerald-600" />
+                            <div className="text-sm">
+                                <p className="font-bold">Registration Successful</p>
+                                <p className="text-emerald-700 mt-1">Your profile is pending approval.</p>
+                            </div>
+                        </div>
+                    )}
+
+                    {!isLoginMode && (
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1.5">Full Name</label>
+                            <div className="relative">
+                                <UserIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                <input 
+                                    type="text" 
+                                    value={fullName}
+                                    onChange={(e) => setFullName(e.target.value)}
+                                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-slate-900 placeholder:text-slate-400 shadow-sm"
+                                    placeholder="e.g. John Smith"
+                                    required={!isLoginMode}
+                                />
+                            </div>
+                        </div>
+                    )}
+
                     <div>
-                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Full Name</label>
+                        <label className="block text-sm font-medium text-slate-700 mb-1.5">Email Address</label>
                         <div className="relative">
-                            <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                            <UserIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                             <input 
-                                type="text" 
-                                value={fullName}
-                                onChange={(e) => setFullName(e.target.value)}
-                                className="w-full pl-10 pr-4 py-3 rounded-lg border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-slate-800 placeholder:text-slate-400"
-                                placeholder="e.g. John Smith"
-                                required={!isLoginMode}
+                                type="email" 
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-slate-900 placeholder:text-slate-400 shadow-sm"
+                                placeholder="name@company.com"
+                                required
                             />
                         </div>
                     </div>
-                )}
 
-                <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Email Identity</label>
-                    <div className="relative">
-                        <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                        <input 
-                            type="email" 
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            className="w-full pl-10 pr-4 py-3 rounded-lg border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-slate-800 placeholder:text-slate-400"
-                            placeholder="username@eprom.com"
-                            required
-                        />
+                    <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                            <label className="block text-sm font-medium text-slate-700">Password</label>
+                            {isLoginMode && (
+                                <a href="#" className="text-sm text-blue-600 hover:text-blue-700 font-medium">Forgot password?</a>
+                            )}
+                        </div>
+                        <div className="relative">
+                            <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                            <input 
+                                type="password" 
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-slate-900 placeholder:text-slate-400 shadow-sm"
+                                placeholder="••••••••"
+                                required
+                            />
+                        </div>
                     </div>
-                </div>
-
-                <div>
-                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Password</label>
-                    <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                        <input 
-                            type="password" 
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            className="w-full pl-10 pr-4 py-3 rounded-lg border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-slate-800 placeholder:text-slate-400"
-                            placeholder="••••••••"
-                            required
-                        />
-                    </div>
-                </div>
-                
-                {error && <p className="text-emerald-600 text-xs bg-emerald-50 p-3 rounded-lg border border-emerald-100 flex items-center gap-2 font-medium"><ShieldCheck size={14}/> {error}</p>}
-
-                <button 
-                    type="submit" 
-                    disabled={authLoading}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 mt-4 group"
-                >
-                    {authLoading ? <Loader2 className="animate-spin" size={20} /> : (
-                        <>
-                            {isLoginMode ? 'Secure Login' : 'Create Account'}
-                            <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
-                        </>
+                    
+                    {error && (
+                        <div className="bg-red-50 border border-red-100 text-red-600 p-3 rounded-xl text-sm flex items-center gap-2 font-medium">
+                            <ShieldCheck size={16}/> {error}
+                        </div>
                     )}
-                </button>
 
-                <div className="flex items-center justify-between mt-6 pt-6 border-t border-slate-100">
                     <button 
+                        type="submit" 
+                        disabled={authLoading}
+                        className="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium py-3 rounded-xl transition-all flex items-center justify-center gap-2 mt-6 group disabled:opacity-70 disabled:cursor-not-allowed"
+                    >
+                        {authLoading ? <Loader2 className="animate-spin" size={20} /> : (
+                            <>
+                                {isLoginMode ? 'Sign in' : 'Create account'}
+                                <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform opacity-70" />
+                            </>
+                        )}
+                    </button>
+
+                    <div className="text-center mt-8">
+                        <span className="text-slate-500 text-sm">
+                            {isLoginMode ? "Don't have an account? " : "Already have an account? "}
+                        </span>
+                        <button 
                             type="button"
                             onClick={() => { setIsLoginMode(!isLoginMode); setError(''); }}
-                            className="text-sm text-blue-600 hover:text-blue-800 font-medium hover:underline"
-                    >
-                            {isLoginMode ? 'Need an account?' : 'Already have an account?'}
-                    </button>
-                    <a href="#" className="text-sm text-slate-400 hover:text-slate-600">Forgot Password?</a>
-                </div>
-            </form>
-
-            {CONFIG.SOURCE === 'MOCK' && isLoginMode && (
-                <div className="mt-8 p-4 bg-slate-100 rounded-lg border border-slate-200 text-center">
-                    <p className="text-[10px] text-slate-400 mb-3 font-bold uppercase tracking-widest">Development Access</p>
-                    <div className="flex flex-wrap gap-2 justify-center">
-                        <button onClick={() => { setEmail('sarah.ahmed@midor.com.eg'); setPassword('any'); }} className="px-3 py-1 bg-white border border-slate-200 rounded shadow-sm text-xs font-semibold text-slate-600 hover:border-blue-500 hover:text-blue-600 transition-all">Employee (Sarah)</button>
-                        <button onClick={() => { setEmail('sameh.i@zohr.com.eg'); setPassword('any'); }} className="px-3 py-1 bg-white border border-slate-200 rounded shadow-sm text-xs font-semibold text-slate-600 hover:border-blue-500 hover:text-blue-600 transition-all">Manager (Sameh)</button>
-                        <button onClick={() => { setEmail('admin@egpc.com.eg'); setPassword('any'); }} className="px-3 py-1 bg-white border border-slate-200 rounded shadow-sm text-xs font-semibold text-slate-600 hover:border-blue-500 hover:text-blue-600 transition-all">Admin (Mahmoud)</button>
+                            className="text-sm text-slate-900 font-semibold hover:underline"
+                        >
+                            {isLoginMode ? 'Sign up' : 'Sign in'}
+                        </button>
                     </div>
-                </div>
-            )}
+                </form>
+
+                {CONFIG.SOURCE === 'MOCK' && isLoginMode && (
+                    <div className="mt-12 pt-8 border-t border-slate-200">
+                        <p className="text-[10px] text-slate-400 mb-4 font-bold uppercase tracking-widest text-center">Development Access</p>
+                        <div className="flex flex-col gap-2">
+                            <button onClick={() => { setEmail('sarah.ahmed@midor.com.eg'); setPassword('any'); }} className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl shadow-sm text-sm font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-all flex justify-between items-center">
+                                <span>Employee</span>
+                                <span className="text-slate-400 text-xs">Sarah</span>
+                            </button>
+                            <button onClick={() => { setEmail('sameh.i@zohr.com.eg'); setPassword('any'); }} className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl shadow-sm text-sm font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-all flex justify-between items-center">
+                                <span>Manager</span>
+                                <span className="text-slate-400 text-xs">Sameh</span>
+                            </button>
+                            <button onClick={() => { setEmail('admin@egpc.com.eg'); setPassword('any'); }} className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl shadow-sm text-sm font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-all flex justify-between items-center">
+                                <span>Admin</span>
+                                <span className="text-slate-400 text-xs">Mahmoud</span>
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
         </div>
       </div>
     );
