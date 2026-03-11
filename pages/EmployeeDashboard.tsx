@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { User, JobProfile, Skill } from '../types';
 import { dataService } from '../services/store';
-import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Tooltip, BarChart, CartesianGrid, XAxis, YAxis, Bar, Legend, Cell } from 'recharts';
+import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Tooltip, BarChart, CartesianGrid, XAxis, YAxis, Bar, Legend, Cell, LineChart, Line } from 'recharts';
 import { AlertCircle, CheckCircle, Award, BookOpen, Activity, TrendingUp, Users, PlayCircle, Calendar, ArrowRight, Download, FileText } from 'lucide-react';
 
 interface EmployeeDashboardProps {
@@ -92,6 +92,56 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
       suggestedActions: actions
     };
   }), [gaps]);
+
+  const trendData = useMemo(() => {
+    const assessments = dataService.getAssessments({ subjectId: user.id })
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    
+    if (assessments.length === 0) return [];
+
+    const months = new Set<string>();
+    assessments.forEach(a => {
+      const d = new Date(a.date);
+      months.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    });
+
+    const sortedMonths = Array.from(months).sort();
+    const data = [];
+    const currentScores: Record<string, number> = {};
+
+    for (const month of sortedMonths) {
+      const monthAssessments = assessments.filter(a => {
+        const d = new Date(a.date);
+        const m = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        return m === month;
+      });
+
+      monthAssessments.forEach(a => {
+        currentScores[a.skillId] = a.score;
+      });
+
+      let totalGap = 0;
+      let count = 0;
+      levelRequirements.forEach(req => {
+        const score = currentScores[req.skillId] || 0;
+        const gap = Math.max(0, req.requiredLevel - score);
+        totalGap += gap;
+        count++;
+      });
+
+      const avgGap = count > 0 ? (totalGap / count).toFixed(2) : 0;
+      const [year, m] = month.split('-');
+      const date = new Date(parseInt(year), parseInt(m) - 1);
+      const monthLabel = date.toLocaleString('default', { month: 'short', year: 'numeric' });
+
+      data.push({
+        name: monthLabel,
+        'Average Gap': parseFloat(avgGap as string)
+      });
+    }
+
+    return data;
+  }, [user.id, levelRequirements]);
 
   // Export Handlers
   const handleExportReport = () => {
@@ -254,6 +304,27 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
           </p>
         </div>
       </div>
+
+      {/* Trend Chart */}
+      {trendData.length > 0 && (
+        <div className="bg-white p-6 rounded-lg shadow-panel border border-slate-200">
+          <div className="flex items-center gap-2 mb-6">
+            <TrendingUp size={20} className="text-blue-700" />
+            <h4 className="font-bold text-slate-900">Skill Gap Trend</h4>
+          </div>
+          <div className="h-72 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={trendData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
+                <Tooltip content={<CustomTooltip />} />
+                <Line type="monotone" dataKey="Average Gap" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
 
       {/* Recommendations List */}
       <div className="bg-white rounded-lg shadow-panel border border-slate-200 overflow-hidden">

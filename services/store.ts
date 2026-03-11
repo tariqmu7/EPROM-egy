@@ -1,4 +1,4 @@
-import { User, Role, JobProfile, Skill, Department, Assessment, ActivityLog, ORG_HIERARCHY_ORDER } from '../types';
+import { User, Role, JobProfile, Skill, Department, Assessment, ActivityLog, ORG_HIERARCHY_ORDER, Notification, AssessmentCycle } from '../types';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 // ==========================================
@@ -374,6 +374,8 @@ class DataService {
   private assessments: Assessment[] = [];
   private departments: Department[] = [];
   private logs: ActivityLog[] = [];
+  private notifications: Notification[] = [];
+  private cycles: AssessmentCycle[] = [];
   
   private supabase: SupabaseClient | null = null;
   public isInitialized = false;
@@ -390,6 +392,8 @@ class DataService {
     this.assessments = [...MOCK_ASSESSMENTS];
     this.departments = [...MOCK_DEPTS];
     this.logs = [...MOCK_LOGS];
+    this.notifications = [];
+    this.cycles = [];
   }
 
   // --- INITIALIZATION ---
@@ -760,12 +764,137 @@ class DataService {
     return Math.round(sum / userAssessments.length);
   }
 
-  getAssessments(filters: { raterId?: string, subjectId?: string }) {
+  getAssessments(filters: { raterId?: string, subjectId?: string, cycleId?: string }) {
     return this.assessments.filter(a => {
       const matchRater = filters.raterId ? a.raterId === filters.raterId : true;
       const matchSubject = filters.subjectId ? a.subjectId === filters.subjectId : true;
-      return matchRater && matchSubject;
+      const matchCycle = filters.cycleId ? a.cycleId === filters.cycleId : true;
+      return matchRater && matchSubject && matchCycle;
     }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }
+
+  // --- CYCLES ---
+  getAllCycles() {
+    return [...this.cycles].sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+  }
+
+  getActiveCycle() {
+    return this.cycles.find(c => c.status === 'ACTIVE');
+  }
+
+  addCycle(cycle: Omit<AssessmentCycle, 'id'>) {
+    const newCycle: AssessmentCycle = {
+      ...cycle,
+      id: Math.random().toString(36).substr(2, 9)
+    };
+    this.cycles.push(newCycle);
+    this.persistItem('cycles', newCycle);
+    this.logActivity('Created Assessment Cycle', newCycle.name);
+
+    // Notify all users about the new cycle
+    this.users.forEach(u => {
+      this.addNotification({
+        userId: u.id,
+        title: 'New Assessment Cycle',
+        message: `The ${newCycle.name} assessment cycle is now active. Due date: ${new Date(newCycle.dueDate).toLocaleDateString()}`,
+        type: 'INFO',
+        actionLink: 'emp-assessment'
+      });
+    });
+  }
+
+  updateCycle(cycle: AssessmentCycle) {
+    const idx = this.cycles.findIndex(c => c.id === cycle.id);
+    if (idx >= 0) {
+      this.cycles[idx] = cycle;
+      this.updateItem('cycles', cycle);
+      this.logActivity('Updated Assessment Cycle', cycle.name);
+    }
+  }
+
+  // --- NOTIFICATIONS ---
+  
+  getNotifications(userId: string): Notification[] {
+    // Generate dynamic notifications based on role
+    const user = this.users.find(u => u.id === userId);
+    if (!user) return [];
+
+    const dynamicNotifications: Notification[] = [];
+
+    // Admin Notifications
+    if (user.role === Role.ADMIN) {
+      const pendingUsers = this.users.filter(u => u.status === 'PENDING');
+      if (pendingUsers.length > 0) {
+        dynamicNotifications.push({
+          id: 'dyn-admin-pending',
+          userId: user.id,
+          title: 'Pending Approvals',
+          message: `There are ${pendingUsers.length} user(s) waiting for approval.`,
+          type: 'WARNING',
+          isRead: false,
+          createdAt: new Date().toISOString(),
+          actionLink: 'admin-users'
+        });
+      }
+    }
+
+    // Manager Notifications
+    if (user.role === Role.MANAGER) {
+      const teamMembers = this.users.filter(u => u.managerId === user.id);
+      const teamMemberIds = new Set(teamMembers.map(u => u.id));
+      
+      // Find recent assessments for team members
+      const recentAssessments = this.assessments.filter(a => 
+        teamMemberIds.has(a.subjectId) && 
+        a.raterId !== user.id && // Not rated by this manager
+        new Date(a.date).getTime() > Date.now() - 7 * 24 * 60 * 60 * 1000 // Last 7 days
+      );
+
+      if (recentAssessments.length > 0) {
+        dynamicNotifications.push({
+          id: 'dyn-mgr-assessments',
+          userId: user.id,
+          title: 'Recent Team Assessments',
+          message: `${recentAssessments.length} new assessment(s) submitted for your team members recently.`,
+          type: 'INFO',
+          isRead: false,
+          createdAt: new Date().toISOString(),
+          actionLink: 'manager-dashboard'
+        });
+      }
+    }
+
+    // Combine dynamic and persistent notifications, sort by date desc
+    return [...dynamicNotifications, ...this.notifications.filter(n => n.userId === userId)]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  markNotificationAsRead(notificationId: string) {
+    const idx = this.notifications.findIndex(n => n.id === notificationId);
+    if (idx >= 0) {
+      this.notifications[idx].isRead = true;
+      this.updateItem('notifications', this.notifications[idx]);
+    }
+  }
+
+  markAllNotificationsAsRead(userId: string) {
+    this.notifications.forEach(n => {
+      if (n.userId === userId) {
+        n.isRead = true;
+        this.updateItem('notifications', n);
+      }
+    });
+  }
+
+  addNotification(notification: Omit<Notification, 'id' | 'createdAt' | 'isRead'>) {
+    const newNotification: Notification = {
+      ...notification,
+      id: Math.random().toString(36).substr(2, 9),
+      createdAt: new Date().toISOString(),
+      isRead: false
+    };
+    this.notifications.unshift(newNotification);
+    this.persistItem('notifications', newNotification);
   }
 
   // --- ACTIONS (Async Write-Behind) ---
@@ -794,6 +923,28 @@ class DataService {
     // Log Activity
     const subject = this.users.find(u => u.id === assessment.subjectId)?.name || 'Employee';
     this.logActivity('Submitted Assessment', `For ${subject}`);
+
+    // Notify the subject if it's not a self-assessment
+    if (assessment.raterId !== assessment.subjectId) {
+      this.addNotification({
+        userId: assessment.subjectId,
+        title: 'New Assessment Received',
+        message: `You received a new assessment.`,
+        type: 'INFO',
+        actionLink: 'emp-dashboard'
+      });
+    }
+  }
+
+  updateAssessment(assessment: Assessment) {
+    const idx = this.assessments.findIndex(a => a.id === assessment.id);
+    if (idx >= 0) {
+      this.assessments[idx] = assessment;
+      this.updateItem('assessments', assessment);
+      
+      const subject = this.users.find(u => u.id === assessment.subjectId)?.name || 'Employee';
+      this.logActivity('Updated Assessment', `For ${subject}`);
+    }
   }
 
   addSkill(skill: Skill) { 

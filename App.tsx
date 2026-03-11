@@ -282,12 +282,55 @@ const App: React.FC = () => {
 
   // Router Logic
   const renderContent = () => {
+    // Role Validation
+    if (activeTab.startsWith('admin-') && user.role !== Role.ADMIN) {
+      return (
+        <div className="flex flex-col items-center justify-center h-[60vh] p-12 text-center animate-fade-in">
+          <div className="bg-red-50 text-red-500 p-6 rounded-full mb-6">
+            <Lock size={48} />
+          </div>
+          <h2 className="text-3xl font-bold text-slate-900 mb-3">Access Denied</h2>
+          <p className="text-slate-600 max-w-md mb-8">
+            You do not have the required permissions to view this administration page. Please contact your system administrator if you believe this is an error.
+          </p>
+          <button 
+            onClick={() => setActiveTab('emp-dashboard')}
+            className="bg-blue-600 text-white px-6 py-2.5 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+          >
+            Return to Dashboard
+          </button>
+        </div>
+      );
+    }
+
+    if (activeTab === 'manager-dashboard' && user.role !== Role.MANAGER && user.role !== Role.ADMIN) {
+      return (
+        <div className="flex flex-col items-center justify-center h-[60vh] p-12 text-center animate-fade-in">
+          <div className="bg-orange-50 text-orange-500 p-6 rounded-full mb-6">
+            <Lock size={48} />
+          </div>
+          <h2 className="text-3xl font-bold text-slate-900 mb-3">Manager Access Required</h2>
+          <p className="text-slate-600 max-w-md mb-8">
+            This section is restricted to team managers. You can view your own performance and assessments in the Employee Dashboard.
+          </p>
+          <button 
+            onClick={() => setActiveTab('emp-dashboard')}
+            className="bg-blue-600 text-white px-6 py-2.5 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+          >
+            Return to Dashboard
+          </button>
+        </div>
+      );
+    }
+
     switch(activeTab) {
         case 'emp-dashboard': return <EmployeeDashboard user={user} />;
         case 'manager-dashboard': return <ManagerDashboard user={user} />;
         case 'emp-assessment': return <AssessmentPortal currentUser={user} />;
         // Admin Views - Mapped to sidebar IDs
         case 'admin-dashboard': return <AdminPanel view="OVERVIEW" onNavigate={setActiveTab} />;
+        case 'admin-analytics': return <AdminPanel view="ANALYTICS" onNavigate={setActiveTab} />;
+        case 'admin-cycles': return <AdminPanel view="CYCLES" onNavigate={setActiveTab} />;
         case 'admin-users': return <AdminPanel view="USERS" onNavigate={setActiveTab} />;
         case 'admin-jobs': return <AdminPanel view="JOBS" onNavigate={setActiveTab} />;
         case 'admin-skills': return <AdminPanel view="SKILLS" onNavigate={setActiveTab} />;

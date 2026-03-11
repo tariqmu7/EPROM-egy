@@ -1,7 +1,8 @@
 import React, { memo } from 'react';
 import { User, Role } from '../types';
 import { Logo } from './Logo';
-import { LogOut, LayoutDashboard, ClipboardList, ShieldCheck, UserCircle, Users, Building2, Briefcase } from 'lucide-react';
+import { LogOut, LayoutDashboard, ClipboardList, ShieldCheck, UserCircle, Users, Building2, Briefcase, Activity, Calendar } from 'lucide-react';
+import { NotificationBell } from './NotificationBell';
 
 interface LayoutProps {
   user: User;
@@ -49,14 +50,15 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
             </div>
 
             {/* Main Navigation */}
-            <nav className="hidden md:flex items-center gap-2 overflow-x-auto no-scrollbar mx-4">
+            <nav className="hidden md:flex items-center gap-2 mx-4">
               {user.role === Role.ADMIN ? (
                 <>
                   <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="admin-dashboard" label="Overview" icon={LayoutDashboard} />
-                  <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="admin-users" label="Workforce" icon={Users} />
-                  <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="admin-jobs" label="Job Profiles" icon={Briefcase} />
-                  <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="admin-skills" label="Skill Library" icon={ShieldCheck} />
-                  <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="admin-depts" label="Departments" icon={Building2} />
+                  <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="admin-analytics" label="Analytics" icon={Activity} />
+                  <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="admin-cycles" label="Cycles" icon={Calendar} />
+                  <div className="ml-2">
+                    <NotificationBell user={user} onNavigate={onSwitchTab} />
+                  </div>
                 </>
               ) : (
                 <>
@@ -71,6 +73,9 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
 
             {/* Right Side Actions */}
             <div className="flex items-center gap-4 lg:gap-6 flex-shrink-0">
+              
+              {user.role !== Role.ADMIN && <NotificationBell user={user} onNavigate={onSwitchTab} />}
+
               {/* User Profile */}
               <div className="flex items-center gap-3 pl-6 border-l border-slate-200">
                 <div className="text-right hidden sm:block">

@@ -2,8 +2,10 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { dataService } from '../services/store';
 import { User, Role, JobProfile, Skill, JobProfileSkill, OrgLevel, ORG_LEVEL_LABELS, Department, ORG_HIERARCHY_ORDER, PROFICIENCY_LABELS } from '../types';
 import { PROFICIENCY_DEFINITIONS } from '../constants';
-import { Plus, Users, Briefcase, ChevronRight, CheckCircle, Shield, ShieldCheck, X, Save, Trash2, ArrowLeft, UserPlus, Building2, Search, Edit2, UserCheck, AlertCircle, Layers, BookOpen, MoreHorizontal, LayoutGrid, Activity, Eye } from 'lucide-react';
+import { Plus, Users, Briefcase, ChevronRight, CheckCircle, Shield, ShieldCheck, X, Save, Trash2, ArrowLeft, UserPlus, Building2, Search, Edit2, UserCheck, AlertCircle, Layers, BookOpen, MoreHorizontal, LayoutGrid, Activity, Eye, AlertTriangle } from 'lucide-react';
 import { SearchableSelect, Option } from '../components/SearchableSelect';
+import { AdminAnalytics } from './AdminAnalytics';
+import { AdminCycles } from './AdminCycles';
 
 // --- Reusable Form Wrapper ---
 const FormPage: React.FC<{ title: string; onBack: () => void; children: React.ReactNode }> = ({ title, onBack, children }) => {
@@ -99,6 +101,7 @@ const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void,
     status: 'ACTIVE',
     departmentId: dataService.getAllDepartments()[0]?.id || ''
   });
+  const [managerPrompt, setManagerPrompt] = useState(false);
 
   const isPending = initialData?.status === 'PENDING';
   const isNewUser = !initialData;
@@ -130,14 +133,48 @@ const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void,
 
   const handleJobProfileChange = (val: string) => {
       const job = jobProfiles.find(j => j.id === val);
-      setFormData(prev => ({
-          ...prev,
-          jobProfileId: val,
-          departmentId: job ? job.departmentId : prev.departmentId,
-          managerId: (prev.managerId && job && potentialManagers.find(m => m.id === prev.managerId)?.departmentId !== job.departmentId) 
-            ? undefined 
-            : prev.managerId
-      }));
+      setFormData(prev => {
+          let newManagerId = prev.managerId;
+          if (prev.managerId && job) {
+              const currentManager = potentialManagers.find(m => m.id === prev.managerId);
+              if (currentManager && currentManager.departmentId !== job.departmentId) {
+                  newManagerId = undefined;
+                  setManagerPrompt(true);
+              } else {
+                  setManagerPrompt(false);
+              }
+          } else {
+              setManagerPrompt(false);
+          }
+          return {
+              ...prev,
+              jobProfileId: val,
+              departmentId: job ? job.departmentId : prev.departmentId,
+              managerId: newManagerId
+          };
+      });
+  };
+
+  const handleDepartmentChange = (val: string) => {
+      setFormData(prev => {
+          let newManagerId = prev.managerId;
+          if (prev.managerId) {
+              const currentManager = potentialManagers.find(m => m.id === prev.managerId);
+              if (currentManager && currentManager.departmentId !== val) {
+                  newManagerId = undefined;
+                  setManagerPrompt(true);
+              } else {
+                  setManagerPrompt(false);
+              }
+          } else {
+              setManagerPrompt(false);
+          }
+          return {
+              ...prev,
+              departmentId: val,
+              managerId: newManagerId
+          };
+      });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -201,7 +238,7 @@ const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void,
                         label="Department"
                         options={deptOptions}
                         value={formData.departmentId || ''}
-                        onChange={(val) => setFormData({...formData, departmentId: val})}
+                        onChange={handleDepartmentChange}
                         placeholder="Search Department..."
                     />
                     <div className="md:col-span-2">
@@ -235,13 +272,21 @@ const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void,
                         onChange={handleJobProfileChange}
                         placeholder="Assign Job Profile..."
                     />
-                    <SearchableSelect 
-                        label="Direct Manager"
-                        options={managerOptions}
-                        value={formData.managerId || ''}
-                        onChange={(val) => setFormData({...formData, managerId: val})}
-                        placeholder={contextDepartmentId ? "Select Manager from Dept..." : "Select Manager..."}
-                    />
+                    <div className="flex flex-col">
+                        <SearchableSelect 
+                            label="Direct Manager"
+                            options={managerOptions}
+                            value={formData.managerId || ''}
+                            onChange={(val) => { setFormData({...formData, managerId: val}); setManagerPrompt(false); }}
+                            placeholder={contextDepartmentId ? "Select Manager from Dept..." : "Select Manager..."}
+                        />
+                        {managerPrompt && (
+                            <p className="text-xs text-orange-600 font-medium mt-2 animate-pulse flex items-center gap-1">
+                                <AlertTriangle size={12} />
+                                The previous manager is not in the new department. Please re-select a manager.
+                            </p>
+                        )}
+                    </div>
                 </div>
             </div>
 
@@ -825,6 +870,16 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
             </div>
         </div>
       );
+  }
+
+  // --- ANALYTICS VIEW ---
+  if (view === 'ANALYTICS') {
+      return <AdminAnalytics />;
+  }
+
+  // --- CYCLES VIEW ---
+  if (view === 'CYCLES') {
+      return <AdminCycles />;
   }
 
   // --- TABLE VIEW (Data View) ---

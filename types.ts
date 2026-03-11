@@ -78,6 +78,14 @@ export interface User {
   avatarUrl?: string;
 }
 
+export interface AssessmentCycle {
+  id: string;
+  name: string;
+  startDate: string;
+  dueDate: string;
+  status: 'ACTIVE' | 'CLOSED';
+}
+
 export interface Assessment {
   id: string;
   raterId: string;
@@ -87,6 +95,7 @@ export interface Assessment {
   comment: string;
   date: string;
   type: 'SELF' | 'PEER' | 'MANAGER';
+  cycleId?: string; // Optional for backward compatibility, but used for generated cycles
 }
 
 export interface ActivityLog {
@@ -94,4 +103,15 @@ export interface ActivityLog {
   action: string;
   target: string;
   timestamp: string;
+}
+
+export interface Notification {
+  id: string;
+  userId: string; // The user who receives the notification
+  title: string;
+  message: string;
+  type: 'INFO' | 'WARNING' | 'SUCCESS' | 'ERROR';
+  isRead: boolean;
+  createdAt: string;
+  actionLink?: string; // Optional link to navigate when clicked
 }

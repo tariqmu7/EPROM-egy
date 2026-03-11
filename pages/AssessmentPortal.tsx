@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { User, JobProfile, PROFICIENCY_LABELS } from '../types';
+import { User, JobProfile, PROFICIENCY_LABELS, Assessment } from '../types';
 import { dataService } from '../services/store';
-import { UserCircle, Send, Star, Info, ChevronUp, ChevronDown, Check, Clock, History, FileText } from 'lucide-react';
+import { UserCircle, Send, Star, Info, ChevronUp, ChevronDown, Check, Clock, History, FileText, Calendar } from 'lucide-react';
 
 interface AssessmentPortalProps {
   currentUser: User;
@@ -14,6 +14,35 @@ export const AssessmentPortal: React.FC<AssessmentPortalProps> = React.memo(({ c
   const [selectedSubject, setSelectedSubject] = useState<User | null>(activeTab === 'SELF' ? currentUser : null);
   const [ratings, setRatings] = useState<Record<string, number>>({});
   const [submitted, setSubmitted] = useState(false);
+  const [existingAssessments, setExistingAssessments] = useState<Assessment[]>([]);
+
+  const activeCycle = useMemo(() => dataService.getActiveCycle(), []);
+
+  // Fetch existing assessments for the active cycle
+  useEffect(() => {
+    if (activeCycle && selectedSubject) {
+      const existing = dataService.getAssessments({
+        raterId: currentUser.id,
+        subjectId: selectedSubject.id,
+        cycleId: activeCycle.id
+      });
+      setExistingAssessments(existing);
+      
+      // Pre-fill ratings if they exist
+      if (existing.length > 0) {
+        const prefilledRatings: Record<string, number> = {};
+        existing.forEach(a => {
+          prefilledRatings[a.skillId] = a.score;
+        });
+        setRatings(prefilledRatings);
+      } else {
+        setRatings({});
+      }
+    } else {
+      setExistingAssessments([]);
+      setRatings({});
+    }
+  }, [activeCycle, selectedSubject, currentUser.id]);
 
   // Determine selectable users based on tab
   const subjects = useMemo(() => {
@@ -66,28 +95,38 @@ export const AssessmentPortal: React.FC<AssessmentPortalProps> = React.memo(({ c
 
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedSubject) return;
+    if (!selectedSubject || !activeCycle) return;
 
     Object.entries(ratings).forEach(([skillId, score]) => {
-      dataService.addAssessment({
-        raterId: currentUser.id,
-        subjectId: selectedSubject.id,
-        skillId: skillId,
-        score: score as number,
-        comment: 'Questionnaire Assessment Submission',
-        type: activeTab === 'SUBORDINATE' ? 'MANAGER' : activeTab === 'SELF' ? 'SELF' : 'PEER'
-      });
+      const existing = existingAssessments.find(a => a.skillId === skillId);
+      
+      if (existing) {
+        dataService.updateAssessment({
+          ...existing,
+          score: score as number,
+          date: new Date().toISOString()
+        });
+      } else {
+        dataService.addAssessment({
+          raterId: currentUser.id,
+          subjectId: selectedSubject.id,
+          skillId: skillId,
+          score: score as number,
+          comment: 'Questionnaire Assessment Submission',
+          type: activeTab === 'SUBORDINATE' ? 'MANAGER' : activeTab === 'SELF' ? 'SELF' : 'PEER',
+          cycleId: activeCycle.id
+        });
+      }
     });
 
     setSubmitted(true);
     // Reset after delay
     setTimeout(() => {
         setSubmitted(false);
-        setRatings({});
         if(activeTab !== 'SELF') setSelectedSubject(null);
         setViewMode('HISTORY'); // Switch to history to show the new record
     }, 2000);
-  }, [activeTab, currentUser.id, ratings, selectedSubject]);
+  }, [activeTab, currentUser.id, ratings, selectedSubject, activeCycle, existingAssessments]);
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -97,6 +136,12 @@ export const AssessmentPortal: React.FC<AssessmentPortalProps> = React.memo(({ c
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Competency Assessment</h2>
           <p className="text-slate-600 text-sm">Evaluate performance using behavioral questionnaires</p>
+          {activeCycle && (
+            <div className="mt-2 inline-flex items-center gap-2 bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full text-xs font-bold border border-emerald-200">
+              <Calendar size={14} />
+              Active Cycle: {activeCycle.name} (Due: {new Date(activeCycle.dueDate).toLocaleDateString()})
+            </div>
+          )}
         </div>
         <div className="flex gap-4">
              {/* Main Context Tabs */}
@@ -187,7 +232,13 @@ export const AssessmentPortal: React.FC<AssessmentPortalProps> = React.memo(({ c
               {/* VIEW: NEW ASSESSMENT (Questionnaire) */}
               {viewMode === 'ASSESS' && (
                   <div className="p-6">
-                    {submitted ? (
+                    {!activeCycle ? (
+                        <div className="flex flex-col items-center justify-center py-12 text-slate-500">
+                            <Calendar size={48} className="mb-4 text-slate-300" />
+                            <h4 className="text-xl font-bold text-slate-700">No Active Assessment Cycle</h4>
+                            <p className="text-sm mt-2 text-center max-w-md">There is currently no active assessment cycle. You will be notified when a new cycle is generated by the administration.</p>
+                        </div>
+                    ) : submitted ? (
                         <div className="flex flex-col items-center justify-center py-12 text-blue-700 animate-fade-in">
                         <div className="bg-blue-100 p-4 rounded-full mb-4">
                             <Send size={32} />
@@ -197,6 +248,15 @@ export const AssessmentPortal: React.FC<AssessmentPortalProps> = React.memo(({ c
                         </div>
                     ) : (
                         <form onSubmit={handleSubmit}>
+                        {existingAssessments.length > 0 && (
+                          <div className="mb-6 bg-blue-50 border border-blue-200 text-blue-800 p-4 rounded-lg flex items-start gap-3">
+                            <Info size={20} className="mt-0.5 flex-shrink-0" />
+                            <div>
+                              <p className="font-bold text-sm">You have already submitted an assessment for this cycle.</p>
+                              <p className="text-xs mt-1">You can update your ratings below. Changes will overwrite your previous submission.</p>
+                            </div>
+                          </div>
+                        )}
                         {subjectJobProfile && subjectLevel ? (
                             applicableSkills.length > 0 ? (
                             <div className="space-y-10">
@@ -266,7 +326,7 @@ export const AssessmentPortal: React.FC<AssessmentPortalProps> = React.memo(({ c
                                     className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white px-8 py-3 rounded-lg font-bold shadow-lg shadow-blue-200/50 transition-all flex items-center gap-2"
                                 >
                                     <Send size={18} />
-                                    Submit Evaluation
+                                    {existingAssessments.length > 0 ? 'Update Evaluation' : 'Submit Evaluation'}
                                 </button>
                             </div>
                             </div>
