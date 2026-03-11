@@ -15,7 +15,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
   if (!jobProfile) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] text-slate-600">
-         <Activity size={48} className="mb-4 text-slate-300" />
+         <Activity size={48} className="mb-4 text-slate-500" />
          <p className="font-medium">No Job Profile assigned. Contact Administration.</p>
       </div>
     );
@@ -23,8 +23,8 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
 
   if (!userLevel) {
     return (
-      <div className="flex flex-col items-center justify-center h-[60vh] text-slate-500">
-        <Activity size={48} className="mb-4 text-slate-300" />
+      <div className="flex flex-col items-center justify-center h-[60vh] text-slate-700">
+        <Activity size={48} className="mb-4 text-slate-500" />
         <p className="font-medium">No Organization Level assigned. Contact Administration.</p>
       </div>
     );
@@ -34,8 +34,8 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
   
   if (levelRequirements.length === 0) {
       return (
-        <div className="flex flex-col items-center justify-center h-[60vh] text-slate-500">
-             <CheckCircle size={48} className="mb-4 text-slate-300" />
+        <div className="flex flex-col items-center justify-center h-[60vh] text-slate-700">
+             <CheckCircle size={48} className="mb-4 text-slate-500" />
             <p className="font-medium">No specific competency requirements defined for level: <span className="font-bold text-slate-700">{userLevel}</span>.</p>
         </div>
       );
@@ -155,7 +155,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
           {payload.map((p: any, idx: number) => (
              <div key={idx} className="flex items-center gap-2 text-xs">
                 <div className="w-2 h-2 rounded-full" style={{background: p.color}}></div>
-                <span className="text-slate-300">{p.name}:</span>
+                <span className="text-slate-500">{p.name}:</span>
                 <span className="font-bold text-white">{p.value}</span>
              </div>
           ))}
@@ -171,10 +171,10 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
       <div className="flex flex-col md:flex-row justify-between items-end border-b border-slate-200 pb-6">
         <div>
           <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Competency Dashboard</h2>
-          <div className="flex items-center gap-2 mt-2 text-sm text-slate-500">
+          <div className="flex items-center gap-2 mt-2 text-sm text-slate-700">
              <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-bold uppercase text-[10px] tracking-wider">{userLevel}</span>
              <span>{jobProfile.title}</span>
-             <span className="text-slate-300">•</span>
+             <span className="text-slate-500">•</span>
              <span>{dataService.getAllDepartments().find(d => d.id === user.departmentId)?.name}</span>
           </div>
         </div>
@@ -199,58 +199,58 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
         <div className="bg-white p-6 rounded-lg shadow-md border-t-4 border-blue-500">
           <div className="flex justify-between items-start mb-4">
             <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Compliance Rate</p>
+              <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Compliance Rate</p>
               <h3 className="text-4xl font-bold text-slate-900 mt-1">
-                {skillAnalysis.length > 0 ? Math.round((compliant.length / skillAnalysis.length) * 100) : 0}<span className="text-xl text-slate-400 font-normal">%</span>
+                {skillAnalysis.length > 0 ? Math.round((compliant.length / skillAnalysis.length) * 100) : 0}<span className="text-xl text-slate-600 font-normal">%</span>
               </h3>
             </div>
-            <div className="p-2 bg-slate-100 rounded-full text-blue-600">
+            <div className="p-2 bg-slate-100 rounded-full text-blue-700">
               <CheckCircle size={24} />
             </div>
           </div>
           <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
              <div className="bg-blue-500 h-full" style={{ width: `${skillAnalysis.length > 0 ? (compliant.length / skillAnalysis.length) * 100 : 0}%` }}></div>
           </div>
-          <p className="text-xs text-slate-500 mt-3 font-medium flex items-center gap-1">
-             <span className="text-blue-600">●</span> {compliant.length} skills fully compliant
+          <p className="text-xs text-slate-700 mt-3 font-medium flex items-center gap-1">
+             <span className="text-blue-700">●</span> {compliant.length} skills fully compliant
           </p>
         </div>
 
         <div className="bg-white p-6 rounded-lg shadow-panel border-t-4 border-emerald-500">
           <div className="flex justify-between items-start mb-4">
             <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Critical Gaps</p>
+              <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Critical Gaps</p>
               <h3 className="text-4xl font-bold text-slate-900 mt-1">{gaps.length}</h3>
             </div>
-            <div className="p-2 bg-slate-100 rounded-full text-emerald-500">
+            <div className="p-2 bg-slate-100 rounded-full text-emerald-700">
               <AlertCircle size={24} />
             </div>
           </div>
           <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
              <div className="bg-emerald-500 h-full" style={{ width: `${skillAnalysis.length > 0 ? (gaps.length / skillAnalysis.length) * 100 : 0}%` }}></div>
           </div>
-          <p className="text-xs text-slate-500 mt-3 font-medium flex items-center gap-1">
-             <span className="text-emerald-500">●</span> Requires immediate action
+          <p className="text-xs text-slate-700 mt-3 font-medium flex items-center gap-1">
+             <span className="text-emerald-700">●</span> Requires immediate action
           </p>
         </div>
 
         <div className="bg-white p-6 rounded-lg shadow-panel border-t-4 border-cyan-400">
           <div className="flex justify-between items-start mb-4">
             <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Certifications Needed</p>
+              <p className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Certifications Needed</p>
               <h3 className="text-4xl font-bold text-slate-900 mt-1">
                 {recommendations.reduce((acc, curr) => acc + curr.certs.length, 0)}
               </h3>
             </div>
-            <div className="p-2 bg-slate-50 rounded-full text-cyan-400">
+            <div className="p-2 bg-slate-50 rounded-full text-cyan-700">
               <Award size={24} />
             </div>
           </div>
           <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
              <div className="bg-cyan-400 h-full" style={{ width: `${Math.min(recommendations.reduce((acc, curr) => acc + curr.certs.length, 0) * 10, 100)}%` }}></div>
           </div>
-           <p className="text-xs text-slate-500 mt-3 font-medium flex items-center gap-1">
-             <span className="text-cyan-400">●</span> To reach next level
+           <p className="text-xs text-slate-700 mt-3 font-medium flex items-center gap-1">
+             <span className="text-cyan-700">●</span> To reach next level
           </p>
         </div>
       </div>
@@ -259,7 +259,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
       <div className="bg-white rounded-lg shadow-panel border border-slate-200 overflow-hidden">
         <div className="p-5 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
           <h4 className="font-bold text-slate-900">Action Plan & Recommendations</h4>
-          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Generated by Oriens Engine</span>
+          <span className="text-xs font-semibold text-slate-700 uppercase tracking-wide">Generated by Oriens Engine</span>
         </div>
         <div className="divide-y divide-slate-100">
           {recommendations.length > 0 ? (
@@ -277,8 +277,8 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                                    <TrendingUp size={10} /> Development Area
                                </span>
                            )}
-                           <span className="text-slate-300">|</span>
-                           <h5 className="font-bold text-slate-900 text-base group-hover:text-blue-600 transition-colors">{rec.skillName}</h5>
+                           <span className="text-slate-500">|</span>
+                           <h5 className="font-bold text-slate-900 text-base group-hover:text-blue-700 transition-colors">{rec.skillName}</h5>
                         </div>
                         <p className="text-sm text-slate-600 mb-4 leading-relaxed max-w-3xl">
                             <span className="font-semibold text-slate-900">Goal:</span> Reach Level {rec.targetLevel} - {rec.description}
@@ -288,7 +288,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                             <div className="flex flex-wrap gap-2 mb-4">
                               {rec.certs.map((cert, cIdx) => (
                                 <span key={cIdx} className="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200">
-                                  <Award size={12} className="text-cyan-500" />
+                                  <Award size={12} className="text-cyan-700" />
                                   {cert}
                                 </span>
                               ))}
@@ -297,34 +297,34 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                      </div>
                      <div className="flex items-start justify-end">
                         <div className="text-right">
-                            <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Gap Size</div>
-                            <div className="text-2xl font-bold text-slate-900">{rec.gapSize} <span className="text-sm font-normal text-slate-400">Levels</span></div>
+                            <div className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">Gap Size</div>
+                            <div className="text-2xl font-bold text-slate-900">{rec.gapSize} <span className="text-sm font-normal text-slate-600">Levels</span></div>
                         </div>
                      </div>
                  </div>
 
                  {/* Action Items */}
                  <div className="bg-slate-50 rounded-lg p-4 border border-slate-100">
-                    <h6 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <h6 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3 flex items-center gap-2">
                         <Activity size={12} /> Recommended Actions
                     </h6>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {rec.suggestedActions.map((action, aIdx) => (
                             <div key={aIdx} className="bg-white p-3 rounded border border-slate-200 flex items-center justify-between hover:border-blue-300 transition-colors cursor-pointer group/action">
                                 <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded bg-blue-50 text-blue-600 flex items-center justify-center group-hover/action:bg-blue-600 group-hover/action:text-white transition-colors">
+                                    <div className="w-8 h-8 rounded bg-blue-50 text-blue-700 flex items-center justify-center group-hover/action:bg-blue-600 group-hover/action:text-white transition-colors">
                                         <action.icon size={16} />
                                     </div>
                                     <div>
-                                        <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">{action.type}</div>
+                                        <div className="text-xs font-bold text-slate-600 uppercase tracking-wider">{action.type}</div>
                                         <div className="text-sm font-semibold text-slate-700">{action.label}</div>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-3">
-                                    <span className="text-xs font-medium text-slate-400 bg-slate-50 px-2 py-1 rounded border border-slate-100 flex items-center gap-1">
+                                    <span className="text-xs font-medium text-slate-600 bg-slate-50 px-2 py-1 rounded border border-slate-100 flex items-center gap-1">
                                         <Calendar size={10} /> {action.duration}
                                     </span>
-                                    <ArrowRight size={14} className="text-slate-300 group-hover/action:text-blue-500" />
+                                    <ArrowRight size={14} className="text-slate-500 group-hover/action:text-blue-700" />
                                 </div>
                             </div>
                         ))}
@@ -334,11 +334,11 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
             ))
           ) : (
             <div className="p-12 text-center">
-              <div className="mx-auto w-12 h-12 bg-green-50 text-green-600 rounded-full flex items-center justify-center mb-4 border border-green-100">
+              <div className="mx-auto w-12 h-12 bg-green-50 text-green-700 rounded-full flex items-center justify-center mb-4 border border-green-100">
                 <CheckCircle size={24} />
               </div>
               <h3 className="text-lg font-bold text-slate-900">100% Compliant</h3>
-              <p className="text-slate-500 text-sm mt-1">Excellent work. You meet all competency requirements for your current role.</p>
+              <p className="text-slate-700 text-sm mt-1">Excellent work. You meet all competency requirements for your current role.</p>
             </div>
           )}
         </div>

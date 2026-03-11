@@ -106,7 +106,7 @@ export const AssessmentPortal: React.FC<AssessmentPortalProps> = React.memo(({ c
                 key={tab}
                 onClick={() => setActiveTab(tab)}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    activeTab === tab ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100'
+                    activeTab === tab ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-100'
                 }`}
                 >
                 {tab === 'SELF' ? 'Self Review' : tab === 'PEER' ? 'Peer Review' : 'Subordinates'}
@@ -118,13 +118,13 @@ export const AssessmentPortal: React.FC<AssessmentPortalProps> = React.memo(({ c
             <div className="bg-white rounded-lg p-1 flex shadow-sm border border-slate-200">
                 <button 
                     onClick={() => setViewMode('ASSESS')}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === 'ASSESS' ? 'bg-slate-100 text-slate-900' : 'text-slate-500'}`}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === 'ASSESS' ? 'bg-slate-100 text-slate-900' : 'text-slate-700'}`}
                 >
                     <FileText size={16}/> New
                 </button>
                 <button 
                     onClick={() => setViewMode('HISTORY')}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === 'HISTORY' ? 'bg-slate-100 text-slate-900' : 'text-slate-500'}`}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${viewMode === 'HISTORY' ? 'bg-slate-100 text-slate-900' : 'text-slate-700'}`}
                 >
                     <History size={16}/> History
                 </button>
@@ -148,15 +148,15 @@ export const AssessmentPortal: React.FC<AssessmentPortalProps> = React.memo(({ c
                   }`}
                 >
                   <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center overflow-hidden flex-shrink-0">
-                    {sub.avatarUrl ? <img src={sub.avatarUrl} alt="" className="w-full h-full object-cover"/> : <UserCircle size={20} className="text-slate-500"/>}
+                    {sub.avatarUrl ? <img src={sub.avatarUrl} alt="" className="w-full h-full object-cover"/> : <UserCircle size={20} className="text-slate-700"/>}
                   </div>
                   <div className="min-w-0">
                     <p className={`text-sm font-medium truncate ${selectedSubject?.id === sub.id ? 'text-blue-900' : 'text-slate-700'}`}>{sub.name}</p>
-                    <p className="text-xs text-slate-500 truncate">{sub.email}</p>
+                    <p className="text-xs text-slate-700 truncate">{sub.email}</p>
                   </div>
                 </button>
               )) : (
-                <div className="p-4 text-center text-sm text-slate-400">No employees found for this category.</div>
+                <div className="p-4 text-center text-sm text-slate-600">No employees found for this category.</div>
               )}
             </div>
           </div>
@@ -173,7 +173,7 @@ export const AssessmentPortal: React.FC<AssessmentPortalProps> = React.memo(({ c
                     <h3 className="text-xl font-bold text-slate-900">
                         {viewMode === 'ASSESS' ? 'New Assessment for:' : 'Assessment History:'} {selectedSubject.name}
                     </h3>
-                    <p className="text-slate-500 text-sm mt-1">
+                    <p className="text-slate-700 text-sm mt-1">
                         {subjectJobProfile?.title || 'No Job Profile'} • Level: <span className="font-semibold">{subjectLevel || 'N/A'}</span>
                     </p>
                 </div>
@@ -188,12 +188,12 @@ export const AssessmentPortal: React.FC<AssessmentPortalProps> = React.memo(({ c
               {viewMode === 'ASSESS' && (
                   <div className="p-6">
                     {submitted ? (
-                        <div className="flex flex-col items-center justify-center py-12 text-blue-600 animate-fade-in">
+                        <div className="flex flex-col items-center justify-center py-12 text-blue-700 animate-fade-in">
                         <div className="bg-blue-100 p-4 rounded-full mb-4">
                             <Send size={32} />
                         </div>
                         <h4 className="text-xl font-bold">Assessment Submitted Successfully!</h4>
-                        <p className="text-slate-500 text-sm mt-2">Redirecting to history...</p>
+                        <p className="text-slate-700 text-sm mt-2">Redirecting to history...</p>
                         </div>
                     ) : (
                         <form onSubmit={handleSubmit}>
@@ -210,10 +210,10 @@ export const AssessmentPortal: React.FC<AssessmentPortalProps> = React.memo(({ c
                                     <div className="mb-4">
                                         <div className="flex items-center gap-2 mb-1">
                                             <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">{skillData.category}</span>
-                                            <span className="text-xs font-medium text-slate-400">Target Level: {req.requiredLevel}</span>
+                                            <span className="text-xs font-medium text-slate-600">Target Level: {req.requiredLevel}</span>
                                         </div>
                                         <h4 className="text-lg font-bold text-slate-800 flex items-start gap-2">
-                                            <span className="text-blue-600 mt-1">Q{idx+1}.</span> 
+                                            <span className="text-blue-700 mt-1">Q{idx+1}.</span> 
                                             {skillData.assessmentQuestion || `Select the statement that best matches the employee's proficiency in "${skillData.name}".`}
                                         </h4>
                                     </div>
@@ -239,18 +239,18 @@ export const AssessmentPortal: React.FC<AssessmentPortalProps> = React.memo(({ c
                                                         value={level}
                                                         checked={isSelected}
                                                         onChange={() => handleRatingChange(req.skillId, level)}
-                                                        className="mt-1 w-4 h-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                                                        className="mt-1 w-4 h-4 text-blue-700 focus:ring-blue-500 border-gray-300"
                                                     />
                                                     <div className="flex-1">
                                                         <div className="flex justify-between">
                                                             <span className={`text-sm font-bold ${isSelected ? 'text-blue-800' : 'text-slate-700'}`}>Level {level}: {PROFICIENCY_LABELS[level]}</span>
-                                                            {isTarget && <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded uppercase">Target</span>}
+                                                            {isTarget && <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded uppercase">Target</span>}
                                                         </div>
-                                                        <p className={`text-sm mt-1 ${isSelected ? 'text-blue-700' : 'text-slate-500'}`}>
+                                                        <p className={`text-sm mt-1 ${isSelected ? 'text-blue-700' : 'text-slate-700'}`}>
                                                             {skillData.levels[level]?.description || 'No description available.'}
                                                         </p>
                                                     </div>
-                                                    {isSelected && <Check size={20} className="text-blue-600 absolute right-4 top-4" />}
+                                                    {isSelected && <Check size={20} className="text-blue-700 absolute right-4 top-4" />}
                                                 </label>
                                             );
                                         })}
@@ -271,12 +271,12 @@ export const AssessmentPortal: React.FC<AssessmentPortalProps> = React.memo(({ c
                             </div>
                             </div>
                             ) : (
-                                <div className="text-center py-12 text-slate-400 bg-slate-50 rounded-lg border border-dashed border-slate-300">
+                                <div className="text-center py-12 text-slate-600 bg-slate-50 rounded-lg border border-dashed border-slate-300">
                                     No competency requirements found for this user's specific level ({subjectLevel}).
                                 </div>
                             )
                         ) : (
-                            <div className="text-center py-12 text-slate-400 bg-slate-50 rounded-lg border border-dashed border-slate-300">
+                            <div className="text-center py-12 text-slate-600 bg-slate-50 rounded-lg border border-dashed border-slate-300">
                             {subjectJobProfile ? "User has no assigned Hierarchy Level." : "No job profile assigned to this user."} Cannot perform assessment.
                             </div>
                         )}
@@ -291,7 +291,7 @@ export const AssessmentPortal: React.FC<AssessmentPortalProps> = React.memo(({ c
                       {historyData.length > 0 ? (
                         <div className="overflow-x-auto">
                             <table className="w-full text-left text-sm">
-                                <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
+                                <thead className="bg-slate-50 text-slate-700 font-medium border-b border-slate-200">
                                     <tr>
                                         <th className="p-4">Date</th>
                                         <th className="p-4">{activeTab === 'SELF' ? 'Evaluator' : 'Subject'}</th>
@@ -309,7 +309,7 @@ export const AssessmentPortal: React.FC<AssessmentPortalProps> = React.memo(({ c
 
                                         return (
                                             <tr key={record.id} className="hover:bg-slate-50 transition-colors">
-                                                <td className="p-4 text-slate-500">
+                                                <td className="p-4 text-slate-700">
                                                     <div className="flex items-center gap-2">
                                                         <Clock size={14}/> {new Date(record.date).toLocaleDateString()}
                                                     </div>
@@ -337,7 +337,7 @@ export const AssessmentPortal: React.FC<AssessmentPortalProps> = React.memo(({ c
                             </table>
                         </div>
                       ) : (
-                          <div className="flex-1 flex flex-col items-center justify-center p-12 text-slate-400">
+                          <div className="flex-1 flex flex-col items-center justify-center p-12 text-slate-600">
                               <History size={48} className="mb-4 opacity-20"/>
                               <p>No assessment history found.</p>
                           </div>
@@ -347,7 +347,7 @@ export const AssessmentPortal: React.FC<AssessmentPortalProps> = React.memo(({ c
 
             </div>
           ) : (
-             <div className="h-full flex flex-col items-center justify-center bg-slate-50 rounded-xl border border-dashed border-slate-300 text-slate-400 p-12">
+             <div className="h-full flex flex-col items-center justify-center bg-slate-50 rounded-xl border border-dashed border-slate-300 text-slate-600 p-12">
                 <UserCircle size={48} className="mb-4 opacity-50" />
                 <p>Select a person from the list to begin.</p>
              </div>

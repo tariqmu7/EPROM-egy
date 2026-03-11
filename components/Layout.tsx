@@ -1,5 +1,6 @@
 import React, { memo } from 'react';
 import { User, Role } from '../types';
+import { Logo } from './Logo';
 import { LogOut, LayoutDashboard, ClipboardList, ShieldCheck, UserCircle, Users, Building2, Briefcase } from 'lucide-react';
 
 interface LayoutProps {
@@ -18,10 +19,10 @@ const NavItem = memo(({ id, label, icon: Icon, activeTab, onSwitchTab }: { id: s
       className={`relative flex items-center gap-2 px-3 py-2 text-sm font-medium transition-all duration-200 rounded-md group whitespace-nowrap flex-shrink-0 ${
         isActive 
           ? 'text-blue-700 bg-blue-50 shadow-sm border border-blue-100' 
-          : 'text-slate-600 hover:text-blue-600 hover:bg-slate-100'
+          : 'text-slate-600 hover:text-blue-700 hover:bg-slate-100'
       }`}
     >
-      <Icon size={18} className={`${isActive ? 'text-blue-600' : 'text-slate-400 group-hover:text-blue-500'}`} />
+      <Icon size={18} className={`${isActive ? 'text-blue-700' : 'text-slate-600 group-hover:text-blue-700'}`} />
       <span className="hidden md:inline">{label}</span>
     </button>
   );
@@ -37,13 +38,13 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
           <div className="flex justify-between h-20 items-center">
             
             {/* Logo Section */}
-            <div className="flex items-center gap-3 flex-shrink-0">
-               <div className="w-12 h-12 rounded overflow-hidden flex items-center justify-center">
-                    <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRTk3oTrPWYW9cwmL9Wu21gBh0borRXsDUFsw&s" alt="Logo" className="w-full h-full object-contain" />
+            <div className="flex items-center gap-4 flex-shrink-0">
+               <div className="w-16 h-16 rounded-xl overflow-hidden flex items-center justify-center py-1">
+                    <Logo className="w-full h-full" />
                </div>
                <div className="hidden lg:flex flex-col">
-                 <span className="font-bold text-xl tracking-tight leading-none text-slate-900">Oriens</span>
-                 <span className="text-[10px] text-blue-600 font-bold uppercase tracking-widest mt-0.5">Competency OS</span>
+                 <span className="font-bold text-2xl tracking-tight leading-none text-slate-900">ORIENS</span>
+                 <span className="text-xs text-blue-700 font-bold uppercase tracking-widest mt-1">EPROM Competency program</span>
                </div>
             </div>
 
@@ -74,14 +75,14 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
               <div className="flex items-center gap-3 pl-6 border-l border-slate-200">
                 <div className="text-right hidden sm:block">
                     <p className="text-sm font-bold text-slate-900 leading-none">{user.name}</p>
-                    <p className="text-[10px] text-slate-500 uppercase mt-1">{user.role}</p>
+                    <p className="text-[10px] text-slate-700 uppercase mt-1">{user.role}</p>
                 </div>
-                <div className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden shadow-sm text-slate-500">
+                <div className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden shadow-sm text-slate-700">
                     {user.avatarUrl ? <img src={user.avatarUrl} alt="avatar" /> : <UserCircle size={24} />}
                 </div>
                 <button 
                   onClick={onLogout}
-                  className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-full transition-colors"
+                  className="p-2 text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-full transition-colors"
                   title="Sign Out"
                 >
                   <LogOut size={18} />

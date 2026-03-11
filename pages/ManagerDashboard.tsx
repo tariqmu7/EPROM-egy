@@ -43,7 +43,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
       <div className="animate-in slide-in-from-right duration-300">
         <button 
           onClick={() => setSelectedMember(null)}
-          className="mb-6 flex items-center gap-2 text-slate-600 hover:text-blue-600 transition-colors font-medium text-sm"
+          className="mb-6 flex items-center gap-2 text-slate-600 hover:text-blue-700 transition-colors font-medium text-sm"
         >
           <ArrowLeft size={16} /> Back to Team Overview
         </button>
@@ -53,7 +53,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
             </div>
             <div>
                 <h3 className="text-lg font-bold text-slate-900">{selectedMember.name}</h3>
-                <p className="text-sm text-slate-500">{dataService.getJobProfile(selectedMember.jobProfileId || '')?.title || 'No Job Profile'}</p>
+                <p className="text-sm text-slate-700">{dataService.getJobProfile(selectedMember.jobProfileId || '')?.title || 'No Job Profile'}</p>
             </div>
             <div className="ml-auto">
                 <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide">
@@ -88,10 +88,10 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
                         <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                             <div>
                                 <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                                    <Briefcase size={20} className="text-blue-600" />
+                                    <Briefcase size={20} className="text-blue-700" />
                                     {job.title}
                                 </h3>
-                                <p className="text-slate-500 text-sm mt-1">{job.description}</p>
+                                <p className="text-slate-700 text-sm mt-1">{job.description}</p>
                             </div>
                             <div className="flex items-center gap-2">
                                 <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide flex items-center gap-1">
@@ -104,14 +104,14 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
                             {/* Requirements Section */}
                             <div>
                                 <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                    <Shield size={16} className="text-slate-400" /> Competency Requirements
+                                    <Shield size={16} className="text-slate-600" /> Competency Requirements
                                 </h4>
                                 <div className="space-y-4">
                                     {Object.entries(job.requirements).map(([level, reqs]) => (
                                         <div key={level} className="bg-slate-100 rounded-lg p-4 border border-slate-100">
                                             <div className="flex items-center justify-between mb-3">
                                                 <span className="text-xs font-bold bg-white border border-slate-200 px-2 py-1 rounded text-slate-700">Level: {level}</span>
-                                                <span className="text-[10px] text-slate-400 uppercase font-semibold">{reqs.length} Skills Required</span>
+                                                <span className="text-[10px] text-slate-600 uppercase font-semibold">{reqs.length} Skills Required</span>
                                             </div>
                                             <div className="flex flex-wrap gap-2">
                                                 {reqs.map((req, idx) => {
@@ -132,7 +132,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
                             {/* Team Stats List */}
                             <div>
                                 <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                    <Users size={16} className="text-slate-400" /> Current Team Status
+                                    <Users size={16} className="text-slate-600" /> Current Team Status
                                 </h4>
                                 {employeesInJob.length > 0 ? (
                                     <div className="bg-slate-50 rounded-lg border border-slate-100 p-4 space-y-3">
@@ -147,10 +147,10 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
                                                             </div>
                                                             <div>
                                                                 <div className="text-sm font-bold text-slate-700 leading-none">{emp.name}</div>
-                                                                <div className="text-[10px] text-slate-400 mt-0.5">{stats.gaps} Gaps Detected</div>
+                                                                <div className="text-[10px] text-slate-600 mt-0.5">{stats.gaps} Gaps Detected</div>
                                                             </div>
                                                         </div>
-                                                        <span className={`text-xs font-bold ${stats.compliance >= 80 ? 'text-green-600' : stats.compliance >= 50 ? 'text-cyan-500' : 'text-emerald-500'}`}>
+                                                        <span className={`text-xs font-bold ${stats.compliance >= 80 ? 'text-green-700' : stats.compliance >= 50 ? 'text-cyan-700' : 'text-emerald-700'}`}>
                                                             {stats.compliance}%
                                                         </span>
                                                     </div>
@@ -165,7 +165,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
                                         })}
                                     </div>
                                 ) : (
-                                    <div className="h-64 w-full bg-slate-50 rounded-lg border border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-400">
+                                    <div className="h-64 w-full bg-slate-50 rounded-lg border border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-600">
                                         <Users size={32} className="mb-2 opacity-50" />
                                         <p className="text-sm font-medium">No team members in this role yet.</p>
                                     </div>
@@ -178,9 +178,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
             
             {managedJobs.length === 0 && (
                 <div className="p-12 text-center bg-slate-50 rounded-lg border border-dashed border-slate-300">
-                    <Briefcase size={48} className="mx-auto text-slate-300 mb-4" />
+                    <Briefcase size={48} className="mx-auto text-slate-500 mb-4" />
                     <h3 className="text-lg font-medium text-slate-900">No Job Profiles Found</h3>
-                    <p className="text-slate-500 text-sm mt-1">There are no job profiles associated with your department.</p>
+                    <p className="text-slate-700 text-sm mt-1">There are no job profiles associated with your department.</p>
                 </div>
             )}
         </div>
@@ -193,8 +193,8 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
       <div className="flex flex-col md:flex-row justify-between items-end border-b border-slate-200 pb-6">
         <div>
           <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Manager Dashboard</h2>
-          <div className="flex items-center gap-2 mt-2 text-sm text-slate-500">
-             <Users size={16} className="text-blue-600" />
+          <div className="flex items-center gap-2 mt-2 text-sm text-slate-700">
+             <Users size={16} className="text-blue-700" />
              <span>Managing {subordinates.length} Team Members across {managedJobs.length} Roles</span>
           </div>
         </div>
@@ -203,13 +203,13 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
         <div className="flex bg-slate-100 p-1 rounded-lg">
             <button 
                 onClick={() => setActiveView('TEAM')}
-                className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeView === 'TEAM' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeView === 'TEAM' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-700 hover:text-slate-700'}`}
             >
                 Team Overview
             </button>
             <button 
                 onClick={() => setActiveView('JOBS')}
-                className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeView === 'JOBS' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeView === 'JOBS' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-700 hover:text-slate-700'}`}
             >
                 Job Profiles
             </button>
@@ -238,22 +238,22 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
                                 </div>
                                 <div>
                                     <h4 className="font-bold text-slate-900 leading-tight group-hover:text-blue-700 transition-colors">{member.name}</h4>
-                                    <p className="text-xs text-slate-500 mt-0.5">{jobTitle}</p>
+                                    <p className="text-xs text-slate-700 mt-0.5">{jobTitle}</p>
                                 </div>
                             </div>
-                            <div className="bg-slate-50 p-1.5 rounded-full text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                            <div className="bg-slate-50 p-1.5 rounded-full text-slate-600 group-hover:bg-blue-50 group-hover:text-blue-700 transition-colors">
                                 <ChevronRight size={18} />
                             </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4 pl-3 mt-6">
                             <div className="bg-slate-50 rounded p-3 border border-slate-100">
-                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Compliance</div>
+                                <div className="text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Compliance</div>
                                 <div className="flex items-center gap-2 mb-2">
-                                    <span className={`text-lg font-bold ${stats.compliance >= 80 ? 'text-green-600' : stats.compliance >= 50 ? 'text-cyan-500' : 'text-emerald-500'}`}>
+                                    <span className={`text-lg font-bold ${stats.compliance >= 80 ? 'text-green-700' : stats.compliance >= 50 ? 'text-cyan-700' : 'text-emerald-700'}`}>
                                         {stats.compliance}%
                                     </span>
-                                    {stats.compliance >= 80 ? <CheckCircle size={14} className="text-green-500"/> : <TrendingUp size={14} className="text-cyan-500"/>}
+                                    {stats.compliance >= 80 ? <CheckCircle size={14} className="text-green-700"/> : <TrendingUp size={14} className="text-cyan-700"/>}
                                 </div>
                                 <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
                                     <div 
@@ -263,12 +263,12 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
                                 </div>
                             </div>
                             <div className="bg-slate-50 rounded p-3 border border-slate-100">
-                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Critical Gaps</div>
+                                <div className="text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Critical Gaps</div>
                                 <div className="flex items-center gap-2">
-                                    <span className={`text-lg font-bold ${stats.gaps === 0 ? 'text-slate-700' : 'text-emerald-600'}`}>
+                                    <span className={`text-lg font-bold ${stats.gaps === 0 ? 'text-slate-700' : 'text-emerald-700'}`}>
                                         {stats.gaps}
                                     </span>
-                                    {stats.gaps > 0 && <AlertCircle size={14} className="text-emerald-500"/>}
+                                    {stats.gaps > 0 && <AlertCircle size={14} className="text-emerald-700"/>}
                                 </div>
                             </div>
                         </div>
@@ -278,9 +278,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
 
             {subordinates.length === 0 && (
                 <div className="col-span-full p-12 text-center bg-slate-50 rounded-lg border border-dashed border-slate-300">
-                    <Users size={48} className="mx-auto text-slate-300 mb-4" />
+                    <Users size={48} className="mx-auto text-slate-500 mb-4" />
                     <h3 className="text-lg font-medium text-slate-900">No Team Members Found</h3>
-                    <p className="text-slate-500 text-sm mt-1">You don't have any direct reports assigned to you yet.</p>
+                    <p className="text-slate-700 text-sm mt-1">You don't have any direct reports assigned to you yet.</p>
                 </div>
             )}
         </div>

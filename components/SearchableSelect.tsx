@@ -60,20 +60,20 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({ options, val
           {selectedOption ? (
              <div className="flex items-center gap-2">
                 <span className="text-slate-900 font-medium truncate">{selectedOption.label}</span>
-                {selectedOption.subLabel && <span className="text-slate-400 text-xs truncate">({selectedOption.subLabel})</span>}
+                {selectedOption.subLabel && <span className="text-slate-600 text-xs truncate">({selectedOption.subLabel})</span>}
              </div>
           ) : (
-            <span className="text-slate-400">{placeholder || 'Select...'}</span>
+            <span className="text-slate-600">{placeholder || 'Select...'}</span>
           )}
         </div>
-        <ChevronDown size={16} className={`text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown size={16} className={`text-slate-600 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </div>
 
       {isOpen && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl max-h-60 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-100">
           <div className="p-2 border-b border-slate-200 bg-slate-100 sticky top-0">
              <div className="relative">
-                <Search size={14} className="absolute left-2.5 top-2.5 text-slate-400"/>
+                <Search size={14} className="absolute left-2.5 top-2.5 text-slate-600"/>
                 <input
                     ref={inputRef}
                     type="text"
@@ -105,7 +105,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({ options, val
                     </div>
                 ))
             ) : (
-                <div className="p-8 text-center text-sm text-slate-400 flex flex-col items-center">
+                <div className="p-8 text-center text-sm text-slate-600 flex flex-col items-center">
                     <Search size={24} className="mb-2 opacity-20"/>
                     No results found
                 </div>

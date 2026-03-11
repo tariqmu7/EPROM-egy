@@ -4,6 +4,7 @@ import { EmployeeDashboard } from './pages/EmployeeDashboard';
 import { ManagerDashboard } from './pages/ManagerDashboard';
 import { AssessmentPortal } from './pages/AssessmentPortal';
 import { AdminPanel } from './pages/AdminPanel';
+import { Logo } from './components/Logo';
 import { dataService, CONFIG } from './services/store';
 import { User, Role } from './types';
 import { ShieldCheck, Loader2, Lock, User as UserIcon, CheckCircle, ArrowRight, Activity, X } from 'lucide-react';
@@ -85,8 +86,8 @@ const App: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-slate-400 gap-4">
-        <Loader2 className="animate-spin text-blue-500" size={48} />
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-slate-600 gap-4">
+        <Loader2 className="animate-spin text-blue-700" size={48} />
         <p className="font-bold tracking-widest text-xs uppercase animate-pulse">Initializing System...</p>
       </div>
     );
@@ -104,13 +105,13 @@ const App: React.FC = () => {
             </div>
             
             <div className="relative z-10">
-                <div className="flex items-center gap-3 mb-12">
-                   <div className="w-12 h-12 rounded overflow-hidden flex items-center justify-center bg-white">
-                        <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRTk3oTrPWYW9cwmL9Wu21gBh0borRXsDUFsw&s" alt="Logo" className="w-full h-full object-contain" />
+                <div className="flex items-center gap-4 mb-12">
+                   <div className="w-20 h-20 rounded-xl overflow-hidden flex items-center justify-center bg-white p-2">
+                        <Logo className="w-full h-full" />
                    </div>
                    <div className="flex flex-col">
-                     <span className="font-bold text-2xl tracking-tight leading-none text-white">ORIENS</span>
-                     <span className="text-[10px] text-blue-400 font-bold uppercase tracking-widest mt-0.5">Competency OS</span>
+                     <span className="font-bold text-3xl tracking-tight leading-none text-white">ORIENS</span>
+                     <span className="text-xs text-blue-400 font-bold uppercase tracking-widest mt-1">EPROM Competency program</span>
                    </div>
                 </div>
             </div>
@@ -119,10 +120,10 @@ const App: React.FC = () => {
                 <h1 className="text-4xl font-bold text-white mb-6 leading-tight">
                     Empowering the Energy Sector Workforce
                 </h1>
-                <p className="text-slate-300 text-lg mb-8 leading-relaxed">
+                <p className="text-slate-500 text-lg mb-8 leading-relaxed">
                     A comprehensive competency management system featuring skill gap analysis dashboards, 360-degree assessments, and intelligent job profiling.
                 </p>
-                <div className="flex items-center gap-4 text-sm font-medium text-slate-400">
+                <div className="flex items-center gap-4 text-sm font-medium text-slate-600">
                     <div className="flex items-center gap-2">
                         <CheckCircle size={16} className="text-blue-400" />
                         <span>Skill Gap Analysis</span>
@@ -139,13 +140,13 @@ const App: React.FC = () => {
         <div className="w-full lg:w-1/2 flex items-center justify-center p-8 sm:p-12 relative">
             <div className="w-full max-w-md animate-in fade-in slide-in-from-bottom-4 duration-500">
                 {/* Mobile Logo */}
-                <div className="flex lg:hidden items-center gap-3 mb-10 justify-center">
-                   <div className="w-12 h-12 rounded overflow-hidden flex items-center justify-center bg-white shadow-sm border border-slate-200">
-                        <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRTk3oTrPWYW9cwmL9Wu21gBh0borRXsDUFsw&s" alt="Logo" className="w-full h-full object-contain" />
+                <div className="flex lg:hidden items-center gap-4 mb-10 justify-center">
+                   <div className="w-20 h-20 rounded-xl overflow-hidden flex items-center justify-center bg-white shadow-sm border border-slate-200 p-2">
+                        <Logo className="w-full h-full" />
                    </div>
-                   <div className="flex flex-col">
-                     <span className="font-bold text-2xl tracking-tight leading-none text-slate-900">ORIENS</span>
-                     <span className="text-[10px] text-blue-600 font-bold uppercase tracking-widest mt-0.5">Competency OS</span>
+                   <div className="flex flex-col text-left">
+                     <span className="font-bold text-3xl tracking-tight leading-none text-slate-900">ORIENS</span>
+                     <span className="text-xs text-blue-700 font-bold uppercase tracking-widest mt-1">EPROM Competency program</span>
                    </div>
                 </div>
 
@@ -153,7 +154,7 @@ const App: React.FC = () => {
                     <h2 className="text-3xl font-bold text-slate-900 tracking-tight">
                         {isLoginMode ? 'Welcome back' : 'Create an account'}
                     </h2>
-                    <p className="text-slate-500 mt-2">
+                    <p className="text-slate-700 mt-2">
                         {isLoginMode ? 'Enter your details to access your dashboard.' : 'Join Oriens OS to manage your professional profile.'}
                     </p>
                 </div>
@@ -161,7 +162,7 @@ const App: React.FC = () => {
                 <form onSubmit={handleAuth} className="space-y-5">
                     {signupSuccess && (
                         <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-xl flex items-start gap-3">
-                            <CheckCircle size={20} className="mt-0.5 flex-shrink-0 text-emerald-600" />
+                            <CheckCircle size={20} className="mt-0.5 flex-shrink-0 text-emerald-700" />
                             <div className="text-sm">
                                 <p className="font-bold">Registration Successful</p>
                                 <p className="text-emerald-700 mt-1">Your profile is pending approval.</p>
@@ -173,12 +174,12 @@ const App: React.FC = () => {
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1.5">Full Name</label>
                             <div className="relative">
-                                <UserIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                <UserIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-600" size={18} />
                                 <input 
                                     type="text" 
                                     value={fullName}
                                     onChange={(e) => setFullName(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-slate-900 placeholder:text-slate-400 shadow-sm"
+                                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-slate-900 placeholder:text-slate-600 shadow-sm"
                                     placeholder="e.g. John Smith"
                                     required={!isLoginMode}
                                 />
@@ -189,12 +190,12 @@ const App: React.FC = () => {
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1.5">Email Address</label>
                         <div className="relative">
-                            <UserIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                            <UserIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-600" size={18} />
                             <input 
                                 type="email" 
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-slate-900 placeholder:text-slate-400 shadow-sm"
+                                className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-slate-900 placeholder:text-slate-600 shadow-sm"
                                 placeholder="name@company.com"
                                 required
                             />
@@ -205,16 +206,16 @@ const App: React.FC = () => {
                         <div className="flex items-center justify-between mb-1.5">
                             <label className="block text-sm font-medium text-slate-700">Password</label>
                             {isLoginMode && (
-                                <a href="#" className="text-sm text-blue-600 hover:text-blue-700 font-medium">Forgot password?</a>
+                                <a href="#" className="text-sm text-blue-700 hover:text-blue-700 font-medium">Forgot password?</a>
                             )}
                         </div>
                         <div className="relative">
-                            <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                            <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-600" size={18} />
                             <input 
                                 type="password" 
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-slate-900 placeholder:text-slate-400 shadow-sm"
+                                className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-slate-900 placeholder:text-slate-600 shadow-sm"
                                 placeholder="••••••••"
                                 required
                             />
@@ -241,7 +242,7 @@ const App: React.FC = () => {
                     </button>
 
                     <div className="text-center mt-8">
-                        <span className="text-slate-500 text-sm">
+                        <span className="text-slate-700 text-sm">
                             {isLoginMode ? "Don't have an account? " : "Already have an account? "}
                         </span>
                         <button 
@@ -256,19 +257,19 @@ const App: React.FC = () => {
 
                 {CONFIG.SOURCE === 'MOCK' && isLoginMode && (
                     <div className="mt-12 pt-8 border-t border-slate-200">
-                        <p className="text-[10px] text-slate-400 mb-4 font-bold uppercase tracking-widest text-center">Development Access</p>
+                        <p className="text-[10px] text-slate-600 mb-4 font-bold uppercase tracking-widest text-center">Development Access</p>
                         <div className="flex flex-col gap-2">
                             <button onClick={() => { setEmail('sarah.ahmed@midor.com.eg'); setPassword('any'); }} className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl shadow-sm text-sm font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-all flex justify-between items-center">
                                 <span>Employee</span>
-                                <span className="text-slate-400 text-xs">Sarah</span>
+                                <span className="text-slate-600 text-xs">Sarah</span>
                             </button>
                             <button onClick={() => { setEmail('sameh.i@zohr.com.eg'); setPassword('any'); }} className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl shadow-sm text-sm font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-all flex justify-between items-center">
                                 <span>Manager</span>
-                                <span className="text-slate-400 text-xs">Sameh</span>
+                                <span className="text-slate-600 text-xs">Sameh</span>
                             </button>
                             <button onClick={() => { setEmail('admin@egpc.com.eg'); setPassword('any'); }} className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl shadow-sm text-sm font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-all flex justify-between items-center">
                                 <span>Admin</span>
-                                <span className="text-slate-400 text-xs">Mahmoud</span>
+                                <span className="text-slate-600 text-xs">Mahmoud</span>
                             </button>
                         </div>
                     </div>
@@ -291,7 +292,7 @@ const App: React.FC = () => {
         case 'admin-jobs': return <AdminPanel view="JOBS" onNavigate={setActiveTab} />;
         case 'admin-skills': return <AdminPanel view="SKILLS" onNavigate={setActiveTab} />;
         case 'admin-depts': return <AdminPanel view="DEPTS" onNavigate={setActiveTab} />;
-        default: return <div className="p-8 text-center text-slate-400">Section Under Construction</div>;
+        default: return <div className="p-8 text-center text-slate-600">Section Under Construction</div>;
     }
   };
 
