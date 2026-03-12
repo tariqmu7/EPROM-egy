@@ -1,4 +1,4 @@
-import { User, Role, JobProfile, Skill, Department, Assessment, ActivityLog, ORG_HIERARCHY_ORDER, Notification, AssessmentCycle } from '../types';
+import { User, Role, JobProfile, Skill, Department, Assessment, ActivityLog, ORG_HIERARCHY_ORDER, Notification, AssessmentCycle, Nomination } from '../types';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 // ==========================================
@@ -195,7 +195,12 @@ const MOCK_USERS: User[] = [
     status: 'ACTIVE',
     departmentId: 'd_tech_services',
     orgLevel: 'GM',
-    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=MahmoudF'
+    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=MahmoudF',
+    certificates: [
+      { id: 'cert_1', name: 'PMP Certification', issuer: 'PMI', dateAchieved: '2020-05-12' },
+      { id: 'cert_2', name: 'Certified Reliability Engineer', issuer: 'ASQ', dateAchieved: '2018-11-20' }
+    ],
+    location: 'EGPC HQ'
   },
   {
     id: 'u_mgr_eng',
@@ -206,7 +211,11 @@ const MOCK_USERS: User[] = [
     departmentId: 'd_eng_design',
     jobProfileId: 'j_eng_mgr',
     orgLevel: 'DM',
-    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Sameh'
+    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Sameh',
+    certificates: [
+      { id: 'cert_3', name: 'Process Safety Management', issuer: 'NEBOSH', dateAchieved: '2021-08-15' }
+    ],
+    location: 'APC'
   },
   {
     id: 'u_mgr_maint',
@@ -217,7 +226,11 @@ const MOCK_USERS: User[] = [
     departmentId: 'd_maint_exec',
     jobProfileId: 'j_maint_mgr',
     orgLevel: 'DM',
-    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Youssef'
+    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Youssef',
+    certificates: [
+      { id: 'cert_4', name: 'Maintenance and Reliability Professional', issuer: 'SMRP', dateAchieved: '2019-02-10' }
+    ],
+    location: 'MIDOR'
   },
   {
     id: 'u_emp_sarah',
@@ -229,7 +242,12 @@ const MOCK_USERS: User[] = [
     managerId: 'u_mgr_eng',
     jobProfileId: 'j_proc_eng',
     orgLevel: 'FP',
-    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Sarah'
+    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Sarah',
+    certificates: [
+      { id: 'cert_5', name: 'HAZOP Leader Certification', issuer: 'TUV', dateAchieved: '2023-01-22' },
+      { id: 'cert_6', name: 'Advanced Process Control', issuer: 'Honeywell', dateAchieved: '2022-06-14' }
+    ],
+    location: 'MIDOR'
   },
   {
     id: 'u_emp_ali',
@@ -241,7 +259,11 @@ const MOCK_USERS: User[] = [
     managerId: 'u_mgr_maint',
     jobProfileId: 'j_rel_eng',
     orgLevel: 'FP',
-    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Ali'
+    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Ali',
+    certificates: [
+      { id: 'cert_7', name: 'Vibration Analysis ISO Category III', issuer: 'Mobius Institute', dateAchieved: '2022-11-05' }
+    ],
+    location: 'ANOPC'
   },
   {
     id: 'u_emp_ahmed',
@@ -253,7 +275,11 @@ const MOCK_USERS: User[] = [
     managerId: 'u_mgr_maint',
     jobProfileId: 'j_pipe_eng',
     orgLevel: 'FP',
-    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Ahmed'
+    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Ahmed',
+    certificates: [
+      { id: 'cert_8', name: 'API 570 Piping Inspector', issuer: 'API', dateAchieved: '2021-03-18' }
+    ],
+    location: 'AMO'
   },
   {
     id: 'u_emp_mahmoud',
@@ -265,7 +291,9 @@ const MOCK_USERS: User[] = [
     managerId: 'u_mgr_eng',
     jobProfileId: 'j_proc_eng',
     orgLevel: 'FR',
-    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Mahmoud'
+    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Mahmoud',
+    certificates: [],
+    location: 'APC'
   },
   {
     id: 'u_emp_fatima',
@@ -277,7 +305,11 @@ const MOCK_USERS: User[] = [
     managerId: 'u_mgr_eng',
     jobProfileId: 'j_proc_eng',
     orgLevel: 'FP',
-    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Fatima'
+    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Fatima',
+    certificates: [
+      { id: 'cert_9', name: 'Process Simulation with HYSYS', issuer: 'AspenTech', dateAchieved: '2022-09-30' }
+    ],
+    location: 'MIDOR'
   },
   {
     id: 'u_emp_hassan',
@@ -289,7 +321,9 @@ const MOCK_USERS: User[] = [
     managerId: 'u_mgr_maint',
     jobProfileId: 'j_rel_eng',
     orgLevel: 'FR',
-    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Hassan'
+    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Hassan',
+    certificates: [],
+    location: 'ANOPC'
   },
   {
     id: 'u_emp_nour',
@@ -301,7 +335,8 @@ const MOCK_USERS: User[] = [
     managerId: 'u_mgr_maint',
     jobProfileId: 'j_pipe_eng',
     orgLevel: 'FP',
-    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Nour'
+    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Nour',
+    location: 'AMO'
   },
   {
     id: 'u_emp_mariam',
@@ -313,7 +348,8 @@ const MOCK_USERS: User[] = [
     managerId: 'u_mgr_eng',
     jobProfileId: 'j_proc_eng',
     orgLevel: 'FR',
-    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Mariam'
+    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Mariam',
+    location: 'MIDOR'
   },
   {
     id: 'u_emp_karim',
@@ -325,7 +361,8 @@ const MOCK_USERS: User[] = [
     managerId: 'u_mgr_maint',
     jobProfileId: 'j_rel_eng',
     orgLevel: 'FP',
-    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Karim'
+    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Karim',
+    location: 'ANOPC'
   },
   {
     id: 'u_emp_yasmine',
@@ -337,7 +374,8 @@ const MOCK_USERS: User[] = [
     managerId: 'u_mgr_eng',
     jobProfileId: 'j_proc_eng',
     orgLevel: 'FP',
-    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Yasmine'
+    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Yasmine',
+    location: 'APC'
   },
   {
     id: 'u_pending',
@@ -376,6 +414,7 @@ class DataService {
   private logs: ActivityLog[] = [];
   private notifications: Notification[] = [];
   private cycles: AssessmentCycle[] = [];
+  private nominations: Nomination[] = [];
   
   private supabase: SupabaseClient | null = null;
   public isInitialized = false;
@@ -394,6 +433,43 @@ class DataService {
     this.logs = [...MOCK_LOGS];
     this.notifications = [];
     this.cycles = [];
+    this.nominations = [];
+  }
+
+  // --- Nominations ---
+  getNominations(filters?: { subjectId?: string, raterId?: string, nominatorId?: string }) {
+    let result = this.nominations;
+    if (filters?.subjectId) result = result.filter(n => n.subjectId === filters.subjectId);
+    if (filters?.raterId) result = result.filter(n => n.raterId === filters.raterId);
+    if (filters?.nominatorId) result = result.filter(n => n.nominatorId === filters.nominatorId);
+    return result;
+  }
+
+  addNomination(nomination: Omit<Nomination, 'id' | 'date' | 'status'>) {
+    const newNomination: Nomination = {
+      ...nomination,
+      id: Math.random().toString(36).substr(2, 9),
+      date: new Date().toISOString(),
+      status: 'PENDING'
+    };
+    this.nominations.push(newNomination);
+    
+    // Add notification to the rater
+    this.addNotification({
+      userId: nomination.raterId,
+      title: 'New Assessment Request',
+      message: `You have been requested to assess ${this.getCurrentUser(nomination.subjectId)?.name}.`,
+      type: 'INFO'
+    });
+
+    return newNomination;
+  }
+
+  updateNominationStatus(id: string, status: 'APPROVED' | 'REJECTED') {
+    const index = this.nominations.findIndex(n => n.id === id);
+    if (index !== -1) {
+      this.nominations[index].status = status;
+    }
   }
 
   // --- INITIALIZATION ---

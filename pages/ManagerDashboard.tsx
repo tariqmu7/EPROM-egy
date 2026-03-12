@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { User, Role, JobProfile } from '../types';
 import { dataService } from '../services/store';
 import { EmployeeDashboard } from './EmployeeDashboard';
-import { Users, ChevronRight, AlertCircle, CheckCircle, TrendingUp, ArrowLeft, Briefcase, BarChart2, Shield } from 'lucide-react';
+import { Users, ChevronRight, AlertCircle, CheckCircle, TrendingUp, ArrowLeft, Briefcase, BarChart2, Shield, Search, Award, Mail } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
 
 interface ManagerDashboardProps {
@@ -11,7 +11,8 @@ interface ManagerDashboardProps {
 
 export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ user }) => {
   const [selectedMember, setSelectedMember] = useState<User | null>(null);
-  const [activeView, setActiveView] = useState<'TEAM' | 'JOBS'>('TEAM');
+  const [activeView, setActiveView] = useState<'TEAM' | 'JOBS' | 'TALENT_SEARCH'>('TEAM');
+  const [searchQuery, setSearchQuery] = useState('');
   
   const subordinates = useMemo(() => dataService.getSubordinates(user.id), [user.id]);
   
@@ -187,6 +188,110 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
     );
   };
 
+  const renderTalentSearch = () => {
+    const allUsers = dataService.getAllUsers();
+    
+    const filteredUsers = allUsers.filter(u => {
+      if (!searchQuery) return true;
+      const query = searchQuery.toLowerCase();
+      
+      const dept = dataService.getAllDepartments().find(d => d.id === u.departmentId)?.name.toLowerCase() || '';
+      const job = dataService.getJobProfile(u.jobProfileId || '')?.title.toLowerCase() || '';
+      const certs = (u.certificates || []).map(c => c.name.toLowerCase()).join(' ');
+      const loc = (u.location || '').toLowerCase();
+      
+      return (
+        u.name.toLowerCase().includes(query) ||
+        u.email.toLowerCase().includes(query) ||
+        dept.includes(query) ||
+        job.includes(query) ||
+        certs.includes(query) ||
+        loc.includes(query)
+      );
+    });
+
+    return (
+      <div className="space-y-6">
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+          <div className="flex flex-col md:flex-row gap-4 items-center">
+            <div className="relative flex-1 w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+              <input 
+                type="text" 
+                placeholder="Search by name, department, job title, certificates, or location..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+              />
+            </div>
+            <div className="text-sm text-slate-500 font-medium whitespace-nowrap">
+              {filteredUsers.length} results found
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {filteredUsers.map(u => {
+            const dept = dataService.getAllDepartments().find(d => d.id === u.departmentId);
+            const job = dataService.getJobProfile(u.jobProfileId || '');
+            
+            return (
+              <div key={u.id} className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col h-full">
+                <div className="flex items-start gap-4 mb-4">
+                  <div className="w-12 h-12 rounded-full bg-slate-100 border border-slate-200 overflow-hidden flex-shrink-0">
+                    <img src={u.avatarUrl} alt={u.name} className="w-full h-full object-cover" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-bold text-slate-900 text-lg truncate">{u.name}</h3>
+                    <p className="text-slate-600 text-sm truncate">{job?.title || 'No Job Profile'}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-slate-500 text-xs truncate">{dept?.name || 'No Department'}</span>
+                      <span className="text-slate-300">•</span>
+                      <span className="text-blue-600 font-bold text-[10px] uppercase tracking-wider bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">{u.location || 'N/A'}</span>
+                    </div>
+                  </div>
+                  <a 
+                    href={`mailto:${u.email}`}
+                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-full transition-colors flex-shrink-0"
+                    title="Contact Employee"
+                  >
+                    <Mail size={20} />
+                  </a>
+                </div>
+                
+                <div className="mt-auto pt-4 border-t border-slate-100">
+                  <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                    <Award size={14} className="text-blue-600" /> Certificates Achieved
+                  </h4>
+                  {u.certificates && u.certificates.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {u.certificates.map(cert => (
+                        <div key={cert.id} className="bg-blue-50 border border-blue-100 text-blue-800 px-2.5 py-1.5 rounded text-xs">
+                          <span className="font-semibold">{cert.name}</span>
+                          <span className="text-blue-600/70 ml-1">({new Date(cert.dateAchieved).getFullYear()})</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-500 italic">No certificates recorded.</p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          
+          {filteredUsers.length === 0 && (
+            <div className="col-span-full p-12 text-center bg-slate-50 rounded-lg border border-dashed border-slate-300">
+              <Search size={48} className="mx-auto text-slate-400 mb-4" />
+              <h3 className="text-lg font-medium text-slate-900">No Matches Found</h3>
+              <p className="text-slate-600 text-sm mt-1">Try adjusting your search terms to find the right talent.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-8 pb-12">
       {/* Header */}
@@ -213,6 +318,12 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
             >
                 Job Profiles
             </button>
+            <button 
+                onClick={() => setActiveView('TALENT_SEARCH')}
+                className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeView === 'TALENT_SEARCH' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-700 hover:text-slate-700'}`}
+            >
+                Talent Search
+            </button>
         </div>
       </div>
 
@@ -238,7 +349,11 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
                                 </div>
                                 <div>
                                     <h4 className="font-bold text-slate-900 leading-tight group-hover:text-blue-700 transition-colors">{member.name}</h4>
-                                    <p className="text-xs text-slate-700 mt-0.5">{jobTitle}</p>
+                                    <div className="flex items-center gap-2 mt-0.5">
+                                        <p className="text-xs text-slate-700">{jobTitle}</p>
+                                        <span className="text-slate-300">•</span>
+                                        <span className="text-[10px] font-bold text-blue-600 uppercase tracking-tight">{member.location || 'N/A'}</span>
+                                    </div>
                                 </div>
                             </div>
                             <div className="bg-slate-50 p-1.5 rounded-full text-slate-600 group-hover:bg-blue-50 group-hover:text-blue-700 transition-colors">
@@ -284,9 +399,12 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
                 </div>
             )}
         </div>
-      ) : (
+      ) : activeView === 'JOBS' ? (
         /* Job Profiles View */
         renderJobProfiles()
+      ) : (
+        /* Talent Search View */
+        renderTalentSearch()
       )}
     </div>
   );

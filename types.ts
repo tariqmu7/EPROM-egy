@@ -65,6 +65,13 @@ export interface Department {
   managerId?: string;
 }
 
+export interface Certificate {
+  id: string;
+  name: string;
+  issuer: string;
+  dateAchieved: string;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -76,6 +83,8 @@ export interface User {
   jobProfileId?: string;
   managerId?: string; // Direct reporting line (can be inferred from structure or explicit)
   avatarUrl?: string;
+  certificates?: Certificate[];
+  location?: string;
 }
 
 export interface AssessmentCycle {
@@ -96,6 +105,15 @@ export interface Assessment {
   date: string;
   type: 'SELF' | 'PEER' | 'MANAGER';
   cycleId?: string; // Optional for backward compatibility, but used for generated cycles
+}
+
+export interface Nomination {
+  id: string;
+  nominatorId: string;
+  subjectId: string;
+  raterId: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  date: string;
 }
 
 export interface ActivityLog {

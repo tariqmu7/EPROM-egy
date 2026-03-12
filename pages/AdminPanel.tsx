@@ -217,6 +217,43 @@ const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void,
                         placeholder="john@company.com"
                     />
                 </div>
+                <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Project Location</label>
+                    <input type="text" className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all placeholder:text-slate-600" 
+                        value={formData.location || ''} onChange={e => setFormData({...formData, location: e.target.value})} placeholder="e.g. MIDOR, APC, AMO"/>
+                </div>
+                <div className="md:col-span-2">
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Avatar URL</label>
+                    <div className="flex items-center gap-4">
+                        {formData.avatarUrl ? (
+                            <div className="relative w-12 h-12 rounded-full overflow-hidden border border-slate-200 shrink-0">
+                                <img src={formData.avatarUrl} alt="Avatar Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                            </div>
+                        ) : (
+                            <div className="w-12 h-12 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 text-slate-400">
+                                <Users size={20} />
+                            </div>
+                        )}
+                        <div className="flex-1 flex items-center gap-2">
+                            <input 
+                                type="url" 
+                                className="flex-1 px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all placeholder:text-slate-600" 
+                                value={formData.avatarUrl || ''} 
+                                onChange={e => setFormData({...formData, avatarUrl: e.target.value})} 
+                                placeholder="https://example.com/avatar.png"
+                            />
+                            {formData.avatarUrl && (
+                                <button 
+                                    type="button" 
+                                    onClick={() => setFormData({...formData, avatarUrl: undefined})}
+                                    className="px-3 py-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-md border border-red-200 transition-colors font-medium text-xs whitespace-nowrap"
+                                >
+                                    Clear
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
             </div>
             
             <div className="p-6 bg-slate-50 rounded-lg border border-slate-100 space-y-6">
