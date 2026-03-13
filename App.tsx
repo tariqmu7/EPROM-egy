@@ -4,7 +4,6 @@ import { EmployeeDashboard } from './pages/EmployeeDashboard';
 import { ManagerDashboard } from './pages/ManagerDashboard';
 import { AdminPanel } from './pages/AdminPanel';
 import { EvidencePortal } from './pages/EvidencePortal';
-import { SupervisorApproval } from './pages/SupervisorApproval';
 import { BehavioralAssessment } from './pages/BehavioralAssessment';
 import { Logo } from './components/Logo';
 import { dataService, CONFIG } from './services/store';
@@ -330,7 +329,6 @@ const App: React.FC = () => {
         case 'manager-dashboard': return <ManagerDashboard user={user} />;
         case 'emp-assessment': return <BehavioralAssessment currentUser={user} />;
         case 'evidence-portal': return <EvidencePortal currentUser={user} />;
-        case 'supervisor-approval': return <SupervisorApproval currentUser={user} />;
         // Admin Views - Mapped to sidebar IDs
         case 'admin-dashboard': return <AdminPanel view="OVERVIEW" onNavigate={setActiveTab} />;
         case 'admin-analytics': return <AdminPanel view="ANALYTICS" onNavigate={setActiveTab} />;

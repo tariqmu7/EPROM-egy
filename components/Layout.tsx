@@ -65,10 +65,7 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
                 <>
                   <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="emp-dashboard" label="My Profile" icon={LayoutDashboard} />
                   {dataService.isManager(user) && (
-                    <>
-                      <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="manager-dashboard" label="My Team" icon={Users} />
-                      <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="supervisor-approval" label="Approvals" icon={CheckSquare} />
-                    </>
+                    <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="manager-dashboard" label="My Team" icon={Users} />
                   )}
                   <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="emp-assessment" label="Evaluations" icon={Star} />
                   <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="evidence-portal" label="Evidence" icon={UploadCloud} />
