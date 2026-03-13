@@ -1,7 +1,26 @@
 import React, { useState, useMemo } from 'react';
 import { dataService } from '../services/store';
 import { User, Skill } from '../types';
-import { Star, MessageSquare, Send, CheckCircle } from 'lucide-react';
+import { Star, MessageSquare, Send, CheckCircle, User as UserIcon } from 'lucide-react';
+
+const UserCard = ({ user, isSelected, onClick, role, isSelf }: { user: User, isSelected: boolean, onClick: () => void, role?: string, isSelf?: boolean }) => {
+  const jobProfile = user.jobProfileId ? dataService.getJobProfile(user.jobProfileId) : null;
+  
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex flex-col items-center p-3 rounded-xl border-2 transition-all w-40 flex-shrink-0 ${isSelected ? 'border-blue-500 bg-blue-50 shadow-md scale-105' : 'border-slate-200 bg-white hover:border-blue-300 hover:shadow-sm'}`}
+    >
+      <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold mb-2 ${isSelf ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-700'}`}>
+        {user.name.charAt(0)}
+      </div>
+      <div className="text-sm font-bold text-slate-800 text-center w-full leading-tight mb-1" title={user.name}>{user.name}</div>
+      {jobProfile && <div className="text-[10px] text-slate-500 text-center leading-tight mb-1 line-clamp-2" title={jobProfile.title}>{jobProfile.title}</div>}
+      {role && <div className="text-[10px] font-bold text-blue-600 uppercase mt-auto pt-1">{role}</div>}
+    </button>
+  );
+};
 
 export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentUser }) => {
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
@@ -13,13 +32,39 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
   const [successMessage, setSuccessMessage] = useState('');
 
   const users = useMemo(() => dataService.getAllUsers(), []);
-  const skills = useMemo(() => dataService.getAllSkills().filter(s => s.category === 'Behavioral'), []);
   
-  // Include self and peers
-  const evaluatees = useMemo(() => {
-    const others = users.filter(u => u.id !== currentUser.id);
-    return [currentUser, ...others];
-  }, [users, currentUser]);
+  // The selection of the employee must be related to the same department of the user who will do the evaluation
+  const departmentUsers = useMemo(() => {
+    return users.filter(u => u.departmentId === currentUser.departmentId);
+  }, [users, currentUser.departmentId]);
+
+  const manager = useMemo(() => {
+    return departmentUsers.find(u => u.id === currentUser.managerId);
+  }, [departmentUsers, currentUser.managerId]);
+
+  const peers = useMemo(() => {
+    return departmentUsers.filter(u => u.managerId === currentUser.managerId && u.id !== currentUser.id);
+  }, [departmentUsers, currentUser.managerId, currentUser.id]);
+
+  const subordinates = useMemo(() => {
+    return departmentUsers.filter(u => u.managerId === currentUser.id);
+  }, [departmentUsers, currentUser.id]);
+
+  const selectedEmployee = useMemo(() => {
+    return departmentUsers.find(u => u.id === selectedSubjectId);
+  }, [departmentUsers, selectedSubjectId]);
+
+  // The selection of behavioral competency must be related to the department of selected employee
+  const availableSkills = useMemo(() => {
+    if (!selectedEmployee) return [];
+    
+    const department = dataService.getAllDepartments().find(d => d.id === selectedEmployee.departmentId);
+    if (!department || !department.behavioralSkillIds || department.behavioralSkillIds.length === 0) {
+      return [];
+    }
+    
+    return dataService.getAllSkills().filter(s => s.category === 'Behavioral' && department.behavioralSkillIds?.includes(s.id));
+  }, [selectedEmployee]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,7 +84,7 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
         type: isSelf ? 'SELF' : 'PEER'
       });
 
-      setSuccessMessage(isSelf ? 'Self-evaluation submitted successfully.' : 'Anonymous feedback submitted successfully.');
+      setSuccessMessage(isSelf ? 'Self-evaluation submitted successfully.' : 'Feedback submitted successfully.');
       setSelectedSubjectId('');
       setSelectedSkillId('');
       setRating(0);
@@ -51,10 +96,10 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
   };
 
   return (
-    <div className="space-y-6 max-w-3xl mx-auto">
+    <div className="space-y-6 max-w-4xl mx-auto">
       <div className="pb-6 border-b border-slate-200">
         <h2 className="text-3xl font-bold text-slate-900 tracking-tight">360-Degree Evaluation</h2>
-        <p className="text-slate-700 text-sm mt-1">Submit behavioral feedback for yourself and your peers.</p>
+        <p className="text-slate-700 text-sm mt-1">Submit behavioral feedback for yourself and your team members.</p>
       </div>
 
       {successMessage && (
@@ -65,98 +110,153 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
       )}
 
       <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-bold text-slate-700 mb-2">Select Employee</label>
-              <select 
-                required
-                value={selectedSubjectId}
-                onChange={(e) => setSelectedSubjectId(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-3 shadow-sm"
-              >
-                <option value="" disabled>Choose an employee...</option>
-                {evaluatees.map(p => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} {p.id === currentUser.id ? '(Self)' : `(${p.departmentId})`}
-                  </option>
-                ))}
-              </select>
+        <div className="mb-10">
+          <label className="block text-sm font-bold text-slate-700 mb-4 text-center">Select Employee for 360° Evaluation</label>
+          
+          <div className="flex flex-col items-center gap-6 bg-slate-50 p-8 rounded-xl border border-slate-200 overflow-x-auto">
+            {/* Manager */}
+            {manager && (
+              <div className="flex flex-col items-center">
+                <UserCard user={manager} isSelected={selectedSubjectId === manager.id} onClick={() => setSelectedSubjectId(manager.id)} role="Manager" />
+                <div className="h-8 w-px bg-slate-300 mt-2"></div>
+              </div>
+            )}
+
+            {/* Middle Row: Peers and Self */}
+            <div className="flex items-center justify-center gap-4 min-w-max">
+              {/* Peers (Left) */}
+              {peers.slice(0, Math.ceil(peers.length / 2)).map(peer => (
+                <div key={peer.id} className="flex items-center gap-4">
+                  <UserCard user={peer} isSelected={selectedSubjectId === peer.id} onClick={() => setSelectedSubjectId(peer.id)} role="Peer" />
+                  <div className="w-8 h-px bg-slate-300"></div>
+                </div>
+              ))}
+
+              {/* Self */}
+              <div className="relative">
+                <div className="absolute -top-2 -left-2 -right-2 -bottom-2 bg-blue-100 rounded-xl border-2 border-blue-200 z-0"></div>
+                <div className="relative z-10">
+                  <UserCard user={currentUser} isSelected={selectedSubjectId === currentUser.id} onClick={() => setSelectedSubjectId(currentUser.id)} role="Self" isSelf />
+                </div>
+              </div>
+
+              {/* Peers (Right) */}
+              {peers.slice(Math.ceil(peers.length / 2)).map(peer => (
+                <div key={peer.id} className="flex items-center gap-4">
+                  <div className="w-8 h-px bg-slate-300"></div>
+                  <UserCard user={peer} isSelected={selectedSubjectId === peer.id} onClick={() => setSelectedSubjectId(peer.id)} role="Peer" />
+                </div>
+              ))}
             </div>
 
-            <div>
-              <label className="block text-sm font-bold text-slate-700 mb-2">Behavioral Competency</label>
-              <select 
-                required
-                value={selectedSkillId}
-                onChange={(e) => setSelectedSkillId(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-3 shadow-sm"
-              >
-                <option value="" disabled>Select behavior to evaluate...</option>
-                {skills.map(s => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
-            </div>
+            {/* Subordinates */}
+            {subordinates.length > 0 && (
+              <div className="flex flex-col items-center w-full min-w-max">
+                <div className="h-8 w-px bg-slate-300 mb-2"></div>
+                <div className="flex justify-center gap-6">
+                  {subordinates.map(sub => (
+                    <UserCard key={sub.id} user={sub} isSelected={selectedSubjectId === sub.id} onClick={() => setSelectedSubjectId(sub.id)} role="Team" />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
+        </div>
 
-          {selectedSkillId && (
-            <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-              <p className="text-sm text-blue-800 font-medium italic">
-                "{skills.find(s => s.id === selectedSkillId)?.assessmentQuestion}"
-              </p>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {selectedSubjectId ? (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">Selected Employee</label>
+                  <div className="w-full bg-slate-100 border border-slate-200 text-slate-700 text-sm rounded-lg p-3 shadow-sm font-medium">
+                    {selectedEmployee?.name} {selectedEmployee?.id === currentUser.id ? '(Self)' : ''}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">Behavioral Competency</label>
+                  <select 
+                    required
+                    value={selectedSkillId}
+                    onChange={(e) => setSelectedSkillId(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-3 shadow-sm"
+                  >
+                    <option value="" disabled>Select behavior to evaluate...</option>
+                    {availableSkills.map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                  {availableSkills.length === 0 && (
+                    <p className="text-xs text-amber-600 mt-1">No behavioral competencies found for this department.</p>
+                  )}
+                </div>
+              </div>
+
+              {selectedSkillId && (
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                  <p className="text-sm text-blue-800 font-medium italic">
+                    "{availableSkills.find(s => s.id === selectedSkillId)?.assessmentQuestion}"
+                  </p>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-3">Rating (1-5 Stars)</label>
+                <div className="flex items-center gap-2">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setRating(star)}
+                      onMouseEnter={() => setHoverRating(star)}
+                      onMouseLeave={() => setHoverRating(0)}
+                      className="focus:outline-none transition-transform hover:scale-110"
+                    >
+                      <Star 
+                        size={32} 
+                        className={`${(hoverRating || rating) >= star ? 'text-amber-400 fill-amber-400' : 'text-slate-300'} transition-colors`} 
+                      />
+                    </button>
+                  ))}
+                  <span className="ml-4 text-sm font-medium text-slate-500">
+                    {rating === 0 ? 'Select a rating' : rating === 1 ? 'Poor' : rating === 2 ? 'Needs Improvement' : rating === 3 ? 'Meets Expectations' : rating === 4 ? 'Exceeds Expectations' : 'Outstanding'}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
+                  <MessageSquare size={16} className="text-slate-400" />
+                  Feedback (Optional)
+                </label>
+                <textarea 
+                  rows={4}
+                  value={feedback}
+                  onChange={(e) => setFeedback(e.target.value)}
+                  placeholder="Provide specific examples of their behavior..."
+                  className="w-full bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-3 shadow-sm"
+                ></textarea>
+                <p className="text-xs text-slate-500 mt-2">Feedback will be shared with the employee and their manager.</p>
+              </div>
+
+              <div className="pt-4 border-t border-slate-200 flex justify-end">
+                <button 
+                  type="submit" 
+                  disabled={isSubmitting || !selectedSubjectId || !selectedSkillId || rating === 0}
+                  className="bg-slate-900 hover:bg-slate-800 text-white font-medium py-3 px-8 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-md"
+                >
+                  {isSubmitting ? 'Submitting...' : 'Submit Evaluation'}
+                  {!isSubmitting && <Send size={18} />}
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="text-center p-8 text-slate-500 border-2 border-dashed border-slate-200 rounded-xl">
+              <UserIcon size={48} className="mx-auto mb-4 text-slate-300" />
+              <p>Please select an employee from the 360° view above to begin their evaluation.</p>
             </div>
           )}
-
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-3">Rating (1-5 Stars)</label>
-            <div className="flex items-center gap-2">
-              {[1, 2, 3, 4, 5].map((star) => (
-                <button
-                  key={star}
-                  type="button"
-                  onClick={() => setRating(star)}
-                  onMouseEnter={() => setHoverRating(star)}
-                  onMouseLeave={() => setHoverRating(0)}
-                  className="focus:outline-none transition-transform hover:scale-110"
-                >
-                  <Star 
-                    size={32} 
-                    className={`${(hoverRating || rating) >= star ? 'text-amber-400 fill-amber-400' : 'text-slate-300'} transition-colors`} 
-                  />
-                </button>
-              ))}
-              <span className="ml-4 text-sm font-medium text-slate-500">
-                {rating === 0 ? 'Select a rating' : rating === 1 ? 'Poor' : rating === 2 ? 'Needs Improvement' : rating === 3 ? 'Meets Expectations' : rating === 4 ? 'Exceeds Expectations' : 'Outstanding'}
-              </span>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
-              <MessageSquare size={16} className="text-slate-400" />
-              Anonymous Feedback (Optional)
-            </label>
-            <textarea 
-              rows={4}
-              value={feedback}
-              onChange={(e) => setFeedback(e.target.value)}
-              placeholder="Provide specific examples of their behavior..."
-              className="w-full bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-3 shadow-sm"
-            ></textarea>
-            <p className="text-xs text-slate-500 mt-2">Feedback for peers will be shared anonymously with the employee and their manager.</p>
-          </div>
-
-          <div className="pt-4 border-t border-slate-200 flex justify-end">
-            <button 
-              type="submit" 
-              disabled={isSubmitting || !selectedSubjectId || !selectedSkillId || rating === 0}
-              className="bg-slate-900 hover:bg-slate-800 text-white font-medium py-3 px-8 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-md"
-            >
-              {isSubmitting ? 'Submitting...' : 'Submit Evaluation'}
-              {!isSubmitting && <Send size={18} />}
-            </button>
-          </div>
         </form>
       </div>
     </div>

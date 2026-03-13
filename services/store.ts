@@ -194,10 +194,10 @@ const MOCK_SKILLS: Skill[] = [
 ];
 
 const MOCK_DEPTS: Department[] = [
-  { id: 'd_eng_design', name: 'Engineering Design & Projects' },
-  { id: 'd_maint_exec', name: 'Maintenance Execution' },
-  { id: 'd_reliability', name: 'Reliability & Integrity' },
-  { id: 'd_tech_services', name: 'Technical Services' }
+  { id: 'd_eng_design', name: 'Engineering Design & Projects', behavioralSkillIds: ['s_beh_listening', 's_beh_mentor'] },
+  { id: 'd_maint_exec', name: 'Maintenance Execution', behavioralSkillIds: ['s_beh_safety', 's_beh_mentor'] },
+  { id: 'd_reliability', name: 'Reliability & Integrity', behavioralSkillIds: ['s_beh_listening', 's_beh_clarity'] },
+  { id: 'd_tech_services', name: 'Technical Services', behavioralSkillIds: ['s_beh_clarity', 's_beh_mentor'] }
 ];
 
 const MOCK_JOBS: JobProfile[] = [

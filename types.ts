@@ -63,6 +63,7 @@ export interface Department {
   id: string;
   name: string;
   managerId?: string;
+  behavioralSkillIds?: string[];
 }
 
 export interface Certificate {
