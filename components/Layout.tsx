@@ -71,7 +71,6 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
                     </>
                   )}
                   <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="emp-assessment" label="Evaluations" icon={Star} />
-                  <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="competency-matrix" label="Matrix" icon={Grid} />
                   <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="evidence-portal" label="Evidence" icon={UploadCloud} />
                 </>
               )}

@@ -2,6 +2,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { User, Role, JobProfile, OrgLevel } from '../types';
 import { dataService } from '../services/store';
 import { EmployeeDashboard } from './EmployeeDashboard';
+import { CompetencyMatrix } from './CompetencyMatrix';
 import { Users, ChevronRight, AlertCircle, CheckCircle, TrendingUp, ArrowLeft, Briefcase, BarChart2, Shield, Search, Award, Mail } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
 
@@ -11,7 +12,7 @@ interface ManagerDashboardProps {
 
 export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ user }) => {
   const [selectedMember, setSelectedMember] = useState<User | null>(null);
-  const [activeView, setActiveView] = useState<'TEAM' | 'JOBS' | 'TALENT_SEARCH'>('TEAM');
+  const [activeView, setActiveView] = useState<'TEAM' | 'JOBS' | 'TALENT_SEARCH' | 'MATRIX'>('TEAM');
   const [searchQuery, setSearchQuery] = useState('');
   
   const subordinates = useMemo(() => dataService.getSubordinates(user.id), [user.id]);
@@ -326,6 +327,12 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
             >
                 Job Profiles
             </button>
+            <button 
+                onClick={() => setActiveView('MATRIX')}
+                className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeView === 'MATRIX' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-700 hover:text-slate-700'}`}
+            >
+                Matrix
+            </button>
             {canSearchTalent && (
                 <button 
                     onClick={() => setActiveView('TALENT_SEARCH')}
@@ -412,6 +419,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
       ) : activeView === 'JOBS' ? (
         /* Job Profiles View */
         renderJobProfiles()
+      ) : activeView === 'MATRIX' ? (
+        /* Matrix View */
+        <CompetencyMatrix currentUser={user} />
       ) : (
         /* Talent Search View */
         renderTalentSearch()

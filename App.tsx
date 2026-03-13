@@ -3,7 +3,6 @@ import { Layout } from './components/Layout';
 import { EmployeeDashboard } from './pages/EmployeeDashboard';
 import { ManagerDashboard } from './pages/ManagerDashboard';
 import { AdminPanel } from './pages/AdminPanel';
-import { CompetencyMatrix } from './pages/CompetencyMatrix';
 import { EvidencePortal } from './pages/EvidencePortal';
 import { SupervisorApproval } from './pages/SupervisorApproval';
 import { BehavioralAssessment } from './pages/BehavioralAssessment';
@@ -330,7 +329,6 @@ const App: React.FC = () => {
         case 'emp-dashboard': return <EmployeeDashboard user={user} />;
         case 'manager-dashboard': return <ManagerDashboard user={user} />;
         case 'emp-assessment': return <BehavioralAssessment currentUser={user} />;
-        case 'competency-matrix': return <CompetencyMatrix currentUser={user} />;
         case 'evidence-portal': return <EvidencePortal currentUser={user} />;
         case 'supervisor-approval': return <SupervisorApproval currentUser={user} />;
         // Admin Views - Mapped to sidebar IDs
