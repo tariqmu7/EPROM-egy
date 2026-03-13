@@ -18,10 +18,17 @@ export const CompetencyMatrix: React.FC<{ currentUser: User }> = ({ currentUser 
     if (selectedDeptId !== 'ALL') {
       filtered = filtered.filter(u => u.departmentId === selectedDeptId);
     }
-    // If manager, only show their team
-    if (dataService.isManager(currentUser) && currentUser.role !== 'ADMIN') {
-      filtered = filtered.filter(u => u.managerId === currentUser.id || u.id === currentUser.id);
+    
+    if (currentUser.role === 'ADMIN') {
+      return filtered;
     }
+
+    if (dataService.isManager(currentUser)) {
+      filtered = filtered.filter(u => u.managerId === currentUser.id || u.id === currentUser.id);
+    } else {
+      filtered = filtered.filter(u => u.id === currentUser.id);
+    }
+    
     return filtered;
   }, [users, selectedDeptId, currentUser]);
 
