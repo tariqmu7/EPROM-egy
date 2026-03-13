@@ -1,8 +1,7 @@
 
 export enum Role {
   ADMIN = 'ADMIN',
-  EMPLOYEE = 'EMPLOYEE',
-  MANAGER = 'MANAGER'
+  EMPLOYEE = 'EMPLOYEE'
 }
 
 export type UserStatus = 'ACTIVE' | 'PENDING' | 'REJECTED';
@@ -43,6 +42,7 @@ export interface Skill {
   category: string;
   assessmentQuestion?: string;
   levels: Record<number, SkillLevel>; 
+  status?: 'APPROVED' | 'PENDING';
 }
 
 export interface JobProfileSkill {
@@ -116,11 +116,38 @@ export interface Nomination {
   date: string;
 }
 
+export interface TrainingRecommendation {
+  skillId: string;
+  skillName: string;
+  gap: number;
+  recommendation: string;
+  priority: 'HIGH' | 'MEDIUM' | 'LOW';
+}
+
+export interface IndividualTrainingPlan {
+  userId: string;
+  recommendations: TrainingRecommendation[];
+  generatedAt: string;
+}
+
 export interface ActivityLog {
   id: string;
   action: string;
   target: string;
   timestamp: string;
+}
+
+export interface Evidence {
+  id: string;
+  userId: string;
+  skillId: string;
+  fileUrl: string;
+  fileName: string;
+  notes: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  submittedAt: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
 }
 
 export interface Notification {

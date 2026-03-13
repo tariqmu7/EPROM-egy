@@ -1,4 +1,4 @@
-import { User, Role, JobProfile, Skill, Department, Assessment, ActivityLog, ORG_HIERARCHY_ORDER, Notification, AssessmentCycle, Nomination } from '../types';
+import { User, Role, JobProfile, Skill, Department, Assessment, ActivityLog, ORG_HIERARCHY_ORDER, Notification, AssessmentCycle, Nomination, IndividualTrainingPlan, TrainingRecommendation, OrgLevel, Evidence } from '../types';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 // ==========================================
@@ -99,6 +99,97 @@ const MOCK_SKILLS: Skill[] = [
       4: { level: 4, description: 'Directs major capital projects and negotiates complex contracts.', requiredCertificates: ['Advanced Project Management'] },
       5: { level: 5, description: 'Portfolio Manager; aligns engineering projects with strategic business goals.', requiredCertificates: ['PgMP'] },
     }
+  },
+  {
+    id: 's_tech_rca',
+    name: 'RCA Standard Compliance',
+    category: 'Technical',
+    assessmentQuestion: 'Does the latest RCA report meet the SMRP standard for root cause analysis?',
+    levels: {
+      1: { level: 1, description: 'Understands basic RCA terminology.', requiredCertificates: [] },
+      2: { level: 2, description: 'Participates in RCA sessions and contributes data.', requiredCertificates: [] },
+      3: { level: 3, description: 'Conducts standard RCA investigations using 5-Whys or Fishbone.', requiredCertificates: ['RCA Practitioner'] },
+      4: { level: 4, description: 'Leads complex RCA investigations and verifies against SMRP standards.', requiredCertificates: ['SMRP RCA Leader'] },
+      5: { level: 5, description: 'SME in RCA; audits corporate investigations and develops standards.', requiredCertificates: ['CMRP'] },
+    }
+  },
+  {
+    id: 's_beh_listening',
+    name: 'Field Investigation Listening',
+    category: 'Behavioral',
+    assessmentQuestion: 'Does this engineer actively listen to field input during failure investigations?',
+    levels: {
+      1: { level: 1, description: 'Rarely seeks field input.', requiredCertificates: [] },
+      2: { level: 2, description: 'Listens when prompted by others.', requiredCertificates: [] },
+      3: { level: 3, description: 'Consistently seeks and listens to field input during investigations.', requiredCertificates: [] },
+      4: { level: 4, description: 'Actively encourages field staff to share insights and incorporates them into reports.', requiredCertificates: [] },
+      5: { level: 5, description: 'Role model for collaborative investigation; builds trust with field teams.', requiredCertificates: [] },
+    }
+  },
+  {
+    id: 's_tech_pump',
+    name: 'Pump Alignment (Physical)',
+    category: 'Technical',
+    assessmentQuestion: 'Can the technician physically perform precision pump alignment using laser or dial indicators?',
+    levels: {
+      1: { level: 1, description: 'Assists in setting up alignment tools.', requiredCertificates: [] },
+      2: { level: 2, description: 'Performs rough alignment under supervision.', requiredCertificates: [] },
+      3: { level: 3, description: 'Independently performs precision alignment to within tolerance.', requiredCertificates: ['Alignment Specialist'] },
+      4: { level: 4, description: 'Performs complex alignments on high-speed or multi-stage pumps.', requiredCertificates: ['Master Aligner'] },
+      5: { level: 5, description: 'Trains others in precision alignment techniques and troubleshoots chronic issues.', requiredCertificates: [] },
+    }
+  },
+  {
+    id: 's_beh_safety',
+    name: 'Safety Protocol Adherence',
+    category: 'Behavioral',
+    assessmentQuestion: 'Does this technician consistently follow safety protocols (like LOTO) even when rushing?',
+    levels: {
+      1: { level: 1, description: 'Follows protocols only when supervised.', requiredCertificates: [] },
+      2: { level: 2, description: 'Generally follows protocols but may skip steps under pressure.', requiredCertificates: [] },
+      3: { level: 3, description: 'Consistently follows all safety protocols regardless of schedule pressure.', requiredCertificates: [] },
+      4: { level: 4, description: 'Promotes safety protocols to others and intervenes in unsafe acts.', requiredCertificates: [] },
+      5: { level: 5, description: 'Safety champion; develops and improves site safety procedures.', requiredCertificates: [] },
+    }
+  },
+  {
+    id: 's_beh_mentor',
+    name: 'Mentorship & Knowledge Sharing',
+    category: 'Behavioral',
+    assessmentQuestion: 'Is the employee willing to mentor junior staff and share technical knowledge?',
+    levels: {
+      1: { level: 1, description: 'Keeps knowledge to themselves.', requiredCertificates: [] },
+      2: { level: 2, description: 'Shares knowledge only when asked directly.', requiredCertificates: [] },
+      3: { level: 3, description: 'Willingly mentors junior staff and shares lessons learned.', requiredCertificates: [] },
+      4: { level: 4, description: 'Actively seeks opportunities to mentor and develop others.', requiredCertificates: [] },
+      5: { level: 5, description: 'Recognized mentor; formalizes knowledge sharing programs.', requiredCertificates: [] },
+    }
+  },
+  {
+    id: 's_tech_cmms',
+    name: 'CMMS Scheduling & Audit',
+    category: 'Technical',
+    assessmentQuestion: 'Are work order schedules in CMMS accurate, optimized, and compliant with site standards?',
+    levels: {
+      1: { level: 1, description: 'Enters basic work order data.', requiredCertificates: [] },
+      2: { level: 2, description: 'Creates simple schedules for routine tasks.', requiredCertificates: [] },
+      3: { level: 3, description: 'Optimizes multi-week schedules and manages resource leveling.', requiredCertificates: ['CMMS Specialist'] },
+      4: { level: 4, description: 'Audits CMMS data for accuracy and compliance; optimizes scheduling workflows.', requiredCertificates: [] },
+      5: { level: 5, description: 'CMMS Administrator; develops corporate scheduling standards and integrations.', requiredCertificates: [] },
+    }
+  },
+  {
+    id: 's_beh_clarity',
+    name: 'Work Package Clarity',
+    category: 'Behavioral',
+    assessmentQuestion: 'Are the work packages provided clear, accurate, and ready for execution?',
+    levels: {
+      1: { level: 1, description: 'Packages often missing critical info or parts.', requiredCertificates: [] },
+      2: { level: 2, description: 'Packages are functional but require clarification from field staff.', requiredCertificates: [] },
+      3: { level: 3, description: 'Packages are clear, accurate, and ready for execution without rework.', requiredCertificates: [] },
+      4: { level: 4, description: 'Packages include advanced details (e.g., specific torque values, rigging plans).', requiredCertificates: [] },
+      5: { level: 5, description: 'Sets the standard for planning excellence; packages are used as templates.', requiredCertificates: [] },
+    }
   }
 ];
 
@@ -183,6 +274,45 @@ const MOCK_JOBS: JobProfile[] = [
         { skillId: 's_hse_02', requiredLevel: 4 },
       ]
     }
+  },
+  {
+    id: 'j_rel_eng_pilot',
+    title: 'Reliability Engineer (Pilot)',
+    description: 'Focuses on RCA standards and field collaboration.',
+    departmentId: 'd_reliability',
+    requirements: {
+      'FP': [
+        { skillId: 's_tech_rca', requiredLevel: 4 },
+        { skillId: 's_beh_listening', requiredLevel: 3 },
+        { skillId: 's_maint_02', requiredLevel: 3 },
+      ]
+    }
+  },
+  {
+    id: 'j_mech_tech_pilot',
+    title: 'Senior Mechanical Technician (Pilot)',
+    description: 'Expert in pump alignment and safety protocols.',
+    departmentId: 'd_maint_exec',
+    requirements: {
+      'EX': [
+        { skillId: 's_tech_pump', requiredLevel: 3 },
+        { skillId: 's_beh_safety', requiredLevel: 4 },
+        { skillId: 's_beh_mentor', requiredLevel: 3 },
+      ]
+    }
+  },
+  {
+    id: 'j_plan_eng_pilot',
+    title: 'Maintenance Planning Engineer (Pilot)',
+    description: 'Responsible for CMMS scheduling and work package quality.',
+    departmentId: 'd_maint_exec',
+    requirements: {
+      'FP': [
+        { skillId: 's_tech_cmms', requiredLevel: 4 },
+        { skillId: 's_beh_clarity', requiredLevel: 4 },
+        { skillId: 's_mgt_02', requiredLevel: 3 },
+      ]
+    }
   }
 ];
 
@@ -206,7 +336,7 @@ const MOCK_USERS: User[] = [
     id: 'u_mgr_eng',
     name: 'Eng. Sameh Ibrahim',
     email: 'sameh.i@zohr.com.eg',
-    role: Role.MANAGER,
+    role: Role.EMPLOYEE,
     status: 'ACTIVE',
     departmentId: 'd_eng_design',
     jobProfileId: 'j_eng_mgr',
@@ -221,7 +351,7 @@ const MOCK_USERS: User[] = [
     id: 'u_mgr_maint',
     name: 'Eng. Youssef Ali',
     email: 'youssef.a@midor.com.eg',
-    role: Role.MANAGER,
+    role: Role.EMPLOYEE,
     status: 'ACTIVE',
     departmentId: 'd_maint_exec',
     jobProfileId: 'j_maint_mgr',
@@ -298,17 +428,78 @@ const MOCK_USERS: User[] = [
   {
     id: 'u_emp_fatima',
     name: 'Eng. Fatima Zahra',
-    email: 'f.zahra@midor.com.eg',
+    email: 'fatima.z@midor.com.eg',
     role: Role.EMPLOYEE,
     status: 'ACTIVE',
-    departmentId: 'd_eng_design',
-    managerId: 'u_mgr_eng',
-    jobProfileId: 'j_proc_eng',
+    departmentId: 'd_reliability',
+    managerId: 'u_mgr_maint',
+    jobProfileId: 'j_rel_eng_pilot',
     orgLevel: 'FP',
     avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Fatima',
     certificates: [
       { id: 'cert_9', name: 'Process Simulation with HYSYS', issuer: 'AspenTech', dateAchieved: '2022-09-30' }
     ],
+    location: 'MIDOR'
+  },
+  {
+    id: 'u_pilot_tech',
+    name: 'Hassan Mahmoud',
+    email: 'hassan.m@midor.com.eg',
+    role: Role.EMPLOYEE,
+    status: 'ACTIVE',
+    departmentId: 'd_maint_exec',
+    managerId: 'u_mgr_maint',
+    jobProfileId: 'j_mech_tech_pilot',
+    orgLevel: 'EX',
+    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Hassan',
+    certificates: [],
+    location: 'MIDOR'
+  },
+  {
+    id: 'u_pilot_planner',
+    name: 'Eng. Khaled Said',
+    email: 'khaled.s@midor.com.eg',
+    role: Role.EMPLOYEE,
+    status: 'ACTIVE',
+    departmentId: 'd_maint_exec',
+    managerId: 'u_mgr_maint',
+    jobProfileId: 'j_plan_eng_pilot',
+    orgLevel: 'FP',
+    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Khaled',
+    certificates: [],
+    location: 'MIDOR'
+  },
+  {
+    id: 'u_peer_planner',
+    name: 'Eng. Omar Farouk',
+    email: 'omar.f@midor.com.eg',
+    role: Role.EMPLOYEE,
+    status: 'ACTIVE',
+    departmentId: 'd_maint_exec',
+    orgLevel: 'FP',
+    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Omar',
+    location: 'MIDOR'
+  },
+  {
+    id: 'u_peer_tech',
+    name: 'Tarek Ibrahim',
+    email: 'tarek.i@midor.com.eg',
+    role: Role.EMPLOYEE,
+    status: 'ACTIVE',
+    departmentId: 'd_maint_exec',
+    orgLevel: 'FR',
+    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Tarek',
+    location: 'MIDOR'
+  },
+  {
+    id: 'u_peer_supervisor',
+    name: 'Eng. Mostafa Bakr',
+    email: 'mostafa.b@midor.com.eg',
+    role: Role.EMPLOYEE,
+    status: 'ACTIVE',
+    departmentId: 'd_maint_exec',
+    orgLevel: 'DH',
+    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Mostafa',
     location: 'MIDOR'
   },
   {
@@ -392,6 +583,13 @@ const MOCK_ASSESSMENTS: Assessment[] = [
   { id: 'a1', raterId: 'u_emp_sarah', subjectId: 'u_emp_sarah', skillId: 's_eng_01', score: 4, comment: 'Successfully completed the HYSYS simulation for the new gas plant.', date: '2024-02-10', type: 'SELF' },
   { id: 'a2', raterId: 'u_mgr_eng', subjectId: 'u_emp_sarah', skillId: 's_eng_01', score: 4, comment: 'Excellent work on the process design package.', date: '2024-02-12', type: 'MANAGER' },
   { id: 'a3', raterId: 'u_emp_ali', subjectId: 'u_emp_ali', skillId: 's_maint_02', score: 3, comment: 'Completed Vibration Analysis Level II certification.', date: '2024-01-20', type: 'SELF' },
+  // Pilot Group Assessments
+  { id: 'p1', raterId: 'u_mgr_maint', subjectId: 'u_emp_fatima', skillId: 's_tech_rca', score: 4, comment: 'RCA report verified against SMRP standard. Good technical depth.', date: '2024-03-01', type: 'MANAGER' },
+  { id: 'p2', raterId: 'u_peer_planner', subjectId: 'u_emp_fatima', skillId: 's_beh_listening', score: 5, comment: 'Fatima always listens to our input from the field during investigations.', date: '2024-03-02', type: 'PEER' },
+  { id: 'p3', raterId: 'u_mgr_maint', subjectId: 'u_pilot_tech', skillId: 's_tech_pump', score: 3, comment: 'Observed alignment of Pump P-101; within tolerance but could be faster.', date: '2024-03-01', type: 'MANAGER' },
+  { id: 'p4', raterId: 'u_peer_tech', subjectId: 'u_pilot_tech', skillId: 's_beh_safety', score: 5, comment: 'Hassan never skips LOTO even when we are in a rush. Great safety role model.', date: '2024-03-03', type: 'PEER' },
+  { id: 'p5', raterId: 'u_mgr_maint', subjectId: 'u_pilot_planner', skillId: 's_tech_cmms', score: 4, comment: 'Audit of CMMS schedules shows high compliance and optimization.', date: '2024-03-01', type: 'MANAGER' },
+  { id: 'p6', raterId: 'u_peer_supervisor', subjectId: 'u_pilot_planner', skillId: 's_beh_clarity', score: 4, comment: 'Work packages are clear, accurate, and ready for execution.', date: '2024-03-04', type: 'PEER' },
 ];
 
 const MOCK_LOGS: ActivityLog[] = [
@@ -399,6 +597,19 @@ const MOCK_LOGS: ActivityLog[] = [
     { id: 'l2', action: 'Approved Training Request', target: 'Ali Hassan', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString() },
     { id: 'l3', action: 'System Audit', target: 'Engineering Design & Projects', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString() },
     { id: 'l4', action: 'New Employee Registration', target: 'Omar Youssef', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString() }
+];
+
+const MOCK_EVIDENCES: Evidence[] = [
+  {
+    id: 'e1',
+    userId: 'u_emp_fatima',
+    skillId: 's_tech_rca',
+    fileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+    fileName: 'RCA_Report_P101.pdf',
+    notes: 'Attached is the RCA report for the recent P-101 failure, following SMRP guidelines.',
+    status: 'PENDING',
+    submittedAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString()
+  }
 ];
 
 // ==========================================
@@ -415,6 +626,7 @@ class DataService {
   private notifications: Notification[] = [];
   private cycles: AssessmentCycle[] = [];
   private nominations: Nomination[] = [];
+  private evidences: Evidence[] = [];
   
   private supabase: SupabaseClient | null = null;
   public isInitialized = false;
@@ -434,6 +646,67 @@ class DataService {
     this.notifications = [];
     this.cycles = [];
     this.nominations = [];
+    this.evidences = [...MOCK_EVIDENCES];
+  }
+
+  // --- Evidences ---
+  getEvidences(filters?: { userId?: string, skillId?: string, status?: string }) {
+    let result = this.evidences;
+    if (filters?.userId) result = result.filter(e => e.userId === filters.userId);
+    if (filters?.skillId) result = result.filter(e => e.skillId === filters.skillId);
+    if (filters?.status) result = result.filter(e => e.status === filters.status);
+    return result;
+  }
+
+  addEvidence(evidence: Omit<Evidence, 'id' | 'status' | 'submittedAt'>) {
+    const newEvidence: Evidence = {
+      ...evidence,
+      id: Math.random().toString(36).substr(2, 9),
+      status: 'PENDING',
+      submittedAt: new Date().toISOString()
+    };
+    this.evidences.push(newEvidence);
+    
+    // Notify manager
+    const user = this.users.find(u => u.id === evidence.userId);
+    if (user && user.managerId) {
+      this.addNotification({
+        userId: user.managerId,
+        title: 'New Evidence Submitted',
+        message: `${user.name} submitted evidence for review.`,
+        type: 'INFO'
+      });
+    }
+    return newEvidence;
+  }
+
+  updateEvidenceStatus(id: string, status: 'APPROVED' | 'REJECTED', reviewerId: string, level?: number) {
+    const evidence = this.evidences.find(e => e.id === id);
+    if (evidence) {
+      evidence.status = status;
+      evidence.reviewedAt = new Date().toISOString();
+      evidence.reviewedBy = reviewerId;
+
+      // If approved, automatically create an assessment
+      if (status === 'APPROVED') {
+        this.addAssessment({
+          raterId: reviewerId,
+          subjectId: evidence.userId,
+          skillId: evidence.skillId,
+          score: level || 3, // Default to level 3 if not provided
+          comment: `Evidence approved: ${evidence.notes}`,
+          type: 'MANAGER'
+        });
+      }
+
+      // Notify user
+      this.addNotification({
+        userId: evidence.userId,
+        title: `Evidence ${status}`,
+        message: `Your evidence submission was ${status.toLowerCase()}.`,
+        type: status === 'APPROVED' ? 'SUCCESS' : 'ERROR'
+      });
+    }
   }
 
   // --- Nominations ---
@@ -796,6 +1069,57 @@ class DataService {
      await this.persistItem(collectionName, item);
   }
 
+  // --- HIERARCHY & ROLES ---
+  isManager(user: User): boolean {
+    if (user.role === Role.ADMIN) return true;
+    // Hierarchy based check: GM, GAM, DM, DH are managers
+    const managerialLevels: OrgLevel[] = ['GM', 'GAM', 'DM', 'DH'];
+    return user.orgLevel ? managerialLevels.includes(user.orgLevel) : false;
+  }
+
+  generateIndividualTrainingPlan(userId: string): IndividualTrainingPlan | null {
+    const user = this.getCurrentUser(userId);
+    if (!user || !user.jobProfileId || !user.orgLevel) return null;
+
+    const job = this.getJobProfile(user.jobProfileId);
+    if (!job) return null;
+
+    const requirements = job.requirements[user.orgLevel] || [];
+    const recommendations: TrainingRecommendation[] = [];
+
+    requirements.forEach(req => {
+      const currentScore = this.getUserSkillScore(userId, req.skillId);
+      const gap = req.requiredLevel - currentScore;
+
+      if (gap > 0) {
+        const skill = this.getSkill(req.skillId);
+        const skillName = skill?.name || 'Unknown Skill';
+        
+        // Logic for recommendation
+        let recommendation = '';
+        if (gap >= 2) {
+          recommendation = `Intensive training and external certification required for ${skillName}.`;
+        } else {
+          recommendation = `On-the-job training and mentorship recommended to reach proficiency level ${req.requiredLevel}.`;
+        }
+
+        recommendations.push({
+          skillId: req.skillId,
+          skillName,
+          gap,
+          recommendation,
+          priority: gap >= 2 ? 'HIGH' : 'MEDIUM'
+        });
+      }
+    });
+
+    return {
+      userId,
+      recommendations: recommendations.sort((a, b) => b.gap - a.gap),
+      generatedAt: new Date().toISOString()
+    };
+  }
+
   // --- PUBLIC METHODS (GETTERS - Synchronous for UI Performance) ---
 
   // NOTE: In a real app, 'login' is async. We kept the synchronous signature for Mock compatibility in types
@@ -915,7 +1239,7 @@ class DataService {
     }
 
     // Manager Notifications
-    if (user.role === Role.MANAGER) {
+    if (this.isManager(user) && user.role !== Role.ADMIN) {
       const teamMembers = this.users.filter(u => u.managerId === user.id);
       const teamMemberIds = new Set(teamMembers.map(u => u.id));
       
@@ -1080,6 +1404,15 @@ class DataService {
       this.skills[idx] = skill;
       this.updateItem('skills', skill);
       this.logActivity('Updated Skill Standard', skill.name);
+    }
+  }
+
+  approveSkill(id: string) {
+    const idx = this.skills.findIndex(s => s.id === id);
+    if (idx >= 0) {
+      this.skills[idx].status = 'APPROVED';
+      this.updateItem('skills', this.skills[idx]);
+      this.logActivity('Approved New Skill', this.skills[idx].name);
     }
   }
 

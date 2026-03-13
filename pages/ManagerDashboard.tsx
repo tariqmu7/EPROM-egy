@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { User, Role, JobProfile } from '../types';
+import { User, Role, JobProfile, OrgLevel } from '../types';
 import { dataService } from '../services/store';
 import { EmployeeDashboard } from './EmployeeDashboard';
 import { Users, ChevronRight, AlertCircle, CheckCircle, TrendingUp, ArrowLeft, Briefcase, BarChart2, Shield, Search, Award, Mail } from 'lucide-react';
@@ -16,6 +16,12 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
   
   const subordinates = useMemo(() => dataService.getSubordinates(user.id), [user.id]);
   
+  // Check if user has access to Talent Search (DH and above)
+  const canSearchTalent = useMemo(() => {
+    const searchLevels: OrgLevel[] = ['GM', 'GAM', 'DM', 'DH'];
+    return searchLevels.includes(user.orgLevel as OrgLevel) || user.role === Role.ADMIN;
+  }, [user.orgLevel, user.role]);
+
   // Get jobs managed by this manager (based on department)
   // In a real app, we might have a more direct link, but here we use departmentId
   const managedJobs = useMemo(() => dataService.getAllJobs().filter(job => job.departmentId === user.departmentId), [user.departmentId]);
@@ -148,7 +154,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
                                                             </div>
                                                             <div>
                                                                 <div className="text-sm font-bold text-slate-700 leading-none">{emp.name}</div>
-                                                                <div className="text-[10px] text-slate-600 mt-0.5">{stats.gaps} Gaps Detected</div>
+                                                                <div className="text-[10px] text-slate-600 mt-0.5">
+                                                                    {stats.gaps} Gaps • ITP Generated
+                                                                </div>
                                                             </div>
                                                         </div>
                                                         <span className={`text-xs font-bold ${stats.compliance >= 80 ? 'text-green-700' : stats.compliance >= 50 ? 'text-cyan-700' : 'text-emerald-700'}`}>
@@ -318,12 +326,14 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
             >
                 Job Profiles
             </button>
-            <button 
-                onClick={() => setActiveView('TALENT_SEARCH')}
-                className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeView === 'TALENT_SEARCH' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-700 hover:text-slate-700'}`}
-            >
-                Talent Search
-            </button>
+            {canSearchTalent && (
+                <button 
+                    onClick={() => setActiveView('TALENT_SEARCH')}
+                    className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeView === 'TALENT_SEARCH' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-700 hover:text-slate-700'}`}
+                >
+                    Talent Search
+                </button>
+            )}
         </div>
       </div>
 
@@ -352,7 +362,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
                                     <div className="flex items-center gap-2 mt-0.5">
                                         <p className="text-xs text-slate-700">{jobTitle}</p>
                                         <span className="text-slate-300">•</span>
-                                        <span className="text-[10px] font-bold text-blue-600 uppercase tracking-tight">{member.location || 'N/A'}</span>
+                                        <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-tight">ITP Active</span>
                                     </div>
                                 </div>
                             </div>

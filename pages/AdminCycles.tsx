@@ -1,130 +1,240 @@
-import React, { useState, useMemo } from 'react';
-import { dataService } from '../services/store';
-import { AssessmentCycle } from '../types';
-import { Plus, Calendar, CheckCircle, XCircle, Clock } from 'lucide-react';
+import React, { useState } from 'react';
+import { Activity, Calendar, Zap, Users, Settings, PlayCircle, CheckCircle, Save, Edit3 } from 'lucide-react';
 
 export const AdminCycles: React.FC = () => {
-  const [isCreating, setIsCreating] = useState(false);
-  const [formData, setFormData] = useState({ name: '', startDate: '', dueDate: '' });
-  
-  const cycles = useMemo(() => dataService.getAllCycles(), [isCreating]);
+  const [activeCycle, setActiveCycle] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
 
-  const handleCreate = (e: React.FormEvent) => {
-    e.preventDefault();
-    dataService.addCycle({
-      name: formData.name,
-      startDate: formData.startDate,
-      dueDate: formData.dueDate,
-      status: 'ACTIVE'
-    });
-    setIsCreating(false);
-    setFormData({ name: '', startDate: '', dueDate: '' });
+  const [configs, setConfigs] = useState<Record<string, any>>({
+    'baseline': {
+      triggers: ['New Hire', 'Role Transfer', 'Facility Change']
+    },
+    'time-based': {
+      highRiskDuration: 1,
+      mediumRiskDuration: 3
+    },
+    'event-driven': {
+      triggers: ['Post-Incident', 'New Equipment/SOPs', 'Prolonged Absence (>6mo)']
+    },
+    'behavioral': {
+      duration: 1,
+      tiedTo: 'Annual Performance Review'
+    }
+  });
+
+  const handleTrigger = (cycleName: string) => {
+    setActiveCycle(cycleName);
+    setTimeout(() => {
+      setSuccessMessage(`${cycleName} has been successfully triggered.`);
+      setActiveCycle(null);
+      setTimeout(() => setSuccessMessage(''), 3000);
+    }, 1000);
   };
 
-  const handleCloseCycle = (cycle: AssessmentCycle) => {
-    dataService.updateCycle({ ...cycle, status: 'CLOSED' });
-    // Force re-render
-    setFormData({ ...formData });
+  const handleSaveConfig = (id: string) => {
+    setEditingId(null);
+    setSuccessMessage(`Configuration for ${cycles.find(c => c.id === id)?.name} saved.`);
+    setTimeout(() => setSuccessMessage(''), 3000);
   };
 
-  if (isCreating) {
-    return (
-      <div className="bg-white rounded-lg shadow-panel border border-slate-200 p-6">
-        <h3 className="text-xl font-bold text-slate-900 mb-4">Create Assessment Cycle</h3>
-        <form onSubmit={handleCreate} className="space-y-4 max-w-md">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Cycle Name</label>
-            <input 
-              required
-              type="text" 
-              value={formData.name}
-              onChange={e => setFormData({...formData, name: e.target.value})}
-              placeholder="e.g., Q1 2026 Performance Review"
-              className="w-full border border-slate-300 rounded-md px-3 py-2"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Start Date</label>
-            <input 
-              required
-              type="date" 
-              value={formData.startDate}
-              onChange={e => setFormData({...formData, startDate: e.target.value})}
-              className="w-full border border-slate-300 rounded-md px-3 py-2"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Due Date</label>
-            <input 
-              required
-              type="date" 
-              value={formData.dueDate}
-              onChange={e => setFormData({...formData, dueDate: e.target.value})}
-              className="w-full border border-slate-300 rounded-md px-3 py-2"
-            />
-          </div>
-          <div className="flex gap-3 pt-4">
-            <button type="button" onClick={() => setIsCreating(false)} className="px-4 py-2 border border-slate-300 text-slate-700 rounded-md hover:bg-slate-50">Cancel</button>
-            <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Generate Cycle</button>
-          </div>
-        </form>
-      </div>
-    );
-  }
+  const cycles = [
+    {
+      id: 'baseline',
+      name: 'The Baseline Assessment (Initial)',
+      icon: Activity,
+      color: 'text-blue-600',
+      bgColor: 'bg-blue-50',
+      when: 'Upon hiring, transferring to a new role, or moving to a new facility.',
+      goal: 'Establish the baseline. You cannot manage what you have not measured. Even a 20-year veteran gets a baseline assessment to prove they meet your site\'s specific standards, not just their previous employer\'s.'
+    },
+    {
+      id: 'time-based',
+      name: 'The Time-Based Cycle (The Matrix Standard)',
+      icon: Calendar,
+      color: 'text-emerald-600',
+      bgColor: 'bg-emerald-50',
+      when: 'Automated tracking based on criticality (High-Risk: 1-2 years, Medium-Risk: 3 years).',
+      goal: 'Ensure continuous compliance. High-Risk tasks (e.g., PTW, LOTO, Confined Space) require frequent reassessment. Medium-Risk tasks (e.g., Pump alignment, RCA) are retained well if done regularly.'
+    },
+    {
+      id: 'event-driven',
+      name: 'The Event-Driven Assessment (Triggered)',
+      icon: Zap,
+      color: 'text-amber-600',
+      bgColor: 'bg-amber-50',
+      when: 'Post-Incident, New Equipment/SOPs, or Prolonged Absence (6-12 months).',
+      goal: 'Immediate reassessment based on specific events. Resets the clock before the standard 3-year mark to ensure safety and compliance after critical changes or incidents.'
+    },
+    {
+      id: 'behavioral',
+      name: 'The Behavioral Cycle (360-Degree Evaluation)',
+      icon: Users,
+      color: 'text-purple-600',
+      bgColor: 'bg-purple-50',
+      when: 'Annually (often tied to standard performance review periods).',
+      goal: 'Measure safety culture, teamwork, and communication. Lighter to execute than technical evidence, done yearly to track trends in leadership and attitude.'
+    }
+  ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center pb-6 border-b border-slate-200">
+    <div className="space-y-6 max-w-5xl mx-auto">
+      <div className="pb-6 border-b border-slate-200 flex justify-between items-end">
         <div>
-          <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Assessment Cycles</h2>
-          <p className="text-slate-700 text-sm mt-1">Manage organizational assessment campaigns</p>
+          <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Evaluation Cycles Settings</h2>
+          <p className="text-slate-700 text-sm mt-1">Configure and trigger the 4 Standard Evaluation Cycles.</p>
         </div>
-        <button 
-          onClick={() => setIsCreating(true)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center gap-2"
-        >
-          <Plus size={18} /> Generate New Cycle
-        </button>
+        <div className="bg-slate-100 p-2 rounded-lg border border-slate-200 flex items-center gap-2 text-sm text-slate-600 font-medium">
+          <Settings size={16} />
+          <span>System Configured</span>
+        </div>
       </div>
 
-      <div className="grid gap-4">
-        {cycles.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-lg border border-slate-200">
-            <Calendar size={48} className="mx-auto text-slate-300 mb-4" />
-            <p className="text-slate-500 font-medium">No assessment cycles found.</p>
-            <p className="text-slate-400 text-sm mt-1">Generate a new cycle to start assessing employees.</p>
-          </div>
-        ) : (
-          cycles.map(cycle => (
-            <div key={cycle.id} className="bg-white p-5 rounded-lg border border-slate-200 flex items-center justify-between shadow-sm">
-              <div className="flex items-center gap-4">
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center ${cycle.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>
-                  {cycle.status === 'ACTIVE' ? <Clock size={24} /> : <CheckCircle size={24} />}
+      {successMessage && (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-lg flex items-center gap-3 animate-fade-in">
+          <CheckCircle size={20} className="text-emerald-600" />
+          <p className="font-medium">{successMessage}</p>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {cycles.map((cycle) => {
+          const Icon = cycle.icon;
+          return (
+            <div key={cycle.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+              <div className="p-6 flex-grow">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${cycle.bgColor} ${cycle.color}`}>
+                    <Icon size={24} />
+                  </div>
+                  <h3 className="text-lg font-bold text-slate-900 leading-tight">{cycle.name}</h3>
                 </div>
-                <div>
-                  <h3 className="font-bold text-lg text-slate-900">{cycle.name}</h3>
-                  <div className="flex items-center gap-4 text-sm text-slate-500 mt-1">
-                    <span>Start: {new Date(cycle.startDate).toLocaleDateString()}</span>
-                    <span>Due: {new Date(cycle.dueDate).toLocaleDateString()}</span>
+                
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">When it happens</h4>
+                    <p className="text-sm text-slate-700">{cycle.when}</p>
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">The Goal</h4>
+                    <p className="text-sm text-slate-700">{cycle.goal}</p>
                   </div>
                 </div>
+
+                {/* Configuration Section */}
+                <div className="mt-6 pt-4 border-t border-slate-100">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1">
+                      <Settings size={14} /> Configuration
+                    </h4>
+                    {editingId !== cycle.id ? (
+                      <button onClick={() => setEditingId(cycle.id)} className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1">
+                        <Edit3 size={12} /> Edit
+                      </button>
+                    ) : (
+                      <button onClick={() => handleSaveConfig(cycle.id)} className="text-xs text-emerald-600 hover:text-emerald-800 font-medium flex items-center gap-1">
+                        <Save size={12} /> Save
+                      </button>
+                    )}
+                  </div>
+
+                  {cycle.id === 'baseline' && (
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-slate-600">Automatic Triggers (comma separated)</label>
+                      <input 
+                        type="text" 
+                        disabled={editingId !== cycle.id}
+                        value={configs['baseline'].triggers.join(', ')}
+                        onChange={(e) => setConfigs({...configs, baseline: { triggers: e.target.value.split(',').map(s => s.trim()) }})}
+                        className="w-full text-sm border border-slate-300 rounded px-2 py-1.5 disabled:bg-slate-50 disabled:text-slate-500"
+                      />
+                    </div>
+                  )}
+
+                  {cycle.id === 'time-based' && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-medium text-slate-600">High-Risk (Years)</label>
+                        <input 
+                          type="number" 
+                          disabled={editingId !== cycle.id}
+                          value={configs['time-based'].highRiskDuration}
+                          onChange={(e) => setConfigs({...configs, 'time-based': { ...configs['time-based'], highRiskDuration: parseInt(e.target.value) }})}
+                          className="w-full text-sm border border-slate-300 rounded px-2 py-1.5 disabled:bg-slate-50 disabled:text-slate-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-slate-600">Medium-Risk (Years)</label>
+                        <input 
+                          type="number" 
+                          disabled={editingId !== cycle.id}
+                          value={configs['time-based'].mediumRiskDuration}
+                          onChange={(e) => setConfigs({...configs, 'time-based': { ...configs['time-based'], mediumRiskDuration: parseInt(e.target.value) }})}
+                          className="w-full text-sm border border-slate-300 rounded px-2 py-1.5 disabled:bg-slate-50 disabled:text-slate-500"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {cycle.id === 'event-driven' && (
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-slate-600">Manual Triggers (comma separated)</label>
+                      <input 
+                        type="text" 
+                        disabled={editingId !== cycle.id}
+                        value={configs['event-driven'].triggers.join(', ')}
+                        onChange={(e) => setConfigs({...configs, 'event-driven': { triggers: e.target.value.split(',').map(s => s.trim()) }})}
+                        className="w-full text-sm border border-slate-300 rounded px-2 py-1.5 disabled:bg-slate-50 disabled:text-slate-500"
+                      />
+                    </div>
+                  )}
+
+                  {cycle.id === 'behavioral' && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-medium text-slate-600">Frequency (Years)</label>
+                        <input 
+                          type="number" 
+                          disabled={editingId !== cycle.id}
+                          value={configs['behavioral'].duration}
+                          onChange={(e) => setConfigs({...configs, 'behavioral': { ...configs['behavioral'], duration: parseInt(e.target.value) }})}
+                          className="w-full text-sm border border-slate-300 rounded px-2 py-1.5 disabled:bg-slate-50 disabled:text-slate-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-slate-600">Tied To</label>
+                        <input 
+                          type="text" 
+                          disabled={editingId !== cycle.id}
+                          value={configs['behavioral'].tiedTo}
+                          onChange={(e) => setConfigs({...configs, 'behavioral': { ...configs['behavioral'], tiedTo: e.target.value }})}
+                          className="w-full text-sm border border-slate-300 rounded px-2 py-1.5 disabled:bg-slate-50 disabled:text-slate-500"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="flex items-center gap-4">
-                <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${cycle.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
-                  {cycle.status}
-                </span>
-                {cycle.status === 'ACTIVE' && (
-                  <button 
-                    onClick={() => handleCloseCycle(cycle)}
-                    className="text-sm text-red-600 hover:text-red-800 font-medium border border-red-200 hover:bg-red-50 px-3 py-1.5 rounded transition-colors"
-                  >
-                    Close Cycle
-                  </button>
-                )}
+              
+              <div className="bg-slate-50 p-4 border-t border-slate-200 flex justify-end">
+                <button 
+                  onClick={() => handleTrigger(cycle.name)}
+                  disabled={activeCycle === cycle.name}
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 hover:text-slate-900 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                >
+                  {activeCycle === cycle.name ? (
+                    <>Processing...</>
+                  ) : (
+                    <>
+                      <PlayCircle size={16} className={cycle.color} />
+                      Trigger Cycle
+                    </>
+                  )}
+                </button>
               </div>
             </div>
-          ))
-        )}
+          );
+        })}
       </div>
     </div>
   );

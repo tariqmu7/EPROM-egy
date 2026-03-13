@@ -1,7 +1,8 @@
 import React, { memo } from 'react';
-import { User, Role } from '../types';
+import { User, Role, ORG_LEVEL_LABELS } from '../types';
 import { Logo } from './Logo';
-import { LogOut, LayoutDashboard, ClipboardList, ShieldCheck, UserCircle, Users, Building2, Briefcase, Activity, Calendar } from 'lucide-react';
+import { dataService } from '../services/store';
+import { LogOut, LayoutDashboard, ClipboardList, ShieldCheck, UserCircle, Users, Building2, Briefcase, Activity, Calendar, Grid, UploadCloud, CheckSquare, Star } from 'lucide-react';
 import { NotificationBell } from './NotificationBell';
 
 interface LayoutProps {
@@ -44,7 +45,7 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
                     <Logo className="w-full h-full" />
                </div>
                <div className="hidden lg:flex flex-col">
-                 <span className="font-bold text-2xl tracking-tight leading-none text-slate-900">ORIENS</span>
+                 <span className="font-bold text-2xl tracking-tight leading-none text-slate-900">EPROM CMS</span>
                  <span className="text-xs text-blue-700 font-bold uppercase tracking-widest mt-1">EPROM Competency program</span>
                </div>
             </div>
@@ -62,11 +63,16 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
                 </>
               ) : (
                 <>
-                  <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="emp-dashboard" label="My Dashboard" icon={LayoutDashboard} />
-                  {user.role === Role.MANAGER && (
-                    <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="manager-dashboard" label="My Team" icon={Users} />
+                  <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="emp-dashboard" label="My Profile" icon={LayoutDashboard} />
+                  {dataService.isManager(user) && (
+                    <>
+                      <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="manager-dashboard" label="My Team" icon={Users} />
+                      <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="supervisor-approval" label="Approvals" icon={CheckSquare} />
+                    </>
                   )}
-                  <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="emp-assessment" label="Assessments" icon={ClipboardList} />
+                  <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="emp-assessment" label="Evaluations" icon={Star} />
+                  <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="competency-matrix" label="Matrix" icon={Grid} />
+                  <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="evidence-portal" label="Evidence" icon={UploadCloud} />
                 </>
               )}
             </nav>
@@ -80,7 +86,9 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
               <div className="flex items-center gap-3 pl-6 border-l border-slate-200">
                 <div className="text-right hidden sm:block">
                     <p className="text-sm font-bold text-slate-900 leading-none">{user.name}</p>
-                    <p className="text-[10px] text-slate-700 uppercase mt-1">{user.role}</p>
+                    <p className="text-[10px] text-slate-700 uppercase mt-1">
+                        {user.role === Role.ADMIN ? 'Administrator' : (user.orgLevel ? ORG_LEVEL_LABELS[user.orgLevel] : 'Employee')}
+                    </p>
                 </div>
                 <div className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden shadow-sm text-slate-700">
                     {user.avatarUrl ? <img src={user.avatarUrl} alt="avatar" /> : <UserCircle size={24} />}

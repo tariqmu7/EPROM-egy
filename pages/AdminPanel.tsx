@@ -186,12 +186,13 @@ const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void,
       name: formData.name,
       email: formData.email,
       role: formData.role || Role.EMPLOYEE,
-      status: 'ACTIVE', 
+      status: formData.status || 'ACTIVE', 
       departmentId: formData.departmentId || '',
       jobProfileId: formData.jobProfileId,
       managerId: formData.managerId,
       avatarUrl: formData.avatarUrl,
-      orgLevel: formData.orgLevel
+      orgLevel: formData.orgLevel,
+      location: formData.location
     };
     onSave(user);
   };
@@ -267,8 +268,16 @@ const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void,
                         <select className="w-full px-3 py-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none bg-white text-slate-900"
                             value={formData.role} onChange={e => setFormData({...formData, role: e.target.value as Role})}>
                             <option value={Role.EMPLOYEE}>Employee</option>
-                            <option value={Role.MANAGER}>Manager</option>
                             <option value={Role.ADMIN}>Admin</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Account Status</label>
+                        <select className="w-full px-3 py-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none bg-white text-slate-900"
+                            value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})}>
+                            <option value="ACTIVE">Active</option>
+                            <option value="PENDING">Pending Approval</option>
+                            <option value="REJECTED">Rejected</option>
                         </select>
                     </div>
                     <SearchableSelect 
@@ -499,7 +508,8 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
        name: formData.name,
        category: formData.category,
        assessmentQuestion: formData.assessmentQuestion,
-       levels: formData.levels as any
+       levels: formData.levels as any,
+       status: 'APPROVED'
     });
   };
 
@@ -623,9 +633,11 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
   const [formType, setFormType] = useState<'USER' | 'JOB' | 'SKILL' | 'DEPT' | null>(null);
   const [editItem, setEditItem] = useState<any>(null);
   const [viewSkill, setViewSkill] = useState<Skill | null>(null);
+  const [activeTab, setActiveTab] = useState<'ALL' | 'PENDING' | 'ACTIVE'>('ALL');
   
   // Search State
   const [searchTerm, setSearchTerm] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
 
   // Reset search when view changes
   useEffect(() => {
@@ -648,14 +660,18 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
 
   // Filtering Logic
   const filteredUsers = useMemo(() => {
-    return sortedUsers.filter(user => 
-      searchTerm === '' ||
-      user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (depts.find(d => d.id === user.departmentId)?.name || '').toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [sortedUsers, searchTerm, depts]);
+    return sortedUsers.filter(user => {
+      const matchesSearch = searchTerm === '' ||
+        user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (depts.find(d => d.id === user.departmentId)?.name || '').toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesTab = activeTab === 'ALL' || user.status === activeTab;
+      
+      return matchesSearch && matchesTab;
+    });
+  }, [sortedUsers, searchTerm, depts, activeTab]);
 
   const filteredJobs = useMemo(() => {
     return jobs.filter(job => 
@@ -683,7 +699,37 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
   }, [depts, searchTerm, users]);
 
 
+  const handleApprove = useCallback((user: User) => {
+    dataService.updateUser({ ...user, status: 'ACTIVE' });
+    dataService.logActivity('Approved User', user.name);
+    setRefreshKey(k => k + 1);
+  }, []);
+
+  const handleApproveSkill = useCallback((skill: Skill) => {
+    const approvedEvidences = dataService.getEvidences({ skillId: skill.id, status: 'APPROVED' });
+    if (approvedEvidences.length === 0) {
+      setErrorMessage("Cannot approve: A manager must approve an employee's evidence for this skill first.");
+      setTimeout(() => setErrorMessage(''), 5000);
+      return;
+    }
+    handleEdit('SKILL', skill);
+  }, []);
+
+  const handleReject = useCallback((user: User) => {
+    dataService.updateUser({ ...user, status: 'REJECTED' });
+    dataService.logActivity('Rejected User', user.name);
+    setRefreshKey(k => k + 1);
+  }, []);
+
   const handleEdit = useCallback((type: 'USER' | 'JOB' | 'SKILL' | 'DEPT', item: any) => {
+      if (type === 'SKILL' && item.status === 'PENDING') {
+        const approvedEvidences = dataService.getEvidences({ skillId: item.id, status: 'APPROVED' });
+        if (approvedEvidences.length === 0) {
+          setErrorMessage("Cannot edit/approve: A manager must approve an employee's evidence for this skill first.");
+          setTimeout(() => setErrorMessage(''), 5000);
+          return;
+        }
+      }
       setFormType(type);
       setEditItem(item);
       setFormMode(true);
@@ -758,7 +804,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                 <div className="absolute top-0 right-0 -mt-10 -mr-10 h-64 w-64 rounded-full bg-blue-500/10 blur-3xl"></div>
                 <div className="absolute bottom-0 left-0 -mb-10 -ml-10 h-64 w-64 rounded-full bg-blue-500/10 blur-3xl"></div>
                 
-                <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
+                <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
                     <div>
                         <h2 className="text-3xl font-bold text-white tracking-tight">System Command Center</h2>
                         <p className="text-slate-600 mt-2 max-w-xl">
@@ -844,7 +890,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                     <div className="h-1 w-full bg-emerald-600 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></div>
                 </button>
 
-                 <button onClick={() => onNavigate('admin-depts')} className="bg-white rounded-xl shadow-sm border border-slate-200 hover:shadow-lg transition-all group overflow-hidden text-left">
+                <button onClick={() => onNavigate('admin-depts')} className="bg-white rounded-xl shadow-sm border border-slate-200 hover:shadow-lg transition-all group overflow-hidden text-left">
                      <div className="p-6">
                         <div className="flex justify-between items-start mb-4">
                              <div className="w-12 h-12 bg-emerald-50 text-emerald-700 rounded-lg flex items-center justify-center group-hover:bg-orange-600 group-hover:text-white transition-colors">
@@ -864,6 +910,37 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                     </div>
                     <div className="h-1 w-full bg-orange-600 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></div>
                 </button>
+
+                <div className="lg:col-span-4 bg-gradient-to-br from-slate-900 to-slate-800 rounded-xl shadow-lg p-8 text-white relative overflow-hidden">
+                    <div className="absolute top-0 right-0 -mt-10 -mr-10 h-64 w-64 rounded-full bg-blue-500/10 blur-3xl"></div>
+                    <div className="relative z-10">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="p-2 bg-blue-500/20 rounded-lg">
+                                <Activity size={24} className="text-blue-400" />
+                            </div>
+                            <h3 className="text-xl font-bold">Competency Model Engine</h3>
+                        </div>
+                        <p className="text-slate-300 mb-6 max-w-2xl">
+                            The EPROM CMS core engine analyzes workforce capabilities against job profiles. 
+                            It automatically identifies skill gaps and generates Individual Training Plans (ITP) 
+                            to ensure operational excellence and safety compliance.
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                                <p className="text-xs text-slate-400 uppercase font-bold mb-1">Total Skills</p>
+                                <p className="text-2xl font-bold">{skills.length}</p>
+                            </div>
+                            <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                                <p className="text-xs text-slate-400 uppercase font-bold mb-1">Job Profiles</p>
+                                <p className="text-2xl font-bold">{jobs.length}</p>
+                            </div>
+                            <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                                <p className="text-xs text-slate-400 uppercase font-bold mb-1">Active ITPs</p>
+                                <p className="text-2xl font-bold">{users.filter(u => u.status === 'ACTIVE').length}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
             
             {/* Quick Actions or Analytics Row */}
@@ -922,6 +999,12 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
   // --- TABLE VIEW (Data View) ---
   return (
     <div className="space-y-6">
+       {errorMessage && (
+         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative animate-in fade-in" role="alert">
+           <strong className="font-bold">Error: </strong>
+           <span className="block sm:inline">{errorMessage}</span>
+         </div>
+       )}
        <div className="flex justify-between items-center pb-6 border-b border-slate-200">
            <div>
               <h2 className="text-3xl font-bold text-slate-900 tracking-tight">
@@ -935,23 +1018,38 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
 
        {/* Content Area */}
        <div className="bg-white rounded-lg shadow-panel border border-slate-200 overflow-hidden min-h-[600px]">
-           {/* Toolbar */}
-           <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-               <div className="relative max-w-sm w-full">
-                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" size={16}/>
-                   <input 
-                      type="text" 
-                      placeholder="Search records..." 
-                      className="w-full pl-9 pr-4 py-2 text-sm bg-white text-slate-900 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all" 
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                   />
-               </div>
-               <button onClick={() => handleAdd(view === 'USERS' ? 'USER' : view === 'JOBS' ? 'JOB' : view === 'SKILLS' ? 'SKILL' : 'DEPT')}
-                   className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-md text-xs font-bold uppercase tracking-wide shadow-sm flex items-center gap-2 transition-all">
-                   <Plus size={16} /> Add {view === 'USERS' ? 'Employee' : view === 'JOBS' ? 'Profile' : view === 'SKILLS' ? 'Skill' : 'Department'}
-               </button>
-           </div>
+            {/* Toolbar */}
+            <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row justify-between items-center gap-4">
+                <div className="flex items-center gap-4 w-full md:w-auto">
+                    <div className="relative max-w-sm w-full">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" size={16}/>
+                        <input 
+                            type="text" 
+                            placeholder="Search records..." 
+                            className="w-full pl-9 pr-4 py-2 text-sm bg-white text-slate-900 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all" 
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+                    {view === 'USERS' && (
+                        <div className="flex bg-white border border-slate-200 rounded-md p-1">
+                            {(['ALL', 'PENDING', 'ACTIVE'] as const).map(tab => (
+                                <button
+                                    key={tab}
+                                    onClick={() => setActiveTab(tab)}
+                                    className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-all ${activeTab === tab ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
+                                >
+                                    {tab}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+                <button onClick={() => handleAdd(view === 'USERS' ? 'USER' : view === 'JOBS' ? 'JOB' : view === 'SKILLS' ? 'SKILL' : 'DEPT')}
+                    className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-md text-xs font-bold uppercase tracking-wide shadow-sm flex items-center gap-2 transition-all w-full md:w-auto justify-center">
+                    <Plus size={16} /> Add {view === 'USERS' ? 'Employee' : view === 'JOBS' ? 'Profile' : view === 'SKILLS' ? 'Skill' : 'Department'}
+                </button>
+            </div>
 
            {/* Table */}
            <div className="overflow-x-auto">
@@ -960,7 +1058,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                        <tr>
                            {view === 'USERS' && <><th className="p-4 pl-6">Employee</th><th className="p-4">Role & Dept</th><th className="p-4">Level</th><th className="p-4">Status</th></>}
                            {view === 'JOBS' && <><th className="p-4 pl-6">Job Title</th><th className="p-4">Department</th><th className="p-4">Complexity</th></>}
-                           {view === 'SKILLS' && <><th className="p-4 pl-6">Skill Name</th><th className="p-4">Category</th><th className="p-4">Definition</th></>}
+                           {view === 'SKILLS' && <><th className="p-4 pl-6">Skill Name</th><th className="p-4">Category</th><th className="p-4">Definition</th><th className="p-4">Status</th></>}
                            {view === 'DEPTS' && <><th className="p-4 pl-6">Department Name</th><th className="p-4">Head of Dept</th></>}
                            <th className="p-4 text-right pr-6">Actions</th>
                        </tr>
@@ -1025,8 +1123,20 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                                    <span className="px-2 py-1 bg-blue-50 text-blue-700 border border-blue-100 rounded text-[10px] font-bold uppercase tracking-wide">{skill.category}</span>
                                </td>
                                <td className="p-4 text-slate-700 truncate max-w-xs text-xs">{skill.assessmentQuestion || '-'}</td>
+                               <td className="p-4">
+                                   {skill.status === 'PENDING' ? (
+                                       <span className="px-2 py-1 bg-amber-50 text-amber-700 border border-amber-100 rounded text-[10px] font-bold uppercase tracking-wide">Pending</span>
+                                   ) : (
+                                       <span className="px-2 py-1 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded text-[10px] font-bold uppercase tracking-wide">Approved</span>
+                                   )}
+                               </td>
                                <td className="p-4 text-right pr-6">
                                    <div className="flex items-center justify-end gap-2">
+                                       {skill.status === 'PENDING' && (
+                                           <button onClick={() => handleApproveSkill(skill)} className="text-emerald-600 hover:text-emerald-700 p-2 transition-colors flex items-center gap-1" title="Approve Skill">
+                                               <CheckCircle size={16}/> <span className="text-xs font-bold uppercase">Approve</span>
+                                           </button>
+                                       )}
                                        <button onClick={() => setViewSkill(skill)} className="text-slate-600 hover:text-blue-700 p-2 transition-colors flex items-center gap-1" title="View Details">
                                            <Eye size={16}/> <span className="text-xs font-bold uppercase">View</span>
                                        </button>

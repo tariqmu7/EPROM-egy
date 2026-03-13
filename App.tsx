@@ -2,8 +2,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Layout } from './components/Layout';
 import { EmployeeDashboard } from './pages/EmployeeDashboard';
 import { ManagerDashboard } from './pages/ManagerDashboard';
-import { AssessmentPortal } from './pages/AssessmentPortal';
 import { AdminPanel } from './pages/AdminPanel';
+import { CompetencyMatrix } from './pages/CompetencyMatrix';
+import { EvidencePortal } from './pages/EvidencePortal';
+import { SupervisorApproval } from './pages/SupervisorApproval';
+import { BehavioralAssessment } from './pages/BehavioralAssessment';
 import { Logo } from './components/Logo';
 import { dataService, CONFIG } from './services/store';
 import { User, Role } from './types';
@@ -46,7 +49,7 @@ const App: React.FC = () => {
                 // Set default tab based on role
                 if (result.user.role === Role.ADMIN) {
                     setActiveTab('admin-dashboard');
-                } else if (result.user.role === Role.MANAGER) {
+                } else if (dataService.isManager(result.user)) {
                     setActiveTab('manager-dashboard');
                 } else {
                     setActiveTab('emp-dashboard');
@@ -110,7 +113,7 @@ const App: React.FC = () => {
                         <Logo className="w-full h-full" />
                    </div>
                    <div className="flex flex-col">
-                     <span className="font-bold text-3xl tracking-tight leading-none text-white">ORIENS</span>
+                     <span className="font-bold text-3xl tracking-tight leading-none text-white">EPROM CMS</span>
                      <span className="text-xs text-blue-400 font-bold uppercase tracking-widest mt-1">EPROM Competency program</span>
                    </div>
                 </div>
@@ -145,7 +148,7 @@ const App: React.FC = () => {
                         <Logo className="w-full h-full" />
                    </div>
                    <div className="flex flex-col text-left">
-                     <span className="font-bold text-3xl tracking-tight leading-none text-slate-900">ORIENS</span>
+                     <span className="font-bold text-3xl tracking-tight leading-none text-slate-900">EPROM CMS</span>
                      <span className="text-xs text-blue-700 font-bold uppercase tracking-widest mt-1">EPROM Competency program</span>
                    </div>
                 </div>
@@ -155,7 +158,7 @@ const App: React.FC = () => {
                         {isLoginMode ? 'Welcome back' : 'Create an account'}
                     </h2>
                     <p className="text-slate-700 mt-2">
-                        {isLoginMode ? 'Enter your details to access your dashboard.' : 'Join Oriens OS to manage your professional profile.'}
+                        {isLoginMode ? 'Enter your details to access your dashboard.' : 'Join EPROM CMS to manage your professional profile.'}
                     </p>
                 </div>
                 
@@ -264,7 +267,7 @@ const App: React.FC = () => {
                                 <span className="text-slate-600 text-xs">Sarah</span>
                             </button>
                             <button onClick={() => { setEmail('sameh.i@zohr.com.eg'); setPassword('any'); }} className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl shadow-sm text-sm font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-all flex justify-between items-center">
-                                <span>Manager</span>
+                                <span>Manager (DH)</span>
                                 <span className="text-slate-600 text-xs">Sameh</span>
                             </button>
                             <button onClick={() => { setEmail('admin@egpc.com.eg'); setPassword('any'); }} className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl shadow-sm text-sm font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-all flex justify-between items-center">
@@ -303,15 +306,15 @@ const App: React.FC = () => {
       );
     }
 
-    if (activeTab === 'manager-dashboard' && user.role !== Role.MANAGER && user.role !== Role.ADMIN) {
+    if (activeTab === 'manager-dashboard' && !dataService.isManager(user)) {
       return (
         <div className="flex flex-col items-center justify-center h-[60vh] p-12 text-center animate-fade-in">
           <div className="bg-orange-50 text-orange-500 p-6 rounded-full mb-6">
             <Lock size={48} />
           </div>
-          <h2 className="text-3xl font-bold text-slate-900 mb-3">Manager Access Required</h2>
+          <h2 className="text-3xl font-bold text-slate-900 mb-3">Managerial Access Required</h2>
           <p className="text-slate-600 max-w-md mb-8">
-            This section is restricted to team managers. You can view your own performance and assessments in the Employee Dashboard.
+            This section is restricted to employees with managerial hierarchy levels (Department Head and above).
           </p>
           <button 
             onClick={() => setActiveTab('emp-dashboard')}
@@ -326,7 +329,10 @@ const App: React.FC = () => {
     switch(activeTab) {
         case 'emp-dashboard': return <EmployeeDashboard user={user} />;
         case 'manager-dashboard': return <ManagerDashboard user={user} />;
-        case 'emp-assessment': return <AssessmentPortal currentUser={user} />;
+        case 'emp-assessment': return <BehavioralAssessment currentUser={user} />;
+        case 'competency-matrix': return <CompetencyMatrix currentUser={user} />;
+        case 'evidence-portal': return <EvidencePortal currentUser={user} />;
+        case 'supervisor-approval': return <SupervisorApproval currentUser={user} />;
         // Admin Views - Mapped to sidebar IDs
         case 'admin-dashboard': return <AdminPanel view="OVERVIEW" onNavigate={setActiveTab} />;
         case 'admin-analytics': return <AdminPanel view="ANALYTICS" onNavigate={setActiveTab} />;

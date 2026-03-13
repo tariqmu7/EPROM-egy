@@ -1,8 +1,8 @@
 import React, { useMemo } from 'react';
-import { User, JobProfile, Skill } from '../types';
+import { User, JobProfile, Skill, IndividualTrainingPlan } from '../types';
 import { dataService } from '../services/store';
 import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Tooltip, BarChart, CartesianGrid, XAxis, YAxis, Bar, Legend, Cell } from 'recharts';
-import { AlertCircle, CheckCircle, Award, BookOpen, Activity, TrendingUp, Users, PlayCircle, Calendar, ArrowRight, Download, FileText, Mail, Briefcase, MapPin, User as UserIcon, ShieldCheck } from 'lucide-react';
+import { AlertCircle, CheckCircle, Award, BookOpen, Activity, TrendingUp, Users, PlayCircle, Calendar, ArrowRight, Download, FileText, Mail, Briefcase, MapPin, User as UserIcon, ShieldCheck, GraduationCap, Target, Zap } from 'lucide-react';
 
 interface EmployeeDashboardProps {
   user: User;
@@ -13,6 +13,8 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
   const userLevel = user.orgLevel;
   const department = useMemo(() => dataService.getAllDepartments().find(d => d.id === user.departmentId), [user.departmentId]);
   const manager = useMemo(() => user.managerId ? dataService.getCurrentUser(user.managerId) : null, [user.managerId]);
+
+  const itp = useMemo(() => dataService.generateIndividualTrainingPlan(user.id), [user.id]);
 
   if (!jobProfile) {
     return (
@@ -287,6 +289,38 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
             )}
           </div>
 
+          {/* Job Fit Analysis Section */}
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-2">
+                <Target size={20} className="text-emerald-600" />
+                <h3 className="font-bold text-slate-900">Job Fit Analysis</h3>
+              </div>
+              <div className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-100">
+                {skillAnalysis.length > 0 ? Math.round((compliant.length / skillAnalysis.length) * 100) : 0}% Match
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
+                <div className="flex items-center gap-2 mb-2 text-slate-500">
+                  <ShieldCheck size={16} />
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Certificates</span>
+                </div>
+                <p className="text-xl font-bold text-slate-900">{user.certificates?.length || 0}</p>
+                <p className="text-[10px] text-slate-500 mt-1">Professional Validations</p>
+              </div>
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
+                <div className="flex items-center gap-2 mb-2 text-slate-500">
+                  <Zap size={16} />
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Assessments</span>
+                </div>
+                <p className="text-xl font-bold text-slate-900">{dataService.getAssessments({ subjectId: user.id }).length}</p>
+                <p className="text-[10px] text-slate-500 mt-1">Measurable Evaluations</p>
+              </div>
+            </div>
+          </div>
+
           {/* Skill Profile Section */}
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
             <div className="flex items-center justify-between mb-6">
@@ -333,67 +367,38 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
             </div>
           </div>
 
-          {/* Action Plan Section */}
+          {/* Individual Training Plan (ITP) Section */}
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
               <div className="flex items-center gap-2">
                 <TrendingUp size={20} className="text-blue-600" />
-                <h3 className="font-bold text-slate-900">Development Roadmap</h3>
+                <h3 className="font-bold text-slate-900">Individual Training Plan (ITP)</h3>
               </div>
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">AI Generated</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Plan ID: {itp?.userId.split('_')[1] || 'NEW'}</span>
+                <span className="bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">Active</span>
+              </div>
             </div>
             
             <div className="p-6">
-              {recommendations.length > 0 ? (
-                <div className="space-y-4">
-                  {recommendations.map((rec, idx) => (
-                    <div key={idx} className="group p-4 rounded-xl border border-slate-100 bg-slate-50/30 hover:bg-white hover:border-blue-100 hover:shadow-md transition-all">
-                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${rec.isCritical ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
-                            {rec.isCritical ? <AlertCircle size={20} /> : <TrendingUp size={20} />}
-                          </div>
-                          <div>
-                            <h4 className="font-bold text-slate-900 text-sm">{rec.skillName}</h4>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{rec.category}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-bold px-2 py-1 rounded-lg bg-white border border-slate-100 text-slate-600">
-                            Lvl {rec.currentLevel} → {rec.targetLevel}
-                          </span>
-                        </div>
-                      </div>
+              {itp && itp.recommendations.length > 0 ? (
+                <div className="space-y-6">
+                  {itp.recommendations.map((rec, idx) => (
+                    <div key={idx} className="relative pl-6 border-l-2 border-slate-100 pb-6 last:pb-0">
+                      <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-white shadow-sm ${rec.priority === 'HIGH' ? 'bg-red-500' : 'bg-blue-500'}`}></div>
                       
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <p className="text-xs text-slate-600 leading-relaxed">{rec.description}</p>
-                          {rec.certs.length > 0 && (
-                            <div className="flex flex-wrap gap-1.5 pt-1">
-                              {rec.certs.map((cert, cIdx) => (
-                                <span key={cIdx} className="text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-100 px-2 py-0.5 rounded-full flex items-center gap-1">
-                                  <Award size={10} /> {cert}
-                                </span>
-                              ))}
-                            </div>
-                          )}
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-bold text-slate-900">{rec.skillName}</h4>
+                            {rec.priority === 'HIGH' && (
+                              <span className="bg-red-50 text-red-600 text-[9px] font-bold px-1.5 py-0.5 rounded border border-red-100 uppercase tracking-tighter">Critical Gap</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-500 mt-0.5">Recommendation: {rec.recommendation}</p>
                         </div>
-                        
-                        <div className="space-y-2">
-                          {rec.suggestedActions.map((action, aIdx) => {
-                            const ActionIcon = action.icon;
-                            return (
-                              <div key={aIdx} className="flex items-center gap-3 p-2 rounded-lg bg-white border border-slate-100">
-                                <div className="w-6 h-6 rounded bg-slate-50 flex items-center justify-center text-blue-600">
-                                  <ActionIcon size={14} />
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-[11px] font-bold text-slate-800 truncate">{action.label}</p>
-                                  <p className="text-[9px] text-slate-400 uppercase font-bold">{action.type} • {action.duration}</p>
-                                </div>
-                              </div>
-                            );
-                          })}
+                        <div className="text-right">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Gap: {rec.gap}</span>
                         </div>
                       </div>
                     </div>
@@ -404,10 +409,14 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                   <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
                     <CheckCircle size={32} />
                   </div>
-                  <h4 className="text-lg font-bold text-slate-900">Peak Performance</h4>
-                  <p className="text-slate-500 text-sm mt-1">You've mastered all competencies for this level. Keep it up!</p>
+                  <h4 className="text-lg font-bold text-slate-900">No Training Required</h4>
+                  <p className="text-slate-500 text-sm mt-1">You currently meet all competency requirements for your role.</p>
                 </div>
               )}
+            </div>
+            
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-center">
+               <p className="text-[10px] text-slate-400 font-medium italic">Generated based on latest job profile and assessment data on {itp ? new Date(itp.generatedAt).toLocaleDateString() : 'N/A'}</p>
             </div>
           </div>
         </div>
