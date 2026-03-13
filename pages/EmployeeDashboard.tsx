@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { User, JobProfile, Skill, IndividualTrainingPlan } from '../types';
+import { User, JobProfile, Skill, IndividualTrainingPlan, ORG_HIERARCHY_ORDER, ORG_LEVEL_LABELS } from '../types';
 import { dataService } from '../services/store';
 import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Tooltip, BarChart, CartesianGrid, XAxis, YAxis, Bar, Legend, Cell } from 'recharts';
 import { AlertCircle, CheckCircle, Award, BookOpen, Activity, TrendingUp, Users, PlayCircle, Calendar, ArrowRight, Download, FileText, Mail, Briefcase, MapPin, User as UserIcon, ShieldCheck, GraduationCap, Target, Zap } from 'lucide-react';
@@ -89,6 +89,44 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
       suggestedActions: actions
     };
   }), [gaps]);
+
+  const careerPath = useMemo(() => {
+    const currentIndex = ORG_HIERARCHY_ORDER.indexOf(userLevel);
+    if (currentIndex === -1) return [];
+
+    // The hierarchy is ordered from GM (0) down to FR (6).
+    // So the "next" positions are at lower indices.
+    const path = [];
+    
+    // Add current position
+    path.push({
+      level: userLevel,
+      title: ORG_LEVEL_LABELS[userLevel],
+      status: 'CURRENT',
+      year: new Date().getFullYear(),
+      goals: ['Master current role requirements', 'Complete pending ITP actions']
+    });
+
+    // Add up to 3 future positions
+    let yearOffset = 2;
+    for (let i = currentIndex - 1; i >= Math.max(0, currentIndex - 3); i--) {
+      const nextLevel = ORG_HIERARCHY_ORDER[i];
+      path.push({
+        level: nextLevel,
+        title: ORG_LEVEL_LABELS[nextLevel],
+        status: 'FUTURE',
+        year: new Date().getFullYear() + yearOffset,
+        goals: [
+          `Achieve target competencies for ${ORG_LEVEL_LABELS[nextLevel]}`,
+          'Demonstrate leadership and cross-functional collaboration',
+          'Complete advanced certifications'
+        ]
+      });
+      yearOffset += 3; // Assume 3 years between promotions for mock data
+    }
+
+    return path;
+  }, [userLevel]);
 
   // Export Handlers
   const handleExportReport = () => {
@@ -417,6 +455,70 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
             
             <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-center">
                <p className="text-[10px] text-slate-400 font-medium italic">Generated based on latest job profile and assessment data on {itp ? new Date(itp.generatedAt).toLocaleDateString() : 'N/A'}</p>
+            </div>
+          </div>
+
+          {/* Career Path & Development Plan Section */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div className="flex items-center gap-2">
+                <GraduationCap size={20} className="text-indigo-600" />
+                <h3 className="font-bold text-slate-900">Career Path & Development Plan</h3>
+              </div>
+            </div>
+            
+            <div className="p-6">
+              {careerPath.length > 0 ? (
+                <div className="space-y-8">
+                  {careerPath.map((step, idx) => (
+                    <div key={idx} className="relative pl-8 border-l-2 border-slate-100 pb-8 last:pb-0">
+                      <div className={`absolute -left-[11px] top-0 w-5 h-5 rounded-full border-4 border-white shadow-sm flex items-center justify-center ${step.status === 'CURRENT' ? 'bg-emerald-500' : 'bg-indigo-500'}`}>
+                        {step.status === 'CURRENT' && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}
+                      </div>
+                      
+                      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 -mt-1">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <h4 className="font-bold text-slate-900 text-lg">{step.title}</h4>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${step.status === 'CURRENT' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-indigo-50 text-indigo-700 border border-indigo-100'}`}>
+                              {step.level}
+                            </span>
+                            {step.status === 'CURRENT' && (
+                              <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">Current Role</span>
+                            )}
+                          </div>
+                          
+                          <div className="mt-3 space-y-2">
+                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Key Objectives:</p>
+                            <ul className="space-y-1.5">
+                              {step.goals.map((goal, gIdx) => (
+                                <li key={gIdx} className="flex items-start gap-2 text-sm text-slate-600">
+                                  <ArrowRight size={14} className="text-slate-400 mt-0.5 shrink-0" />
+                                  <span>{goal}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <div className="inline-flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
+                            <Calendar size={14} className="text-slate-400" />
+                            <span className="text-sm font-bold text-slate-700">{step.year}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-12 text-center">
+                  <div className="w-16 h-16 bg-slate-50 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Activity size={32} />
+                  </div>
+                  <h4 className="text-lg font-bold text-slate-900">Career Path Unavailable</h4>
+                  <p className="text-slate-500 text-sm mt-1">Your organizational level is not mapped to a standard career progression.</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
