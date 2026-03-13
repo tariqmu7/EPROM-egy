@@ -305,9 +305,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-end border-b border-slate-200 pb-6">
         <div>
-          <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Manager Dashboard</h2>
-          <div className="flex items-center gap-2 mt-2 text-sm text-slate-700">
-             <Users size={16} className="text-blue-700" />
+          <h2 className="text-xl font-bold text-slate-900 tracking-tight">Manager Dashboard</h2>
+          <div className="flex items-center gap-2 mt-1 text-xs text-slate-600">
+             <Users size={14} className="text-blue-700" />
              <span>Managing {subordinates.length} Team Members across {managedJobs.length} Roles</span>
           </div>
         </div>

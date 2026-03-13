@@ -45,8 +45,8 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
                     <Logo className="w-full h-full" />
                </div>
                <div className="hidden lg:flex flex-col">
-                 <span className="font-bold text-2xl tracking-tight leading-none text-slate-900">EPROM CMS</span>
-                 <span className="text-xs text-blue-700 font-bold uppercase tracking-widest mt-1">EPROM Competency program</span>
+                 <span className="font-bold text-lg tracking-tight leading-none text-slate-900">EPROM CMS</span>
+                 <span className="text-[10px] text-blue-700 font-bold uppercase tracking-widest mt-1">EPROM Competency program</span>
                </div>
             </div>
 
