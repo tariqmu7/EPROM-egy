@@ -7,20 +7,20 @@ export enum Role {
 export type UserStatus = 'ACTIVE' | 'PENDING' | 'REJECTED';
 
 // The 7 specific hierarchy levels requested
-export type OrgLevel = 'GM' | 'GAM' | 'DM' | 'DH' | 'EX' | 'FP' | 'FR';
+export type OrgLevel = 'GM' | 'AGM' | 'DM' | 'SH' | 'SP' | 'JP' | 'FR';
 
 export const ORG_LEVEL_LABELS: Record<OrgLevel, string> = {
   'GM': 'General Manager',
-  'GAM': 'General Assistant Manager',
+  'AGM': 'Assistant General Manager',
   'DM': 'Department Manager',
-  'DH': 'Department Head',
-  'EX': 'Excellent Position',
-  'FP': 'First Position',
+  'SH': 'Section Head',
+  'SP': 'Senior Position',
+  'JP': 'Junior Position',
   'FR': 'Fresh'
 };
 
 // Strict Hierarchy Order (Top to Bottom)
-export const ORG_HIERARCHY_ORDER: OrgLevel[] = ['GM', 'GAM', 'DM', 'DH', 'EX', 'FP', 'FR'];
+export const ORG_HIERARCHY_ORDER: OrgLevel[] = ['GM', 'AGM', 'DM', 'SH', 'SP', 'JP', 'FR'];
 
 export const PROFICIENCY_LABELS: Record<number, string> = {
   1: 'Awareness',

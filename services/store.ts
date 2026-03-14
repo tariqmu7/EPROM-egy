@@ -207,7 +207,7 @@ const MOCK_JOBS: JobProfile[] = [
     description: 'Leads process design and optimization for oil and gas facilities.',
     departmentId: 'd_eng_design',
     requirements: {
-      'FP': [
+      'JP': [
         { skillId: 's_eng_01', requiredLevel: 4 },
         { skillId: 's_hse_02', requiredLevel: 3 },
         { skillId: 's_mgt_03', requiredLevel: 2 },
@@ -224,7 +224,7 @@ const MOCK_JOBS: JobProfile[] = [
     description: 'Implements predictive maintenance and condition monitoring programs.',
     departmentId: 'd_reliability',
     requirements: {
-      'FP': [
+      'JP': [
         { skillId: 's_maint_02', requiredLevel: 3 },
         { skillId: 's_mgt_02', requiredLevel: 2 },
       ],
@@ -253,7 +253,7 @@ const MOCK_JOBS: JobProfile[] = [
     description: 'Manages the integrity and inspection of pipeline networks.',
     departmentId: 'd_reliability',
     requirements: {
-      'FP': [
+      'JP': [
         { skillId: 's_eng_02', requiredLevel: 3 },
         { skillId: 's_hse_02', requiredLevel: 2 },
       ],
@@ -281,7 +281,7 @@ const MOCK_JOBS: JobProfile[] = [
     description: 'Focuses on RCA standards and field collaboration.',
     departmentId: 'd_reliability',
     requirements: {
-      'FP': [
+      'JP': [
         { skillId: 's_tech_rca', requiredLevel: 4 },
         { skillId: 's_beh_listening', requiredLevel: 3 },
         { skillId: 's_maint_02', requiredLevel: 3 },
@@ -294,7 +294,7 @@ const MOCK_JOBS: JobProfile[] = [
     description: 'Expert in pump alignment and safety protocols.',
     departmentId: 'd_maint_exec',
     requirements: {
-      'EX': [
+      'SP': [
         { skillId: 's_tech_pump', requiredLevel: 3 },
         { skillId: 's_beh_safety', requiredLevel: 4 },
         { skillId: 's_beh_mentor', requiredLevel: 3 },
@@ -307,7 +307,7 @@ const MOCK_JOBS: JobProfile[] = [
     description: 'Responsible for CMMS scheduling and work package quality.',
     departmentId: 'd_maint_exec',
     requirements: {
-      'FP': [
+      'JP': [
         { skillId: 's_tech_cmms', requiredLevel: 4 },
         { skillId: 's_beh_clarity', requiredLevel: 4 },
         { skillId: 's_mgt_02', requiredLevel: 3 },
@@ -371,7 +371,7 @@ const MOCK_USERS: User[] = [
     departmentId: 'd_eng_design',
     managerId: 'u_mgr_eng',
     jobProfileId: 'j_proc_eng',
-    orgLevel: 'FP',
+    orgLevel: 'JP',
     avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Sarah',
     certificates: [
       { id: 'cert_5', name: 'HAZOP Leader Certification', issuer: 'TUV', dateAchieved: '2023-01-22' },
@@ -388,7 +388,7 @@ const MOCK_USERS: User[] = [
     departmentId: 'd_reliability',
     managerId: 'u_mgr_maint',
     jobProfileId: 'j_rel_eng',
-    orgLevel: 'FP',
+    orgLevel: 'JP',
     avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Ali',
     certificates: [
       { id: 'cert_7', name: 'Vibration Analysis ISO Category III', issuer: 'Mobius Institute', dateAchieved: '2022-11-05' }
@@ -404,7 +404,7 @@ const MOCK_USERS: User[] = [
     departmentId: 'd_reliability',
     managerId: 'u_mgr_maint',
     jobProfileId: 'j_pipe_eng',
-    orgLevel: 'FP',
+    orgLevel: 'JP',
     avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Ahmed',
     certificates: [
       { id: 'cert_8', name: 'API 570 Piping Inspector', issuer: 'API', dateAchieved: '2021-03-18' }
@@ -434,7 +434,7 @@ const MOCK_USERS: User[] = [
     departmentId: 'd_reliability',
     managerId: 'u_mgr_maint',
     jobProfileId: 'j_rel_eng_pilot',
-    orgLevel: 'FP',
+    orgLevel: 'JP',
     avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Fatima',
     certificates: [
       { id: 'cert_9', name: 'Process Simulation with HYSYS', issuer: 'AspenTech', dateAchieved: '2022-09-30' }
@@ -450,7 +450,7 @@ const MOCK_USERS: User[] = [
     departmentId: 'd_maint_exec',
     managerId: 'u_mgr_maint',
     jobProfileId: 'j_mech_tech_pilot',
-    orgLevel: 'EX',
+    orgLevel: 'SP',
     avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Hassan',
     certificates: [],
     location: 'MIDOR'
@@ -464,7 +464,7 @@ const MOCK_USERS: User[] = [
     departmentId: 'd_maint_exec',
     managerId: 'u_mgr_maint',
     jobProfileId: 'j_plan_eng_pilot',
-    orgLevel: 'FP',
+    orgLevel: 'JP',
     avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Khaled',
     certificates: [],
     location: 'MIDOR'
@@ -476,7 +476,7 @@ const MOCK_USERS: User[] = [
     role: Role.EMPLOYEE,
     status: 'ACTIVE',
     departmentId: 'd_maint_exec',
-    orgLevel: 'FP',
+    orgLevel: 'JP',
     avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Omar',
     location: 'MIDOR'
   },
@@ -498,7 +498,7 @@ const MOCK_USERS: User[] = [
     role: Role.EMPLOYEE,
     status: 'ACTIVE',
     departmentId: 'd_maint_exec',
-    orgLevel: 'DH',
+    orgLevel: 'SH',
     avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Mostafa',
     location: 'MIDOR'
   },
@@ -525,7 +525,7 @@ const MOCK_USERS: User[] = [
     departmentId: 'd_reliability',
     managerId: 'u_mgr_maint',
     jobProfileId: 'j_pipe_eng',
-    orgLevel: 'FP',
+    orgLevel: 'JP',
     avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Nour',
     location: 'AMO'
   },
@@ -551,7 +551,7 @@ const MOCK_USERS: User[] = [
     departmentId: 'd_reliability',
     managerId: 'u_mgr_maint',
     jobProfileId: 'j_rel_eng',
-    orgLevel: 'FP',
+    orgLevel: 'JP',
     avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Karim',
     location: 'ANOPC'
   },
@@ -564,7 +564,7 @@ const MOCK_USERS: User[] = [
     departmentId: 'd_eng_design',
     managerId: 'u_mgr_eng',
     jobProfileId: 'j_proc_eng',
-    orgLevel: 'FP',
+    orgLevel: 'JP',
     avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Yasmine',
     location: 'APC'
   },
@@ -1072,8 +1072,8 @@ class DataService {
   // --- HIERARCHY & ROLES ---
   isManager(user: User): boolean {
     if (user.role === Role.ADMIN) return true;
-    // Hierarchy based check: GM, GAM, DM, DH are managers
-    const managerialLevels: OrgLevel[] = ['GM', 'GAM', 'DM', 'DH'];
+    // Hierarchy based check: GM, AGM, DM, SH are managers
+    const managerialLevels: OrgLevel[] = ['GM', 'AGM', 'DM', 'SH'];
     return user.orgLevel ? managerialLevels.includes(user.orgLevel) : false;
   }
 

@@ -18,9 +18,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
   
   const subordinates = useMemo(() => dataService.getSubordinates(user.id), [user.id]);
   
-  // Check if user has access to Talent Search (DH and above)
+  // Check if user has access to Talent Search (SH and above)
   const canSearchTalent = useMemo(() => {
-    const searchLevels: OrgLevel[] = ['GM', 'GAM', 'DM', 'DH'];
+    const searchLevels: OrgLevel[] = ['GM', 'AGM', 'DM', 'SH'];
     return searchLevels.includes(user.orgLevel as OrgLevel) || user.role === Role.ADMIN;
   }, [user.orgLevel, user.role]);
 

@@ -351,7 +351,7 @@ const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void,
 // --- Job Form (Unchanged) ---
 const JobForm: React.FC<{ initialData?: JobProfile | null, onSave: (j: JobProfile) => void, onCancel: () => void }> = ({ initialData, onSave, onCancel }) => {
   const [formData, setFormData] = useState<Partial<JobProfile>>(initialData || { requirements: {} });
-  const [activeLevel, setActiveLevel] = useState<OrgLevel>('FP');
+  const [activeLevel, setActiveLevel] = useState<OrgLevel>('JP');
 
   const departments = dataService.getAllDepartments();
   const allSkills = dataService.getAllSkills();
@@ -630,7 +630,7 @@ const DepartmentForm: React.FC<{ initialData?: Department | null, onSave: (d: De
                 <input required className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
                     value={name} onChange={e => setName(e.target.value)} />
             </div>
-            <SearchableSelect label="Department Head (Optional)" options={managerOptions} value={managerId} onChange={setManagerId} placeholder="Select Manager..." />
+            <SearchableSelect label="Section Head (Optional)" options={managerOptions} value={managerId} onChange={setManagerId} placeholder="Select Manager..." />
             
             <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-3">Behavioral Competencies</label>

@@ -265,7 +265,7 @@ const App: React.FC = () => {
                                 <span className="text-slate-600 text-xs">Sarah</span>
                             </button>
                             <button onClick={() => { setEmail('sameh.i@zohr.com.eg'); setPassword('any'); }} className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl shadow-sm text-sm font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-all flex justify-between items-center">
-                                <span>Manager (DH)</span>
+                                <span>Manager (SH)</span>
                                 <span className="text-slate-600 text-xs">Sameh</span>
                             </button>
                             <button onClick={() => { setEmail('admin@egpc.com.eg'); setPassword('any'); }} className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl shadow-sm text-sm font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-all flex justify-between items-center">
@@ -312,7 +312,7 @@ const App: React.FC = () => {
           </div>
           <h2 className="text-3xl font-bold text-slate-900 mb-3">Managerial Access Required</h2>
           <p className="text-slate-600 max-w-md mb-8">
-            This section is restricted to employees with managerial hierarchy levels (Department Head and above).
+            This section is restricted to employees with managerial hierarchy levels (Section Head and above).
           </p>
           <button 
             onClick={() => setActiveTab('emp-dashboard')}
