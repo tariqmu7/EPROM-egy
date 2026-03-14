@@ -348,15 +348,24 @@ const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void,
   );
 };
 
-// --- Job Form (Unchanged) ---
+const SKILL_CATEGORIES = ['Technical', 'Behavioral', 'Safety', 'Management', 'Soft Skills'];
+
 const JobForm: React.FC<{ initialData?: JobProfile | null, onSave: (j: JobProfile) => void, onCancel: () => void }> = ({ initialData, onSave, onCancel }) => {
   const [formData, setFormData] = useState<Partial<JobProfile>>(initialData || { requirements: {} });
   const [activeLevel, setActiveLevel] = useState<OrgLevel>('JP');
+  const [skillCategoryFilter, setSkillCategoryFilter] = useState<string>('ALL');
 
   const departments = dataService.getAllDepartments();
   const allSkills = dataService.getAllSkills();
   const deptOptions = departments.map(d => ({ value: d.id, label: d.name }));
-  const skillOptions = allSkills.map(s => ({ value: s.id, label: s.name, subLabel: s.category }));
+  
+  const skillOptions = useMemo(() => {
+    let filtered = allSkills;
+    if (skillCategoryFilter !== 'ALL') {
+      filtered = filtered.filter(s => s.category === skillCategoryFilter);
+    }
+    return filtered.map(s => ({ value: s.id, label: s.name, subLabel: s.category }));
+  }, [allSkills, skillCategoryFilter]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -401,6 +410,8 @@ const JobForm: React.FC<{ initialData?: JobProfile | null, onSave: (j: JobProfil
     });
   };
 
+  const levelRequirements = formData.requirements?.[activeLevel] || [];
+
   return (
     <form onSubmit={handleSubmit} className="p-8 space-y-8 bg-white text-sm">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -427,51 +438,128 @@ const JobForm: React.FC<{ initialData?: JobProfile | null, onSave: (j: JobProfil
           <div className="w-full md:w-1/3">
              <label className="block text-xs font-bold text-slate-600 uppercase tracking-widest mb-2">Hierarchy Level</label>
              <div className="space-y-1">
-               {ORG_HIERARCHY_ORDER.map(level => (
-                 <button type="button" key={level} onClick={() => setActiveLevel(level)}
-                   className={`w-full flex justify-between items-center px-4 py-3 rounded-md text-xs font-bold transition-all border ${activeLevel === level ? 'bg-slate-900 text-white border-slate-900 shadow-md' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'}`}>
-                    <span>{ORG_LEVEL_LABELS[level]}</span>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${activeLevel === level ? 'bg-white/20' : 'bg-slate-100'}`}>{level}</span>
-                 </button>
-               ))}
+               {ORG_HIERARCHY_ORDER.map(level => {
+                 const reqsCount = (formData.requirements?.[level] || []).length;
+                 return (
+                   <button type="button" key={level} onClick={() => setActiveLevel(level)}
+                     className={`w-full flex justify-between items-center px-4 py-3 rounded-md text-xs font-bold transition-all border ${activeLevel === level ? 'bg-slate-900 text-white border-slate-900 shadow-md' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'}`}>
+                      <div className="flex flex-col items-start">
+                        <span>{ORG_LEVEL_LABELS[level]}</span>
+                        <span className={`text-[9px] mt-0.5 ${activeLevel === level ? 'text-white/60' : 'text-slate-500'}`}>{reqsCount} Skills Assigned</span>
+                      </div>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${activeLevel === level ? 'bg-white/20' : 'bg-slate-100'}`}>{level}</span>
+                   </button>
+                 );
+               })}
              </div>
           </div>
           
           <div className="flex-1 bg-slate-50 rounded-lg border border-slate-200 p-6">
-             <div className="flex justify-between items-center mb-4">
+             <div className="flex justify-between items-center mb-6">
                <div>
                   <h5 className="font-bold text-slate-900">Requirements: {ORG_LEVEL_LABELS[activeLevel]}</h5>
-                  <p className="text-xs text-slate-700">Define mandatory skills for this position level.</p>
+                  <p className="text-xs text-slate-700">Define mandatory skills for this position level across all categories.</p>
                </div>
              </div>
              
-             <div className="mb-4">
-               <SearchableSelect label="Add Required Skill" options={skillOptions} value="" onChange={handleAddSkill} placeholder="Search skill library..." />
+             <div className="mb-8 grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+               <div className="md:col-span-1">
+                 <label className="block text-xs font-bold text-slate-600 uppercase tracking-widest mb-2">Filter by Category</label>
+                 <select 
+                   value={skillCategoryFilter}
+                   onChange={(e) => setSkillCategoryFilter(e.target.value)}
+                   className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+                 >
+                   <option value="ALL">All Categories</option>
+                   {SKILL_CATEGORIES.map(cat => (
+                     <option key={cat} value={cat}>{cat}</option>
+                   ))}
+                 </select>
+               </div>
+               <div className="md:col-span-2">
+                 <SearchableSelect label="Add Required Skill" options={skillOptions} value="" onChange={handleAddSkill} placeholder={skillCategoryFilter === 'ALL' ? "Search all skills..." : `Search ${skillCategoryFilter} skills...`} />
+               </div>
              </div>
 
-             <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                {(formData.requirements?.[activeLevel] || []).length === 0 && (
-                    <div className="text-center py-8 text-slate-600 border border-dashed border-slate-300 rounded-lg text-xs">No skills assigned to this level yet.</div>
-                )}
-                {(formData.requirements?.[activeLevel] || []).map(req => {
-                   const skill = allSkills.find(s => s.id === req.skillId);
-                   return (
-                     <div key={req.skillId} className="bg-white p-3 rounded border border-slate-200 shadow-sm flex items-center gap-4">
-                        <div className="flex-1">
-                           <p className="font-bold text-slate-900 text-sm">{skill?.name}</p>
-                           <p className="text-[10px] text-slate-700 uppercase tracking-wide">{skill?.category}</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-bold text-slate-600 uppercase">Target Level</span>
-                            <select className="px-2 py-1 bg-slate-100 border border-slate-200 rounded text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
-                              value={req.requiredLevel} onChange={(e) => handleUpdateReq(req.skillId, parseInt(e.target.value))}>
-                               {[1,2,3,4,5].map(v => <option key={v} value={v}>{v}</option>)}
-                            </select>
-                        </div>
-                        <button type="button" onClick={() => handleRemoveReq(req.skillId)} className="text-slate-500 hover:text-emerald-700 p-1 transition-colors"><X size={16} /></button>
-                     </div>
-                   );
+             <div className="space-y-8 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+                {SKILL_CATEGORIES.map(category => {
+                  const categorySkills = levelRequirements.filter(req => {
+                    const skill = allSkills.find(s => s.id === req.skillId);
+                    return skill?.category === category;
+                  });
+
+                  return (
+                    <div key={category} className="space-y-3">
+                      <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                        <h6 className="font-bold text-slate-900 uppercase tracking-wider text-[11px] flex items-center gap-2">
+                          {category}
+                          {categorySkills.length > 0 ? (
+                            <span className="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded text-[9px]">{categorySkills.length}</span>
+                          ) : (
+                            <span className="bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded text-[9px]">Missing</span>
+                          )}
+                        </h6>
+                      </div>
+
+                      <div className="space-y-2">
+                        {categorySkills.length === 0 ? (
+                          <div className="text-[11px] text-slate-500 italic py-2 px-3 bg-white/50 border border-dashed border-slate-200 rounded">
+                            No {category} skills assigned.
+                          </div>
+                        ) : (
+                          categorySkills.map(req => {
+                            const skill = allSkills.find(s => s.id === req.skillId);
+                            return (
+                              <div key={req.skillId} className="bg-white p-3 rounded border border-slate-200 shadow-sm flex items-center gap-4">
+                                 <div className="flex-1">
+                                    <p className="font-bold text-slate-900 text-sm">{skill?.name}</p>
+                                 </div>
+                                 <div className="flex items-center gap-2">
+                                     <span className="text-[10px] font-bold text-slate-600 uppercase">Target Level</span>
+                                     <select className="px-2 py-1 bg-slate-100 border border-slate-200 rounded text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
+                                       value={req.requiredLevel} onChange={(e) => handleUpdateReq(req.skillId, parseInt(e.target.value))}>
+                                        {[1,2,3,4,5].map(v => <option key={v} value={v}>{v}</option>)}
+                                     </select>
+                                 </div>
+                                 <button type="button" onClick={() => handleRemoveReq(req.skillId)} className="text-slate-500 hover:text-rose-600 p-1 transition-colors"><X size={16} /></button>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  );
                 })}
+
+                {/* Other categories if any */}
+                {levelRequirements.some(req => !SKILL_CATEGORIES.includes(allSkills.find(s => s.id === req.skillId)?.category || '')) && (
+                   <div className="space-y-3">
+                      <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                        <h6 className="font-bold text-slate-900 uppercase tracking-wider text-[11px]">Other</h6>
+                      </div>
+                      <div className="space-y-2">
+                        {levelRequirements.filter(req => !SKILL_CATEGORIES.includes(allSkills.find(s => s.id === req.skillId)?.category || '')).map(req => {
+                          const skill = allSkills.find(s => s.id === req.skillId);
+                          return (
+                            <div key={req.skillId} className="bg-white p-3 rounded border border-slate-200 shadow-sm flex items-center gap-4">
+                               <div className="flex-1">
+                                  <p className="font-bold text-slate-900 text-sm">{skill?.name}</p>
+                                  <p className="text-[10px] text-slate-500 uppercase">{skill?.category}</p>
+                               </div>
+                               <div className="flex items-center gap-2">
+                                   <span className="text-[10px] font-bold text-slate-600 uppercase">Target Level</span>
+                                   <select className="px-2 py-1 bg-slate-100 border border-slate-200 rounded text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
+                                     value={req.requiredLevel} onChange={(e) => handleUpdateReq(req.skillId, parseInt(e.target.value))}>
+                                      {[1,2,3,4,5].map(v => <option key={v} value={v}>{v}</option>)}
+                                   </select>
+                               </div>
+                               <button type="button" onClick={() => handleRemoveReq(req.skillId)} className="text-slate-500 hover:text-rose-600 p-1 transition-colors"><X size={16} /></button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                   </div>
+                )}
              </div>
           </div>
         </div>
