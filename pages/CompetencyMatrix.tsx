@@ -100,7 +100,7 @@ export const CompetencyMatrix: React.FC<{ currentUser: User }> = ({ currentUser 
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center pb-6 border-b border-slate-200 gap-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center pb-6 border-b border-slate-300 gap-4">
         <div>
           <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Competency Matrix</h2>
           <p className="text-slate-700 text-sm mt-1">Real-time view of workforce readiness</p>
@@ -111,7 +111,7 @@ export const CompetencyMatrix: React.FC<{ currentUser: User }> = ({ currentUser 
             <select 
               value={selectedDeptId}
               onChange={(e) => setSelectedDeptId(e.target.value)}
-              className="bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 shadow-sm"
+              className="bg-white border border-slate-300 text-slate-900 text-sm rounded-sm focus:ring-slate-900 focus:border-slate-900 block p-2.5 "
             >
               <option value="ALL">All Departments</option>
               {depts.map(d => (
@@ -122,12 +122,12 @@ export const CompetencyMatrix: React.FC<{ currentUser: User }> = ({ currentUser 
         )}
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="bg-white rounded-none  border border-slate-300 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left text-slate-600">
-            <thead className="text-xs text-slate-700 uppercase bg-slate-50 border-b border-slate-200">
+            <thead className="text-xs text-slate-700 uppercase bg-slate-50 border-b border-slate-300">
               <tr>
-                <th scope="col" className="px-6 py-4 font-semibold sticky left-0 bg-slate-50 z-10 border-r border-slate-200">
+                <th scope="col" className="px-6 py-4 font-semibold sticky left-0 bg-slate-50 z-10 border-r border-slate-300">
                   Employee
                 </th>
                 {COLUMNS.map(col => (
@@ -145,9 +145,9 @@ export const CompetencyMatrix: React.FC<{ currentUser: User }> = ({ currentUser 
 
                 return (
                   <tr key={user.id} className={index % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
-                    <td className="px-6 py-4 font-medium text-slate-900 whitespace-nowrap sticky left-0 z-10 border-r border-slate-200" style={{ backgroundColor: index % 2 === 0 ? 'white' : '#f8fafc' }}>
+                    <td className="px-6 py-4 font-medium text-slate-900 whitespace-nowrap sticky left-0 z-10 border-r border-slate-300" style={{ backgroundColor: index % 2 === 0 ? 'white' : '#f8fafc' }}>
                       <div className="flex items-center gap-3">
-                        <img src={user.avatarUrl} alt={user.name} className="w-8 h-8 rounded-full" />
+                        <img src={user.avatarUrl} alt={user.name} className="w-8 h-8 rounded-none" />
                         <div>
                           <div className="font-semibold">{user.name}</div>
                           <div className="text-xs text-slate-500">{job?.title || 'No Profile'}</div>
@@ -166,22 +166,22 @@ export const CompetencyMatrix: React.FC<{ currentUser: User }> = ({ currentUser 
                       let label = '';
 
                       if (status === 'VERIFIED') {
-                        bgColor = 'bg-emerald-100 text-emerald-800 border-emerald-200';
+                        bgColor = 'bg-slate-100 text-slate-800 border-slate-200';
                         icon = <CheckCircle size={14} />;
                         label = 'Verified Safe';
                       } else if (status === 'PENDING') {
-                        bgColor = 'bg-amber-100 text-amber-800 border-amber-200';
+                        bgColor = 'bg-slate-100 text-slate-800 border-slate-200';
                         icon = <Clock size={14} />;
                         label = 'Pending Review';
                       } else {
-                        bgColor = 'bg-rose-100 text-rose-800 border-rose-200';
+                        bgColor = 'bg-slate-100 text-slate-800 border-slate-200';
                         icon = <AlertTriangle size={14} />;
                         label = 'Gap / Risk';
                       }
 
                       return (
                         <td key={col.id} className="px-6 py-4 text-center">
-                          <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${bgColor}`}>
+                          <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-none text-xs font-medium border ${bgColor}`}>
                             {icon}
                             <span>{label}</span>
                           </div>

@@ -12,12 +12,12 @@ const FormPage: React.FC<{ title: string; onBack: () => void; children: React.Re
   return (
     <div className="animate-in fade-in slide-in-from-right-4 duration-300">
       <div className="flex items-center gap-4 mb-6">
-        <button onClick={onBack} className="p-2 rounded-full hover:bg-slate-200 text-slate-600 transition-colors">
+        <button onClick={onBack} className="p-2 rounded-none hover:bg-slate-200 text-slate-600 transition-colors">
           <ArrowLeft size={20} />
         </button>
         <h2 className="text-2xl font-bold text-slate-900">{title}</h2>
       </div>
-      <div className="bg-white rounded-lg shadow-md border border-slate-200 overflow-hidden">
+      <div className="bg-white rounded-sm  border border-slate-300 overflow-hidden">
          {children}
       </div>
     </div>
@@ -28,18 +28,18 @@ const FormPage: React.FC<{ title: string; onBack: () => void; children: React.Re
 const SkillDetailsModal: React.FC<{ skill: Skill; onClose: () => void }> = ({ skill, onClose }) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
-        <div className="p-6 border-b border-slate-200 flex justify-between items-start bg-slate-100/50 shrink-0">
+      <div className="bg-white rounded-none  w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+        <div className="p-6 border-b border-slate-300 flex justify-between items-start bg-slate-100/50 shrink-0">
           <div>
             <div className="flex items-center gap-3 mb-2">
                 <h3 className="text-2xl font-bold text-slate-900">{skill.name}</h3>
-                <span className="px-2 py-1 bg-blue-50 text-blue-700 text-[10px] font-bold uppercase tracking-wide rounded border border-blue-100">
+                <span className="px-2 py-1 bg-slate-50 text-slate-900 text-[10px] font-bold uppercase tracking-wide rounded-none border border-slate-300">
                     {skill.category}
                 </span>
             </div>
             <p className="text-slate-700 text-sm italic">"{skill.assessmentQuestion || 'No assessment question defined.'}"</p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full text-slate-600 hover:text-slate-600 transition-colors">
+          <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-none text-slate-600 hover:text-slate-600 transition-colors">
             <X size={20} />
           </button>
         </div>
@@ -55,8 +55,8 @@ const SkillDetailsModal: React.FC<{ skill: Skill; onClose: () => void }> = ({ sk
                         // @ts-ignore
                         const genericDef = PROFICIENCY_DEFINITIONS[level];
                         return (
-                            <div key={level} className="relative pl-6 border-l-2 border-slate-200 hover:border-blue-500 transition-colors group">
-                                <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-white border-2 border-slate-300 group-hover:border-blue-500 flex items-center justify-center text-[8px] font-bold text-slate-700 group-hover:text-blue-700 transition-colors">
+                            <div key={level} className="relative pl-6 border-l-2 border-slate-300 hover:border-slate-900 transition-colors group">
+                                <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-none bg-white border-2 border-slate-300 group-hover:border-slate-900 flex items-center justify-center text-[8px] font-bold text-slate-700 group-hover:text-slate-900 transition-colors">
                                     {level}
                                 </div>
                                 <div className="mb-1">
@@ -71,7 +71,7 @@ const SkillDetailsModal: React.FC<{ skill: Skill; onClose: () => void }> = ({ sk
                                 {lvlData?.requiredCertificates && lvlData.requiredCertificates.length > 0 && (
                                     <div className="flex flex-wrap gap-2 mt-2">
                                         {lvlData.requiredCertificates.map((cert, idx) => (
-                                            <span key={idx} className="inline-flex items-center gap-1 px-2 py-1 bg-cyan-50 text-cyan-700 border border-cyan-100 text-[10px] font-bold uppercase tracking-wide rounded">
+                                            <span key={idx} className="inline-flex items-center gap-1 px-2 py-1 bg-slate-50 text-slate-700 border border-slate-100 text-[10px] font-bold uppercase tracking-wide rounded-none">
                                                 <ShieldCheck size={10} /> {cert}
                                             </span>
                                         ))}
@@ -85,7 +85,7 @@ const SkillDetailsModal: React.FC<{ skill: Skill; onClose: () => void }> = ({ sk
         </div>
 
         <div className="p-4 bg-slate-100 border-t border-slate-100 flex justify-end shrink-0">
-            <button onClick={onClose} className="px-4 py-2 bg-white border border-slate-200 text-slate-600 font-bold text-xs uppercase tracking-wide rounded hover:bg-slate-50 hover:text-slate-800 transition-colors shadow-sm">
+            <button onClick={onClose} className="px-4 py-2 bg-white border border-slate-300 text-slate-600 font-bold text-xs uppercase tracking-wide rounded-none hover:bg-slate-50 hover:text-slate-800 transition-colors ">
                 Close
             </button>
         </div>
@@ -203,7 +203,7 @@ const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void,
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Full Name</label>
-                    <input required type="text" className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all placeholder:text-slate-600" 
+                    <input required type="text" className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 focus:border-transparent outline-none transition-all placeholder:text-slate-600" 
                         value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="e.g. John Doe"/>
                 </div>
                 <div>
@@ -211,7 +211,7 @@ const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void,
                     <input 
                         required 
                         type="email" 
-                        className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-600 ${!isNewUser ? 'bg-slate-50 text-slate-700 border-slate-200' : 'bg-white text-slate-900 border-slate-200'}`} 
+                        className={`w-full px-3 py-2 border rounded-sm focus:ring-2 focus:ring-slate-900 outline-none transition-all placeholder:text-slate-600 ${!isNewUser ? 'bg-slate-50 text-slate-700 border-slate-300' : 'bg-white text-slate-900 border-slate-300'}`} 
                         value={formData.email || ''} 
                         onChange={e => isNewUser && setFormData({...formData, email: e.target.value})}
                         readOnly={!isNewUser} 
@@ -220,25 +220,25 @@ const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void,
                 </div>
                 <div>
                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Project Location</label>
-                    <input type="text" className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all placeholder:text-slate-600" 
+                    <input type="text" className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 focus:border-transparent outline-none transition-all placeholder:text-slate-600" 
                         value={formData.location || ''} onChange={e => setFormData({...formData, location: e.target.value})} placeholder="e.g. MIDOR, APC, AMO"/>
                 </div>
                 <div className="md:col-span-2">
                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Avatar URL</label>
                     <div className="flex items-center gap-4">
                         {formData.avatarUrl ? (
-                            <div className="relative w-12 h-12 rounded-full overflow-hidden border border-slate-200 shrink-0">
+                            <div className="relative w-12 h-12 rounded-none overflow-hidden border border-slate-300 shrink-0">
                                 <img src={formData.avatarUrl} alt="Avatar Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                             </div>
                         ) : (
-                            <div className="w-12 h-12 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0 text-slate-400">
+                            <div className="w-12 h-12 rounded-none bg-slate-100 border border-slate-300 flex items-center justify-center shrink-0 text-slate-400">
                                 <Users size={20} />
                             </div>
                         )}
                         <div className="flex-1 flex items-center gap-2">
                             <input 
                                 type="url" 
-                                className="flex-1 px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all placeholder:text-slate-600" 
+                                className="flex-1 px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 focus:border-transparent outline-none transition-all placeholder:text-slate-600" 
                                 value={formData.avatarUrl || ''} 
                                 onChange={e => setFormData({...formData, avatarUrl: e.target.value})} 
                                 placeholder="https://example.com/avatar.png"
@@ -247,7 +247,7 @@ const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void,
                                 <button 
                                     type="button" 
                                     onClick={() => setFormData({...formData, avatarUrl: undefined})}
-                                    className="px-3 py-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-md border border-red-200 transition-colors font-medium text-xs whitespace-nowrap"
+                                    className="px-3 py-2 text-slate-600 bg-slate-50 hover:bg-slate-100 rounded-sm border border-slate-200 transition-colors font-medium text-xs whitespace-nowrap"
                                 >
                                     Clear
                                 </button>
@@ -257,15 +257,15 @@ const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void,
                 </div>
             </div>
             
-            <div className="p-6 bg-slate-50 rounded-lg border border-slate-100 space-y-6">
-                <h4 className="font-bold text-slate-900 flex items-center gap-2 border-b border-slate-200 pb-2">
-                    <Shield size={16} className="text-blue-700"/>
+            <div className="p-6 bg-slate-50 rounded-sm border border-slate-100 space-y-6">
+                <h4 className="font-bold text-slate-900 flex items-center gap-2 border-b border-slate-300 pb-2">
+                    <Shield size={16} className="text-slate-900"/>
                     Organizational Role
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">System Role</label>
-                        <select className="w-full px-3 py-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none bg-white text-slate-900"
+                        <select className="w-full px-3 py-2 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none bg-white text-slate-900"
                             value={formData.role} onChange={e => setFormData({...formData, role: e.target.value as Role})}>
                             <option value={Role.EMPLOYEE}>Employee</option>
                             <option value={Role.ADMIN}>Admin</option>
@@ -273,7 +273,7 @@ const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void,
                     </div>
                     <div>
                         <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Account Status</label>
-                        <select className="w-full px-3 py-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none bg-white text-slate-900"
+                        <select className="w-full px-3 py-2 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none bg-white text-slate-900"
                             value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})}>
                             <option value="ACTIVE">Active</option>
                             <option value="PENDING">Pending Approval</option>
@@ -291,7 +291,7 @@ const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void,
                         <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Hierarchy Level</label>
                         <select 
                             required
-                            className="w-full px-3 py-2 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none bg-white text-slate-900"
+                            className="w-full px-3 py-2 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none bg-white text-slate-900"
                             value={formData.orgLevel || ''} 
                             onChange={e => setFormData({...formData, orgLevel: e.target.value as OrgLevel})}
                         >
@@ -305,9 +305,9 @@ const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void,
                 </div>
             </div>
 
-            <div className="p-6 bg-slate-50 rounded-lg border border-slate-100 space-y-6">
-                <h4 className="font-bold text-slate-900 flex items-center gap-2 border-b border-slate-200 pb-2">
-                    <Briefcase size={16} className="text-blue-700"/>
+            <div className="p-6 bg-slate-50 rounded-sm border border-slate-100 space-y-6">
+                <h4 className="font-bold text-slate-900 flex items-center gap-2 border-b border-slate-300 pb-2">
+                    <Briefcase size={16} className="text-slate-900"/>
                     Job & Reporting
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -327,7 +327,7 @@ const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void,
                             placeholder={contextDepartmentId ? "Select Manager from Dept..." : "Select Manager..."}
                         />
                         {managerPrompt && (
-                            <p className="text-xs text-orange-600 font-medium mt-2 animate-pulse flex items-center gap-1">
+                            <p className="text-xs text-slate-600 font-medium mt-2 animate-pulse flex items-center gap-1">
                                 <AlertTriangle size={12} />
                                 The previous manager is not in the new department. Please re-select a manager.
                             </p>
@@ -337,8 +337,8 @@ const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void,
             </div>
 
             <div className="pt-6 flex justify-end gap-3 border-t border-slate-100">
-                <button type="button" onClick={onCancel} className="px-6 py-2 text-slate-600 hover:bg-slate-100 rounded-md transition-colors font-bold uppercase tracking-wide text-xs">Cancel</button>
-                <button type="submit" className={`px-6 py-2 text-white rounded-md transition-all flex items-center gap-2 font-bold uppercase tracking-wide text-xs shadow-md hover:shadow-lg ${isPending ? 'bg-blue-600 hover:bg-blue-700' : 'bg-slate-900 hover:bg-slate-800'}`}>
+                <button type="button" onClick={onCancel} className="px-6 py-2 text-slate-600 hover:bg-slate-100 rounded-sm transition-colors font-bold uppercase tracking-wide text-xs">Cancel</button>
+                <button type="submit" className={`px-6 py-2 text-white rounded-sm transition-all flex items-center gap-2 font-bold uppercase tracking-wide text-xs  hover: ${isPending ? 'bg-slate-800 hover:bg-slate-900' : 'bg-slate-900 hover:bg-slate-800'}`}>
                     {isPending ? <UserCheck size={16} /> : <Save size={16} />} 
                     {isPending ? 'Approve & Activate' : 'Save Employee'}
                 </button>
@@ -417,20 +417,20 @@ const JobForm: React.FC<{ initialData?: JobProfile | null, onSave: (j: JobProfil
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Job Title</label>
-          <input required className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none" 
+          <input required className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none" 
             value={formData.title || ''} onChange={e => setFormData({...formData, title: e.target.value})} />
         </div>
         <SearchableSelect label="Department" options={deptOptions} value={formData.departmentId || ''} onChange={val => setFormData({...formData, departmentId: val})} />
         <div className="md:col-span-2">
           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Description</label>
-          <textarea className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none" rows={2}
+          <textarea className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none" rows={2}
             value={formData.description || ''} onChange={e => setFormData({...formData, description: e.target.value})} />
         </div>
       </div>
 
-      <div className="border-t border-slate-200 pt-6">
+      <div className="border-t border-slate-300 pt-6">
         <h4 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
-            <Layers size={18} className="text-blue-700"/> 
+            <Layers size={18} className="text-slate-900"/> 
             Competency Matrix Configuration
         </h4>
         
@@ -442,19 +442,19 @@ const JobForm: React.FC<{ initialData?: JobProfile | null, onSave: (j: JobProfil
                  const reqsCount = (formData.requirements?.[level] || []).length;
                  return (
                    <button type="button" key={level} onClick={() => setActiveLevel(level)}
-                     className={`w-full flex justify-between items-center px-4 py-3 rounded-md text-xs font-bold transition-all border ${activeLevel === level ? 'bg-slate-900 text-white border-slate-900 shadow-md' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'}`}>
+                     className={`w-full flex justify-between items-center px-4 py-3 rounded-sm text-xs font-bold transition-all border ${activeLevel === level ? 'bg-slate-900 text-white border-slate-900 ' : 'bg-white text-slate-700 border-slate-300 hover:border-slate-300'}`}>
                       <div className="flex flex-col items-start">
                         <span>{ORG_LEVEL_LABELS[level]}</span>
                         <span className={`text-[9px] mt-0.5 ${activeLevel === level ? 'text-white/60' : 'text-slate-500'}`}>{reqsCount} Skills Assigned</span>
                       </div>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${activeLevel === level ? 'bg-white/20' : 'bg-slate-100'}`}>{level}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-none ${activeLevel === level ? 'bg-white/20' : 'bg-slate-100'}`}>{level}</span>
                    </button>
                  );
                })}
              </div>
           </div>
           
-          <div className="flex-1 bg-slate-50 rounded-lg border border-slate-200 p-6">
+          <div className="flex-1 bg-slate-50 rounded-sm border border-slate-300 p-6">
              <div className="flex justify-between items-center mb-6">
                <div>
                   <h5 className="font-bold text-slate-900">Requirements: {ORG_LEVEL_LABELS[activeLevel]}</h5>
@@ -468,7 +468,7 @@ const JobForm: React.FC<{ initialData?: JobProfile | null, onSave: (j: JobProfil
                  <select 
                    value={skillCategoryFilter}
                    onChange={(e) => setSkillCategoryFilter(e.target.value)}
-                   className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+                   className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none"
                  >
                    <option value="ALL">All Categories</option>
                    {SKILL_CATEGORIES.map(cat => (
@@ -490,38 +490,38 @@ const JobForm: React.FC<{ initialData?: JobProfile | null, onSave: (j: JobProfil
 
                   return (
                     <div key={category} className="space-y-3">
-                      <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                      <div className="flex items-center justify-between border-b border-slate-300 pb-2">
                         <h6 className="font-bold text-slate-900 uppercase tracking-wider text-[11px] flex items-center gap-2">
                           {category}
                           {categorySkills.length > 0 ? (
-                            <span className="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded text-[9px]">{categorySkills.length}</span>
+                            <span className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded-none text-[9px]">{categorySkills.length}</span>
                           ) : (
-                            <span className="bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded text-[9px]">Missing</span>
+                            <span className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded-none text-[9px]">Missing</span>
                           )}
                         </h6>
                       </div>
 
                       <div className="space-y-2">
                         {categorySkills.length === 0 ? (
-                          <div className="text-[11px] text-slate-500 italic py-2 px-3 bg-white/50 border border-dashed border-slate-200 rounded">
+                          <div className="text-[11px] text-slate-500 italic py-2 px-3 bg-white/50 border border-dashed border-slate-300 rounded-none">
                             No {category} skills assigned.
                           </div>
                         ) : (
                           categorySkills.map(req => {
                             const skill = allSkills.find(s => s.id === req.skillId);
                             return (
-                              <div key={req.skillId} className="bg-white p-3 rounded border border-slate-200 shadow-sm flex items-center gap-4">
+                              <div key={req.skillId} className="bg-white p-3 rounded-none border border-slate-300  flex items-center gap-4">
                                  <div className="flex-1">
                                     <p className="font-bold text-slate-900 text-sm">{skill?.name}</p>
                                  </div>
                                  <div className="flex items-center gap-2">
                                      <span className="text-[10px] font-bold text-slate-600 uppercase">Target Level</span>
-                                     <select className="px-2 py-1 bg-slate-100 border border-slate-200 rounded text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
+                                     <select className="px-2 py-1 bg-slate-100 border border-slate-300 rounded-none text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-slate-900"
                                        value={req.requiredLevel} onChange={(e) => handleUpdateReq(req.skillId, parseInt(e.target.value))}>
                                         {[1,2,3,4,5].map(v => <option key={v} value={v}>{v}</option>)}
                                      </select>
                                  </div>
-                                 <button type="button" onClick={() => handleRemoveReq(req.skillId)} className="text-slate-500 hover:text-rose-600 p-1 transition-colors"><X size={16} /></button>
+                                 <button type="button" onClick={() => handleRemoveReq(req.skillId)} className="text-slate-500 hover:text-slate-600 p-1 transition-colors"><X size={16} /></button>
                               </div>
                             );
                           })
@@ -534,26 +534,26 @@ const JobForm: React.FC<{ initialData?: JobProfile | null, onSave: (j: JobProfil
                 {/* Other categories if any */}
                 {levelRequirements.some(req => !SKILL_CATEGORIES.includes(allSkills.find(s => s.id === req.skillId)?.category || '')) && (
                    <div className="space-y-3">
-                      <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                      <div className="flex items-center justify-between border-b border-slate-300 pb-2">
                         <h6 className="font-bold text-slate-900 uppercase tracking-wider text-[11px]">Other</h6>
                       </div>
                       <div className="space-y-2">
                         {levelRequirements.filter(req => !SKILL_CATEGORIES.includes(allSkills.find(s => s.id === req.skillId)?.category || '')).map(req => {
                           const skill = allSkills.find(s => s.id === req.skillId);
                           return (
-                            <div key={req.skillId} className="bg-white p-3 rounded border border-slate-200 shadow-sm flex items-center gap-4">
+                            <div key={req.skillId} className="bg-white p-3 rounded-none border border-slate-300  flex items-center gap-4">
                                <div className="flex-1">
                                   <p className="font-bold text-slate-900 text-sm">{skill?.name}</p>
                                   <p className="text-[10px] text-slate-500 uppercase">{skill?.category}</p>
                                </div>
                                <div className="flex items-center gap-2">
                                    <span className="text-[10px] font-bold text-slate-600 uppercase">Target Level</span>
-                                   <select className="px-2 py-1 bg-slate-100 border border-slate-200 rounded text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
+                                   <select className="px-2 py-1 bg-slate-100 border border-slate-300 rounded-none text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-slate-900"
                                      value={req.requiredLevel} onChange={(e) => handleUpdateReq(req.skillId, parseInt(e.target.value))}>
                                       {[1,2,3,4,5].map(v => <option key={v} value={v}>{v}</option>)}
                                    </select>
                                </div>
-                               <button type="button" onClick={() => handleRemoveReq(req.skillId)} className="text-slate-500 hover:text-rose-600 p-1 transition-colors"><X size={16} /></button>
+                               <button type="button" onClick={() => handleRemoveReq(req.skillId)} className="text-slate-500 hover:text-slate-600 p-1 transition-colors"><X size={16} /></button>
                             </div>
                           );
                         })}
@@ -566,8 +566,8 @@ const JobForm: React.FC<{ initialData?: JobProfile | null, onSave: (j: JobProfil
       </div>
 
       <div className="pt-6 flex justify-end gap-3 border-t border-slate-100">
-          <button type="button" onClick={onCancel} className="px-6 py-2 text-slate-600 hover:bg-slate-100 rounded-md font-bold uppercase tracking-wide text-xs transition-colors">Cancel</button>
-          <button type="submit" className="px-6 py-2 bg-slate-900 text-white rounded-md font-bold uppercase tracking-wide text-xs shadow-md hover:bg-slate-800 flex items-center gap-2 transition-all">
+          <button type="button" onClick={onCancel} className="px-6 py-2 text-slate-600 hover:bg-slate-100 rounded-sm font-bold uppercase tracking-wide text-xs transition-colors">Cancel</button>
+          <button type="submit" className="px-6 py-2 bg-slate-900 text-white rounded-sm font-bold uppercase tracking-wide text-xs  hover:bg-slate-800 flex items-center gap-2 transition-all">
              <Save size={16} /> Save Profile
           </button>
       </div>
@@ -616,12 +616,12 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
          <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Skill Name</label>
-            <input required className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+            <input required className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none"
                value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
          </div>
          <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Category</label>
-            <select className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+            <select className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none"
                value={formData.category || ''} onChange={e => setFormData({...formData, category: e.target.value})}>
                 <option value="">Select...</option>
                 <option value="Technical">Technical</option>
@@ -633,30 +633,30 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
          </div>
          <div className="md:col-span-2">
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Assessment Question</label>
-            <input className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+            <input className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none"
                placeholder="e.g. How effectively does the employee..."
                value={formData.assessmentQuestion || ''} onChange={e => setFormData({...formData, assessmentQuestion: e.target.value})} />
          </div>
        </div>
 
-       <div className="border-t border-slate-200 pt-6">
+       <div className="border-t border-slate-300 pt-6">
           <h4 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
-             <BookOpen size={18} className="text-blue-700"/> Proficiency Definition
+             <BookOpen size={18} className="text-slate-900"/> Proficiency Definition
           </h4>
           
-          <div className="bg-slate-100 p-1 rounded flex mb-6">
+          <div className="bg-slate-100 p-1 rounded-none flex mb-6">
              {[1,2,3,4,5].map(lvl => (
                 <button key={lvl} type="button" onClick={() => setActiveTab(lvl)}
-                   className={`flex-1 py-2 text-xs font-bold rounded shadow-sm transition-all ${activeTab === lvl ? 'bg-white text-slate-900' : 'text-slate-700 hover:text-slate-700'}`}>
+                   className={`flex-1 py-2 text-xs font-bold rounded-none  transition-all ${activeTab === lvl ? 'bg-white text-slate-900' : 'text-slate-700 hover:text-slate-700'}`}>
                    Level {lvl}: {PROFICIENCY_LABELS[lvl]}
                 </button>
              ))}
           </div>
 
-          <div className="bg-slate-50 p-6 rounded-lg border border-slate-200">
+          <div className="bg-slate-50 p-6 rounded-sm border border-slate-300">
              <div className="mb-4">
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Description ({PROFICIENCY_LABELS[activeTab]})</label>
-                <textarea className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none" rows={3}
+                <textarea className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none" rows={3}
                    value={formData.levels?.[activeTab as any]?.description || ''}
                    onChange={e => updateLevel(activeTab, 'description', e.target.value)}
                    // @ts-ignore
@@ -665,7 +665,7 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
              </div>
              <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Required Certificates (Comma Separated)</label>
-                <input className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+                <input className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none"
                    placeholder="e.g. PMP, NEBOSH"
                    value={formData.levels?.[activeTab as any]?.requiredCertificates?.join(', ') || ''}
                    onChange={e => updateLevel(activeTab, 'requiredCertificates', e.target.value.split(',').map((s: string) => s.trim()).filter(Boolean))}
@@ -675,8 +675,8 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
        </div>
 
        <div className="pt-6 flex justify-end gap-3 border-t border-slate-100">
-          <button type="button" onClick={onCancel} className="px-6 py-2 text-slate-600 hover:bg-slate-100 rounded-md font-bold uppercase tracking-wide text-xs transition-colors">Cancel</button>
-          <button type="submit" className="px-6 py-2 bg-slate-900 text-white rounded-md font-bold uppercase tracking-wide text-xs shadow-md hover:bg-slate-800 flex items-center gap-2 transition-all">
+          <button type="button" onClick={onCancel} className="px-6 py-2 text-slate-600 hover:bg-slate-100 rounded-sm font-bold uppercase tracking-wide text-xs transition-colors">Cancel</button>
+          <button type="submit" className="px-6 py-2 bg-slate-900 text-white rounded-sm font-bold uppercase tracking-wide text-xs  hover:bg-slate-800 flex items-center gap-2 transition-all">
              <Save size={16} /> Save Definition
           </button>
       </div>
@@ -715,7 +715,7 @@ const DepartmentForm: React.FC<{ initialData?: Department | null, onSave: (d: De
         <form onSubmit={handleSubmit} className="p-8 space-y-6 bg-white text-sm">
             <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Department Name</label>
-                <input required className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+                <input required className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none"
                     value={name} onChange={e => setName(e.target.value)} />
             </div>
             <SearchableSelect label="Section Head (Optional)" options={managerOptions} value={managerId} onChange={setManagerId} placeholder="Select Manager..." />
@@ -724,10 +724,10 @@ const DepartmentForm: React.FC<{ initialData?: Department | null, onSave: (d: De
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-3">Behavioral Competencies</label>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-60 overflow-y-auto p-1">
                     {behavioralSkills.map(skill => (
-                        <label key={skill.id} className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${behavioralSkillIds.includes(skill.id) ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
+                        <label key={skill.id} className={`flex items-start gap-3 p-3 rounded-sm border cursor-pointer transition-colors ${behavioralSkillIds.includes(skill.id) ? 'bg-slate-50 border-slate-300' : 'bg-white border-slate-300 hover:bg-slate-50'}`}>
                             <input 
                                 type="checkbox" 
-                                className="mt-1 w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                                className="mt-1 w-4 h-4 text-slate-800 rounded-none border-slate-300 focus:ring-slate-900"
                                 checked={behavioralSkillIds.includes(skill.id)}
                                 onChange={() => handleToggleSkill(skill.id)}
                             />
@@ -738,7 +738,7 @@ const DepartmentForm: React.FC<{ initialData?: Department | null, onSave: (d: De
                         </label>
                     ))}
                     {behavioralSkills.length === 0 && (
-                        <div className="col-span-2 text-slate-500 italic text-sm p-4 bg-slate-50 rounded-lg text-center">
+                        <div className="col-span-2 text-slate-500 italic text-sm p-4 bg-slate-50 rounded-sm text-center">
                             No behavioral competencies found in the system.
                         </div>
                     )}
@@ -746,8 +746,8 @@ const DepartmentForm: React.FC<{ initialData?: Department | null, onSave: (d: De
             </div>
 
             <div className="pt-6 flex justify-end gap-3 border-t border-slate-100">
-                <button type="button" onClick={onCancel} className="px-6 py-2 text-slate-600 hover:bg-slate-100 rounded-md font-bold uppercase tracking-wide text-xs transition-colors">Cancel</button>
-                <button type="submit" className="px-6 py-2 bg-slate-900 text-white rounded-md font-bold uppercase tracking-wide text-xs shadow-md hover:bg-slate-800 flex items-center gap-2 transition-all">
+                <button type="button" onClick={onCancel} className="px-6 py-2 text-slate-600 hover:bg-slate-100 rounded-sm font-bold uppercase tracking-wide text-xs transition-colors">Cancel</button>
+                <button type="submit" className="px-6 py-2 bg-slate-900 text-white rounded-sm font-bold uppercase tracking-wide text-xs  hover:bg-slate-800 flex items-center gap-2 transition-all">
                     <Save size={16} /> Save Dept
                 </button>
             </div>
@@ -933,9 +933,9 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
   if (view === 'OVERVIEW') {
       return (
         <div className="space-y-8">
-            <div className="relative overflow-hidden rounded-2xl bg-slate-900 p-8 shadow-2xl">
-                <div className="absolute top-0 right-0 -mt-10 -mr-10 h-64 w-64 rounded-full bg-blue-500/10 blur-3xl"></div>
-                <div className="absolute bottom-0 left-0 -mb-10 -ml-10 h-64 w-64 rounded-full bg-blue-500/10 blur-3xl"></div>
+            <div className="relative overflow-hidden rounded-none bg-slate-900 p-8 ">
+                <div className="absolute top-0 right-0 -mt-10 -mr-10 h-64 w-64 rounded-none bg-slate-800/10 blur-3xl"></div>
+                <div className="absolute bottom-0 left-0 -mb-10 -ml-10 h-64 w-64 rounded-none bg-slate-800/10 blur-3xl"></div>
                 
                 <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
                     <div>
@@ -945,12 +945,12 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                         </p>
                     </div>
                     <div className="flex gap-3">
-                         <div className="px-4 py-2 bg-white/5 backdrop-blur rounded-lg border border-white/10">
+                         <div className="px-4 py-2 bg-white/5 backdrop-blur rounded-sm border border-white/10">
                             <p className="text-[10px] uppercase tracking-widest text-slate-600 font-bold">System Status</p>
                             <div className="flex items-center gap-2 mt-1">
                                 <span className="relative flex h-2 w-2">
-                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-none bg-slate-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-none h-2 w-2 bg-slate-500"></span>
                                 </span>
                                 <span className="text-white font-bold text-sm">Operational</span>
                             </div>
@@ -960,96 +960,96 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <button onClick={() => onNavigate('admin-users')} className="bg-white rounded-xl shadow-sm border border-slate-200 hover:shadow-lg transition-all group overflow-hidden text-left">
+                <button onClick={() => onNavigate('admin-users')} className="bg-white rounded-none  border border-slate-300 hover: transition-all group overflow-hidden text-left">
                     <div className="p-6">
                         <div className="flex justify-between items-start mb-4">
-                             <div className="w-12 h-12 bg-blue-50 text-blue-700 rounded-lg flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                             <div className="w-12 h-12 bg-slate-50 text-slate-900 rounded-sm flex items-center justify-center group-hover:bg-slate-800 group-hover:text-white transition-colors">
                                 <Users size={24} />
                             </div>
-                            <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded uppercase">Active</span>
+                            <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded-none uppercase">Active</span>
                         </div>
                         <h3 className="font-bold text-slate-900 text-lg">Workforce Directory</h3>
                         <p className="text-sm text-slate-700 mt-1">Manage employees & hierarchy</p>
                         
                         <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
                             <span className="text-2xl font-bold text-slate-900">{users.length}</span>
-                            <span className="text-xs font-semibold text-blue-700 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                            <span className="text-xs font-semibold text-slate-900 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
                                 View Records <ChevronRight size={14} />
                             </span>
                         </div>
                     </div>
-                    <div className="h-1 w-full bg-blue-600 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></div>
+                    <div className="h-1 w-full bg-slate-800 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></div>
                 </button>
 
-                <button onClick={() => onNavigate('admin-jobs')} className="bg-white rounded-xl shadow-sm border border-slate-200 hover:shadow-lg transition-all group overflow-hidden text-left">
+                <button onClick={() => onNavigate('admin-jobs')} className="bg-white rounded-none  border border-slate-300 hover: transition-all group overflow-hidden text-left">
                      <div className="p-6">
                         <div className="flex justify-between items-start mb-4">
-                             <div className="w-12 h-12 bg-cyan-50 text-cyan-600 rounded-lg flex items-center justify-center group-hover:bg-purple-600 group-hover:text-white transition-colors">
+                             <div className="w-12 h-12 bg-slate-50 text-slate-600 rounded-sm flex items-center justify-center group-hover:bg-slate-600 group-hover:text-white transition-colors">
                                 <Briefcase size={24} />
                             </div>
-                             <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded uppercase">Defined</span>
+                             <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded-none uppercase">Defined</span>
                         </div>
                         <h3 className="font-bold text-slate-900 text-lg">Job Profiles</h3>
                         <p className="text-sm text-slate-700 mt-1">Competency requirements</p>
                         
                         <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
                             <span className="text-2xl font-bold text-slate-900">{jobs.length}</span>
-                            <span className="text-xs font-semibold text-purple-600 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                            <span className="text-xs font-semibold text-slate-600 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
                                 Configure <ChevronRight size={14} />
                             </span>
                         </div>
                     </div>
-                    <div className="h-1 w-full bg-purple-600 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></div>
+                    <div className="h-1 w-full bg-slate-600 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></div>
                 </button>
 
-                <button onClick={() => onNavigate('admin-skills')} className="bg-white rounded-xl shadow-sm border border-slate-200 hover:shadow-lg transition-all group overflow-hidden text-left">
+                <button onClick={() => onNavigate('admin-skills')} className="bg-white rounded-none  border border-slate-300 hover: transition-all group overflow-hidden text-left">
                      <div className="p-6">
                         <div className="flex justify-between items-start mb-4">
-                             <div className="w-12 h-12 bg-emerald-50 text-emerald-700 rounded-lg flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                             <div className="w-12 h-12 bg-slate-50 text-slate-700 rounded-sm flex items-center justify-center group-hover:bg-slate-600 group-hover:text-white transition-colors">
                                 <ShieldCheck size={24} />
                             </div>
-                             <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded uppercase">Library</span>
+                             <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded-none uppercase">Library</span>
                         </div>
                         <h3 className="font-bold text-slate-900 text-lg">Skill Standards</h3>
                         <p className="text-sm text-slate-700 mt-1">Proficiency levels & certs</p>
                         
                         <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
                             <span className="text-2xl font-bold text-slate-900">{skills.length}</span>
-                            <span className="text-xs font-semibold text-emerald-700 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                            <span className="text-xs font-semibold text-slate-700 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
                                 Manage <ChevronRight size={14} />
                             </span>
                         </div>
                     </div>
-                    <div className="h-1 w-full bg-emerald-600 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></div>
+                    <div className="h-1 w-full bg-slate-600 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></div>
                 </button>
 
-                <button onClick={() => onNavigate('admin-depts')} className="bg-white rounded-xl shadow-sm border border-slate-200 hover:shadow-lg transition-all group overflow-hidden text-left">
+                <button onClick={() => onNavigate('admin-depts')} className="bg-white rounded-none  border border-slate-300 hover: transition-all group overflow-hidden text-left">
                      <div className="p-6">
                         <div className="flex justify-between items-start mb-4">
-                             <div className="w-12 h-12 bg-emerald-50 text-emerald-700 rounded-lg flex items-center justify-center group-hover:bg-orange-600 group-hover:text-white transition-colors">
+                             <div className="w-12 h-12 bg-slate-50 text-slate-700 rounded-sm flex items-center justify-center group-hover:bg-slate-600 group-hover:text-white transition-colors">
                                 <Building2 size={24} />
                             </div>
-                             <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded uppercase">Units</span>
+                             <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded-none uppercase">Units</span>
                         </div>
                         <h3 className="font-bold text-slate-900 text-lg">Departments</h3>
                         <p className="text-sm text-slate-700 mt-1">Org structure</p>
                         
                         <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
                             <span className="text-2xl font-bold text-slate-900">{depts.length}</span>
-                            <span className="text-xs font-semibold text-orange-600 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                            <span className="text-xs font-semibold text-slate-600 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
                                 Edit Structure <ChevronRight size={14} />
                             </span>
                         </div>
                     </div>
-                    <div className="h-1 w-full bg-orange-600 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></div>
+                    <div className="h-1 w-full bg-slate-600 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></div>
                 </button>
 
-                <div className="lg:col-span-4 bg-gradient-to-br from-slate-900 to-slate-800 rounded-xl shadow-lg p-8 text-white relative overflow-hidden">
-                    <div className="absolute top-0 right-0 -mt-10 -mr-10 h-64 w-64 rounded-full bg-blue-500/10 blur-3xl"></div>
+                <div className="lg:col-span-4 bg-gradient-to-br from-slate-900 to-slate-800 rounded-none  p-8 text-white relative overflow-hidden">
+                    <div className="absolute top-0 right-0 -mt-10 -mr-10 h-64 w-64 rounded-none bg-slate-800/10 blur-3xl"></div>
                     <div className="relative z-10">
                         <div className="flex items-center gap-3 mb-4">
-                            <div className="p-2 bg-blue-500/20 rounded-lg">
-                                <Activity size={24} className="text-blue-400" />
+                            <div className="p-2 bg-slate-800/20 rounded-sm">
+                                <Activity size={24} className="text-slate-400" />
                             </div>
                             <h3 className="text-xl font-bold">Competency Model Engine</h3>
                         </div>
@@ -1059,15 +1059,15 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                             to ensure operational excellence and safety compliance.
                         </p>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                            <div className="bg-white/5 rounded-sm p-4 border border-white/10">
                                 <p className="text-xs text-slate-400 uppercase font-bold mb-1">Total Skills</p>
                                 <p className="text-2xl font-bold">{skills.length}</p>
                             </div>
-                            <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                            <div className="bg-white/5 rounded-sm p-4 border border-white/10">
                                 <p className="text-xs text-slate-400 uppercase font-bold mb-1">Job Profiles</p>
                                 <p className="text-2xl font-bold">{jobs.length}</p>
                             </div>
-                            <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                            <div className="bg-white/5 rounded-sm p-4 border border-white/10">
                                 <p className="text-xs text-slate-400 uppercase font-bold mb-1">Active ITPs</p>
                                 <p className="text-2xl font-bold">{users.filter(u => u.status === 'ACTIVE').length}</p>
                             </div>
@@ -1078,14 +1078,14 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
             
             {/* Quick Actions or Analytics Row */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <div className="lg:col-span-2 bg-white rounded-none  border border-slate-300 p-6">
                     <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
-                        <Activity size={18} className="text-blue-700"/> System Activity Log
+                        <Activity size={18} className="text-slate-900"/> System Activity Log
                     </h3>
                     <div className="space-y-4 max-h-80 overflow-y-auto custom-scrollbar">
                         {logs.length > 0 ? logs.map(log => (
                              <div key={log.id} className="flex items-start gap-3 pb-3 border-b border-slate-50 last:border-0 last:pb-0">
-                                <div className="w-2 h-2 rounded-full bg-slate-300 mt-2"></div>
+                                <div className="w-2 h-2 rounded-none bg-slate-300 mt-2"></div>
                                 <div>
                                     <p className="text-sm text-slate-700">{log.action}: <span className="font-semibold">{log.target}</span></p>
                                     <p className="text-xs text-slate-600 mt-1">{new Date(log.timestamp).toLocaleString()}</p>
@@ -1097,19 +1097,19 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                     </div>
                 </div>
                 
-                <div className="bg-slate-900 rounded-xl shadow-sm border border-slate-800 p-6 text-white relative overflow-hidden">
-                     <div className="absolute top-0 right-0 -mt-4 -mr-4 h-32 w-32 rounded-full bg-cyan-500/20 blur-2xl"></div>
+                <div className="bg-slate-900 rounded-none  border border-slate-800 p-6 text-white relative overflow-hidden">
+                     <div className="absolute top-0 right-0 -mt-4 -mr-4 h-32 w-32 rounded-none bg-slate-500/20 blur-2xl"></div>
                      <h3 className="font-bold text-white mb-2 relative z-10">Pending Actions</h3>
                      <p className="text-slate-500 text-sm mb-6 relative z-10">There are pending user registrations requiring approval.</p>
                      
-                     <div className="flex items-center justify-between bg-white/10 rounded-lg p-4 backdrop-blur relative z-10">
+                     <div className="flex items-center justify-between bg-white/10 rounded-sm p-4 backdrop-blur relative z-10">
                         <div className="flex items-center gap-3">
-                            <UserPlus size={20} className="text-cyan-700" />
+                            <UserPlus size={20} className="text-slate-700" />
                             <span className="font-bold text-xl">
                                 {users.filter(u => u.status === 'PENDING').length}
                             </span>
                         </div>
-                        <button onClick={() => onNavigate('admin-users')} className="text-xs font-bold uppercase tracking-wider bg-white text-slate-900 px-3 py-1.5 rounded hover:bg-slate-100 transition-colors">
+                        <button onClick={() => onNavigate('admin-users')} className="text-xs font-bold uppercase tracking-wider bg-white text-slate-900 px-3 py-1.5 rounded-none hover:bg-slate-100 transition-colors">
                             Review
                         </button>
                      </div>
@@ -1133,12 +1133,12 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
   return (
     <div className="space-y-6">
        {errorMessage && (
-         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative animate-in fade-in" role="alert">
+         <div className="bg-slate-50 border border-slate-200 text-slate-700 px-4 py-3 rounded-none relative animate-in fade-in" role="alert">
            <strong className="font-bold">Error: </strong>
            <span className="block sm:inline">{errorMessage}</span>
          </div>
        )}
-       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 pb-6 border-b border-slate-200">
+       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 pb-6 border-b border-slate-300">
            <div>
               <h2 className="text-3xl font-bold text-slate-900 tracking-tight">
                 {view === 'USERS' ? 'Workforce Management' : 
@@ -1149,12 +1149,12 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
            </div>
            
            {view === 'SKILLS' && (
-               <div className="flex bg-white border border-slate-200 rounded-md p-1 overflow-x-auto shadow-sm max-w-full">
+               <div className="flex bg-white border border-slate-300 rounded-sm p-1 overflow-x-auto  max-w-full">
                    {(['ALL', 'TECHNICAL', 'BEHAVIORAL', 'SAFETY', 'MANAGEMENT', 'SOFT SKILLS']).map(tab => (
                        <button
                            key={tab}
                            onClick={() => setActiveTab(tab)}
-                           className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded transition-all whitespace-nowrap ${activeTab === tab ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
+                           className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-none transition-all whitespace-nowrap ${activeTab === tab ? 'bg-slate-900 text-white ' : 'text-slate-600 hover:bg-slate-50'}`}
                        >
                            {tab}
                        </button>
@@ -1164,7 +1164,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
        </div>
 
        {/* Content Area */}
-       <div className="bg-white rounded-lg shadow-panel border border-slate-200 overflow-hidden min-h-[600px]">
+       <div className="bg-white rounded-sm  border border-slate-300 overflow-hidden min-h-[600px]">
             {/* Toolbar */}
             <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row justify-between items-center gap-4">
                 <div className="flex items-center gap-4 w-full md:w-auto">
@@ -1173,18 +1173,18 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                         <input 
                             type="text" 
                             placeholder="Search records..." 
-                            className="w-full pl-9 pr-4 py-2 text-sm bg-white text-slate-900 border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all" 
+                            className="w-full pl-9 pr-4 py-2 text-sm bg-white text-slate-900 border border-slate-300 rounded-sm focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all" 
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
                     {view === 'USERS' && (
-                        <div className="flex bg-white border border-slate-200 rounded-md p-1">
+                        <div className="flex bg-white border border-slate-300 rounded-sm p-1">
                             {(['ALL', 'PENDING', 'ACTIVE'] as const).map(tab => (
                                 <button
                                     key={tab}
                                     onClick={() => setActiveTab(tab)}
-                                    className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded transition-all ${activeTab === tab ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
+                                    className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-none transition-all ${activeTab === tab ? 'bg-slate-900 text-white ' : 'text-slate-600 hover:bg-slate-50'}`}
                                 >
                                     {tab}
                                 </button>
@@ -1193,7 +1193,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                     )}
                 </div>
                 <button onClick={() => handleAdd(view === 'USERS' ? 'USER' : view === 'JOBS' ? 'JOB' : view === 'SKILLS' ? 'SKILL' : 'DEPT')}
-                    className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-md text-xs font-bold uppercase tracking-wide shadow-sm flex items-center gap-2 transition-all w-full md:w-auto justify-center">
+                    className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-sm text-xs font-bold uppercase tracking-wide  flex items-center gap-2 transition-all w-full md:w-auto justify-center">
                     <Plus size={16} /> Add {view === 'USERS' ? 'Employee' : view === 'JOBS' ? 'Profile' : view === 'SKILLS' ? 'Skill' : 'Department'}
                 </button>
             </div>
@@ -1201,7 +1201,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
            {/* Table */}
            <div className="overflow-x-auto">
                <table className="w-full text-left">
-                   <thead className="bg-slate-50 text-slate-700 font-bold text-xs uppercase tracking-wider border-b border-slate-200">
+                   <thead className="bg-slate-50 text-slate-700 font-bold text-xs uppercase tracking-wider border-b border-slate-300">
                        <tr>
                            {view === 'USERS' && <><th className="p-4 pl-6">Employee</th><th className="p-4">Role & Dept</th><th className="p-4">Level</th><th className="p-4">Status</th></>}
                            {view === 'JOBS' && <><th className="p-4 pl-6">Job Title</th><th className="p-4">Department</th><th className="p-4">Complexity</th></>}
@@ -1215,11 +1215,11 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                            <tr key={user.id} className="hover:bg-slate-50 transition-colors group">
                                <td className="p-4 pl-6">
                                    <div className="flex items-center gap-3">
-                                       <div className="w-9 h-9 rounded bg-blue-50 flex items-center justify-center text-blue-700 font-bold shadow-sm">
-                                           {user.avatarUrl ? <img src={user.avatarUrl} alt="" className="w-full h-full object-cover rounded"/> : user.name[0]}
+                                       <div className="w-9 h-9 rounded-none bg-slate-50 flex items-center justify-center text-slate-900 font-bold ">
+                                           {user.avatarUrl ? <img src={user.avatarUrl} alt="" className="w-full h-full object-cover rounded-none"/> : user.name[0]}
                                        </div>
                                        <div>
-                                           <div className="font-bold text-slate-900 group-hover:text-blue-700 transition-colors">{user.name}</div>
+                                           <div className="font-bold text-slate-900 group-hover:text-slate-900 transition-colors">{user.name}</div>
                                            <div className="text-slate-600 text-xs">{user.email}</div>
                                        </div>
                                    </div>
@@ -1229,84 +1229,84 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                                    <span className="text-slate-600 text-xs">{depts.find(d => d.id === user.departmentId)?.name || 'Unassigned'}</span>
                                </td>
                                <td className="p-4">
-                                   <span className="inline-block px-2 py-0.5 bg-slate-100 border border-slate-200 text-slate-600 text-[10px] font-bold uppercase tracking-wide rounded">{user.orgLevel || 'N/A'}</span>
+                                   <span className="inline-block px-2 py-0.5 bg-slate-100 border border-slate-300 text-slate-600 text-[10px] font-bold uppercase tracking-wide rounded-none">{user.orgLevel || 'N/A'}</span>
                                </td>
                                <td className="p-4">
                                    {user.status === 'PENDING' ? (
-                                       <span className="inline-flex items-center gap-1.5 px-2 py-1 bg-cyan-50 text-cyan-700 border border-cyan-100 text-[10px] font-bold uppercase tracking-wide rounded">
+                                       <span className="inline-flex items-center gap-1.5 px-2 py-1 bg-slate-50 text-slate-700 border border-slate-100 text-[10px] font-bold uppercase tracking-wide rounded-none">
                                            <AlertCircle size={10}/> Pending
                                        </span>
                                    ) : (
-                                       <span className="inline-flex items-center gap-1.5 px-2 py-1 bg-green-50 text-green-700 border border-green-100 text-[10px] font-bold uppercase tracking-wide rounded">
+                                       <span className="inline-flex items-center gap-1.5 px-2 py-1 bg-slate-50 text-slate-700 border border-slate-100 text-[10px] font-bold uppercase tracking-wide rounded-none">
                                            <CheckCircle size={10}/> Active
                                        </span>
                                    )}
                                </td>
                                <td className="p-4 text-right pr-6">
                                    <div className="flex items-center justify-end gap-2">
-                                       <button onClick={() => handleEdit('USER', user)} className="text-slate-600 hover:text-blue-700 p-2 transition-colors" title="Edit"><Edit2 size={16}/></button>
-                                       <button onClick={() => handleDelete('USER', user.id)} className="text-slate-600 hover:text-emerald-700 p-2 transition-colors" title="Delete"><Trash2 size={16}/></button>
+                                       <button onClick={() => handleEdit('USER', user)} className="text-slate-600 hover:text-slate-900 p-2 transition-colors" title="Edit"><Edit2 size={16}/></button>
+                                       <button onClick={() => handleDelete('USER', user.id)} className="text-slate-600 hover:text-slate-700 p-2 transition-colors" title="Delete"><Trash2 size={16}/></button>
                                    </div>
                                </td>
                            </tr>
                        ))}{view === 'JOBS' && filteredJobs.map(job => (
                            <tr key={job.id} className="hover:bg-slate-50 transition-colors group">
-                               <td className="p-4 pl-6 font-bold text-slate-900 group-hover:text-blue-700">{job.title}</td>
+                               <td className="p-4 pl-6 font-bold text-slate-900 group-hover:text-slate-900">{job.title}</td>
                                <td className="p-4 text-slate-600">{depts.find(d => d.id === job.departmentId)?.name}</td>
                                <td className="p-4">
-                                   <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded text-[10px] font-bold uppercase tracking-wide">{Object.keys(job.requirements).length} Levels Configured</span>
+                                   <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded-none text-[10px] font-bold uppercase tracking-wide">{Object.keys(job.requirements).length} Levels Configured</span>
                                </td>
                                <td className="p-4 text-right pr-6">
                                    <div className="flex items-center justify-end gap-2">
-                                       <button onClick={() => handleEdit('JOB', job)} className="text-slate-600 hover:text-blue-700 p-2" title="Edit"><Edit2 size={16}/></button>
-                                       <button onClick={() => handleDelete('JOB', job.id)} className="text-slate-600 hover:text-emerald-700 p-2" title="Delete"><Trash2 size={16}/></button>
+                                       <button onClick={() => handleEdit('JOB', job)} className="text-slate-600 hover:text-slate-900 p-2" title="Edit"><Edit2 size={16}/></button>
+                                       <button onClick={() => handleDelete('JOB', job.id)} className="text-slate-600 hover:text-slate-700 p-2" title="Delete"><Trash2 size={16}/></button>
                                    </div>
                                </td>
                            </tr>
                        ))}{view === 'SKILLS' && filteredSkills.map(skill => (
                            <tr key={skill.id} className="hover:bg-slate-50 transition-colors group">
-                               <td className="p-4 pl-6 font-bold text-slate-900 group-hover:text-blue-700">{skill.name}</td>
+                               <td className="p-4 pl-6 font-bold text-slate-900 group-hover:text-slate-900">{skill.name}</td>
                                <td className="p-4">
-                                   <span className="px-2 py-1 bg-blue-50 text-blue-700 border border-blue-100 rounded text-[10px] font-bold uppercase tracking-wide">{skill.category}</span>
+                                   <span className="px-2 py-1 bg-slate-50 text-slate-900 border border-slate-300 rounded-none text-[10px] font-bold uppercase tracking-wide">{skill.category}</span>
                                </td>
                                <td className="p-4 text-slate-700 truncate max-w-xs text-xs">{skill.assessmentQuestion || '-'}</td>
                                <td className="p-4">
                                    {skill.status === 'PENDING' ? (
-                                       <span className="px-2 py-1 bg-amber-50 text-amber-700 border border-amber-100 rounded text-[10px] font-bold uppercase tracking-wide">Pending</span>
+                                       <span className="px-2 py-1 bg-slate-50 text-slate-700 border border-slate-100 rounded-none text-[10px] font-bold uppercase tracking-wide">Pending</span>
                                    ) : (
-                                       <span className="px-2 py-1 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded text-[10px] font-bold uppercase tracking-wide">Approved</span>
+                                       <span className="px-2 py-1 bg-slate-50 text-slate-700 border border-slate-100 rounded-none text-[10px] font-bold uppercase tracking-wide">Approved</span>
                                    )}
                                </td>
                                <td className="p-4 text-right pr-6">
                                    <div className="flex items-center justify-end gap-2">
                                        {skill.status === 'PENDING' && (
-                                           <button onClick={() => handleApproveSkill(skill)} className="text-emerald-600 hover:text-emerald-700 p-2 transition-colors flex items-center gap-1" title="Approve Skill">
+                                           <button onClick={() => handleApproveSkill(skill)} className="text-slate-600 hover:text-slate-700 p-2 transition-colors flex items-center gap-1" title="Approve Skill">
                                                <CheckCircle size={16}/> <span className="text-xs font-bold uppercase">Approve</span>
                                            </button>
                                        )}
-                                       <button onClick={() => setViewSkill(skill)} className="text-slate-600 hover:text-blue-700 p-2 transition-colors flex items-center gap-1" title="View Details">
+                                       <button onClick={() => setViewSkill(skill)} className="text-slate-600 hover:text-slate-900 p-2 transition-colors flex items-center gap-1" title="View Details">
                                            <Eye size={16}/> <span className="text-xs font-bold uppercase">View</span>
                                        </button>
-                                       <button onClick={() => handleEdit('SKILL', skill)} className="text-slate-600 hover:text-blue-700 p-2" title="Edit"><Edit2 size={16}/></button>
-                                       <button onClick={() => handleDelete('SKILL', skill.id)} className="text-slate-600 hover:text-emerald-700 p-2" title="Delete"><Trash2 size={16}/></button>
+                                       <button onClick={() => handleEdit('SKILL', skill)} className="text-slate-600 hover:text-slate-900 p-2" title="Edit"><Edit2 size={16}/></button>
+                                       <button onClick={() => handleDelete('SKILL', skill.id)} className="text-slate-600 hover:text-slate-700 p-2" title="Delete"><Trash2 size={16}/></button>
                                    </div>
                                </td>
                            </tr>
                        ))}{view === 'DEPTS' && filteredDepts.map(d => (
                            <tr key={d.id} className="hover:bg-slate-50 transition-colors group">
-                               <td className="p-4 pl-6 font-bold text-slate-900 group-hover:text-blue-700">{d.name}</td>
+                               <td className="p-4 pl-6 font-bold text-slate-900 group-hover:text-slate-900">{d.name}</td>
                                <td className="p-4 text-slate-600">
                                    {users.find(u => u.id === d.managerId)?.name || <span className="text-slate-600 italic text-xs">Vacant Position</span>}
                                </td>
                                <td className="p-4">
-                                   <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded text-[10px] font-bold uppercase tracking-wide">
+                                   <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded-none text-[10px] font-bold uppercase tracking-wide">
                                        {d.behavioralSkillIds?.length || 0} Competencies
                                    </span>
                                </td>
                                <td className="p-4 text-right pr-6">
                                    <div className="flex items-center justify-end gap-2">
-                                       <button onClick={() => handleEdit('DEPT', d)} className="text-slate-600 hover:text-blue-700 p-2" title="Edit"><Edit2 size={16}/></button>
-                                       <button onClick={() => handleDelete('DEPT', d.id)} className="text-slate-600 hover:text-emerald-700 p-2" title="Delete"><Trash2 size={16}/></button>
+                                       <button onClick={() => handleEdit('DEPT', d)} className="text-slate-600 hover:text-slate-900 p-2" title="Edit"><Edit2 size={16}/></button>
+                                       <button onClick={() => handleDelete('DEPT', d.id)} className="text-slate-600 hover:text-slate-700 p-2" title="Delete"><Trash2 size={16}/></button>
                                    </div>
                                </td>
                            </tr>

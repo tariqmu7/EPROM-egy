@@ -10,14 +10,14 @@ const UserCard = ({ user, isSelected, onClick, role, isSelf }: { user: User, isS
     <button
       type="button"
       onClick={onClick}
-      className={`flex flex-col items-center p-3 rounded-xl border-2 transition-all w-40 flex-shrink-0 ${isSelected ? 'border-blue-500 bg-blue-50 shadow-md scale-105' : 'border-slate-200 bg-white hover:border-blue-300 hover:shadow-sm'}`}
+      className={`flex flex-col items-center p-3 rounded-none border-2 transition-all w-40 flex-shrink-0 ${isSelected ? 'border-slate-900 bg-slate-50  scale-105' : 'border-slate-300 bg-white hover:border-slate-300 hover:'}`}
     >
-      <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold mb-2 ${isSelf ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-700'}`}>
+      <div className={`w-12 h-12 rounded-none flex items-center justify-center text-lg font-bold mb-2 ${isSelf ? 'bg-slate-800 text-white' : 'bg-slate-200 text-slate-700'}`}>
         {user.name.charAt(0)}
       </div>
       <div className="text-sm font-bold text-slate-800 text-center w-full leading-tight mb-1" title={user.name}>{user.name}</div>
       {jobProfile && <div className="text-[10px] text-slate-500 text-center leading-tight mb-1 line-clamp-2" title={jobProfile.title}>{jobProfile.title}</div>}
-      {role && <div className="text-[10px] font-bold text-blue-600 uppercase mt-auto pt-1">{role}</div>}
+      {role && <div className="text-[10px] font-bold text-slate-800 uppercase mt-auto pt-1">{role}</div>}
     </button>
   );
 };
@@ -97,23 +97,23 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
-      <div className="pb-6 border-b border-slate-200">
+      <div className="pb-6 border-b border-slate-300">
         <h2 className="text-3xl font-bold text-slate-900 tracking-tight">360-Degree Evaluation</h2>
         <p className="text-slate-700 text-sm mt-1">Submit behavioral feedback for yourself and your team members.</p>
       </div>
 
       {successMessage && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-lg flex items-center gap-3">
-          <CheckCircle size={20} className="text-emerald-600" />
+        <div className="bg-slate-50 border border-slate-200 text-slate-800 px-4 py-3 rounded-sm flex items-center gap-3">
+          <CheckCircle size={20} className="text-slate-600" />
           <p className="font-medium">{successMessage}</p>
         </div>
       )}
 
-      <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200">
+      <div className="bg-white p-8 rounded-none  border border-slate-300">
         <div className="mb-10">
           <label className="block text-sm font-bold text-slate-700 mb-4 text-center">Select Employee for 360° Evaluation</label>
           
-          <div className="flex flex-col items-center gap-6 bg-slate-50 p-8 rounded-xl border border-slate-200 overflow-x-auto">
+          <div className="flex flex-col items-center gap-6 bg-slate-50 p-8 rounded-none border border-slate-300 overflow-x-auto">
             {/* Manager */}
             {manager && (
               <div className="flex flex-col items-center">
@@ -134,7 +134,7 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
 
               {/* Self */}
               <div className="relative">
-                <div className="absolute -top-2 -left-2 -right-2 -bottom-2 bg-blue-100 rounded-xl border-2 border-blue-200 z-0"></div>
+                <div className="absolute -top-2 -left-2 -right-2 -bottom-2 bg-slate-200 rounded-none border-2 border-slate-300 z-0"></div>
                 <div className="relative z-10">
                   <UserCard user={currentUser} isSelected={selectedSubjectId === currentUser.id} onClick={() => setSelectedSubjectId(currentUser.id)} role="Self" isSelf />
                 </div>
@@ -169,7 +169,7 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-bold text-slate-700 mb-2">Selected Employee</label>
-                  <div className="w-full bg-slate-100 border border-slate-200 text-slate-700 text-sm rounded-lg p-3 shadow-sm font-medium">
+                  <div className="w-full bg-slate-100 border border-slate-300 text-slate-700 text-sm rounded-sm p-3  font-medium">
                     {selectedEmployee?.name} {selectedEmployee?.id === currentUser.id ? '(Self)' : ''}
                   </div>
                 </div>
@@ -180,7 +180,7 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
                     required
                     value={selectedSkillId}
                     onChange={(e) => setSelectedSkillId(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-3 shadow-sm"
+                    className="w-full bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-sm focus:ring-slate-900 focus:border-slate-900 block p-3 "
                   >
                     <option value="" disabled>Select behavior to evaluate...</option>
                     {availableSkills.map(s => (
@@ -188,14 +188,14 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
                     ))}
                   </select>
                   {availableSkills.length === 0 && (
-                    <p className="text-xs text-amber-600 mt-1">No behavioral competencies found for this department.</p>
+                    <p className="text-xs text-slate-600 mt-1">No behavioral competencies found for this department.</p>
                   )}
                 </div>
               </div>
 
               {selectedSkillId && (
-                <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                  <p className="text-sm text-blue-800 font-medium italic">
+                <div className="bg-slate-50 p-4 rounded-sm border border-slate-300">
+                  <p className="text-sm text-slate-800 font-medium italic">
                     "{availableSkills.find(s => s.id === selectedSkillId)?.assessmentQuestion}"
                   </p>
                 </div>
@@ -215,7 +215,7 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
                     >
                       <Star 
                         size={32} 
-                        className={`${(hoverRating || rating) >= star ? 'text-amber-400 fill-amber-400' : 'text-slate-300'} transition-colors`} 
+                        className={`${(hoverRating || rating) >= star ? 'text-slate-400 fill-slate-400' : 'text-slate-300'} transition-colors`} 
                       />
                     </button>
                   ))}
@@ -235,16 +235,16 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
                   value={feedback}
                   onChange={(e) => setFeedback(e.target.value)}
                   placeholder="Provide specific examples of their behavior..."
-                  className="w-full bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-3 shadow-sm"
+                  className="w-full bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-sm focus:ring-slate-900 focus:border-slate-900 block p-3 "
                 ></textarea>
                 <p className="text-xs text-slate-500 mt-2">Feedback will be shared with the employee and their manager.</p>
               </div>
 
-              <div className="pt-4 border-t border-slate-200 flex justify-end">
+              <div className="pt-4 border-t border-slate-300 flex justify-end">
                 <button 
                   type="submit" 
                   disabled={isSubmitting || !selectedSubjectId || !selectedSkillId || rating === 0}
-                  className="bg-slate-900 hover:bg-slate-800 text-white font-medium py-3 px-8 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-md"
+                  className="bg-slate-900 hover:bg-slate-800 text-white font-medium py-3 px-8 rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 "
                 >
                   {isSubmitting ? 'Submitting...' : 'Submit Evaluation'}
                   {!isSubmitting && <Send size={18} />}
@@ -252,7 +252,7 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
               </div>
             </>
           ) : (
-            <div className="text-center p-8 text-slate-500 border-2 border-dashed border-slate-200 rounded-xl">
+            <div className="text-center p-8 text-slate-500 border-2 border-dashed border-slate-300 rounded-none">
               <UserIcon size={48} className="mx-auto mb-4 text-slate-300" />
               <p>Please select an employee from the 360° view above to begin their evaluation.</p>
             </div>

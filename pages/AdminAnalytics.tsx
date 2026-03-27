@@ -91,11 +91,11 @@ export const AdminAnalytics: React.FC = () => {
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-slate-900 border border-slate-700 p-3 rounded shadow-xl">
+        <div className="bg-slate-900 border border-slate-700 p-3 rounded-none ">
           <p className="font-bold text-white text-xs mb-2">{label}</p>
           {payload.map((p: any, idx: number) => (
              <div key={idx} className="flex items-center gap-2 text-xs">
-                <div className="w-2 h-2 rounded-full" style={{background: p.color}}></div>
+                <div className="w-2 h-2 rounded-none" style={{background: p.color}}></div>
                 <span className="text-slate-400">{p.name}:</span>
                 <span className="font-bold text-white">{p.value}</span>
              </div>
@@ -108,7 +108,7 @@ export const AdminAnalytics: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center pb-6 border-b border-slate-200 gap-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center pb-6 border-b border-slate-300 gap-4">
         <div>
           <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Organization Analytics</h2>
           <p className="text-slate-700 text-sm mt-1">Skill gap trends and workforce insights</p>
@@ -118,7 +118,7 @@ export const AdminAnalytics: React.FC = () => {
           <select 
             value={selectedDeptId}
             onChange={(e) => setSelectedDeptId(e.target.value)}
-            className="bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 shadow-sm"
+            className="bg-white border border-slate-300 text-slate-900 text-sm rounded-sm focus:ring-slate-900 focus:border-slate-900 block p-2.5 "
           >
             <option value="ALL">All Departments</option>
             {depts.map(d => (
@@ -129,8 +129,8 @@ export const AdminAnalytics: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200 flex items-center gap-4">
-          <div className="w-12 h-12 bg-blue-50 text-blue-700 rounded-lg flex items-center justify-center">
+        <div className="bg-white p-6 rounded-sm  border border-slate-300 flex items-center gap-4">
+          <div className="w-12 h-12 bg-slate-50 text-slate-900 rounded-sm flex items-center justify-center">
             <Users size={24} />
           </div>
           <div>
@@ -141,8 +141,8 @@ export const AdminAnalytics: React.FC = () => {
           </div>
         </div>
         
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200 flex items-center gap-4">
-          <div className="w-12 h-12 bg-emerald-50 text-emerald-700 rounded-lg flex items-center justify-center">
+        <div className="bg-white p-6 rounded-sm  border border-slate-300 flex items-center gap-4">
+          <div className="w-12 h-12 bg-slate-50 text-slate-700 rounded-sm flex items-center justify-center">
             <Activity size={24} />
           </div>
           <div>
@@ -153,8 +153,8 @@ export const AdminAnalytics: React.FC = () => {
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200 flex items-center gap-4">
-          <div className="w-12 h-12 bg-purple-50 text-purple-700 rounded-lg flex items-center justify-center">
+        <div className="bg-white p-6 rounded-sm  border border-slate-300 flex items-center gap-4">
+          <div className="w-12 h-12 bg-slate-50 text-slate-700 rounded-sm flex items-center justify-center">
             <TrendingUp size={24} />
           </div>
           <div>
@@ -166,9 +166,9 @@ export const AdminAnalytics: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-white p-6 rounded-lg shadow-panel border border-slate-200">
+      <div className="bg-white p-6 rounded-sm  border border-slate-300">
         <div className="flex items-center gap-2 mb-6">
-          <TrendingUp size={20} className="text-blue-700" />
+          <TrendingUp size={20} className="text-slate-900" />
           <h4 className="font-bold text-slate-900">Skill Gap Trend Over Time</h4>
         </div>
         

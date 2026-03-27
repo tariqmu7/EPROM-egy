@@ -61,11 +61,11 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ user, onNavi
 
   const getIcon = (type: string) => {
     switch (type) {
-      case 'INFO': return <Info size={16} className="text-blue-500" />;
-      case 'WARNING': return <AlertTriangle size={16} className="text-orange-500" />;
-      case 'SUCCESS': return <CheckCircle size={16} className="text-emerald-500" />;
-      case 'ERROR': return <XCircle size={16} className="text-red-500" />;
-      default: return <Info size={16} className="text-blue-500" />;
+      case 'INFO': return <Info size={16} className="text-slate-700" />;
+      case 'WARNING': return <AlertTriangle size={16} className="text-slate-500" />;
+      case 'SUCCESS': return <CheckCircle size={16} className="text-slate-500" />;
+      case 'ERROR': return <XCircle size={16} className="text-slate-500" />;
+      default: return <Info size={16} className="text-slate-700" />;
     }
   };
 
@@ -73,24 +73,24 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ user, onNavi
     <div className="relative" ref={dropdownRef}>
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className="relative p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors"
+        className="relative p-2 text-slate-500 hover:bg-slate-100 rounded-none transition-colors"
       >
         <Bell size={20} />
         {unreadCount > 0 && (
-          <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white ring-2 ring-white">
+          <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-none bg-slate-500 text-[10px] font-bold text-white ring-2 ring-white">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
+        <div className="absolute right-0 mt-2 w-80 bg-white rounded-none  border border-slate-300 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
           <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
             <h3 className="font-bold text-slate-900">Notifications</h3>
             {unreadCount > 0 && (
               <button 
                 onClick={handleMarkAllAsRead}
-                className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                className="text-xs font-semibold text-slate-800 hover:text-slate-800 flex items-center gap-1"
               >
                 <Check size={14} /> Mark all read
               </button>
@@ -104,7 +104,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ user, onNavi
                   <div 
                     key={notification.id} 
                     onClick={() => handleNotificationClick(notification)}
-                    className={`p-4 hover:bg-slate-50 transition-colors cursor-pointer flex gap-3 ${!notification.isRead ? 'bg-blue-50/30' : ''}`}
+                    className={`p-4 hover:bg-slate-50 transition-colors cursor-pointer flex gap-3 ${!notification.isRead ? 'bg-slate-50/30' : ''}`}
                   >
                     <div className="mt-0.5">
                       {getIcon(notification.type)}
@@ -123,7 +123,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ user, onNavi
                     {!notification.isRead && !notification.id.startsWith('dyn-') && (
                       <button 
                         onClick={(e) => handleMarkAsRead(e, notification.id)}
-                        className="w-2 h-2 rounded-full bg-blue-500 self-center"
+                        className="w-2 h-2 rounded-none bg-slate-800 self-center"
                         title="Mark as read"
                       />
                     )}

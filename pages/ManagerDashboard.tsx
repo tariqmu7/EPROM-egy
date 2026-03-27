@@ -52,12 +52,12 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
       <div className="animate-in slide-in-from-right duration-300">
         <button 
           onClick={() => setSelectedMember(null)}
-          className="mb-6 flex items-center gap-2 text-slate-600 hover:text-blue-700 transition-colors font-medium text-sm"
+          className="mb-6 flex items-center gap-2 text-slate-600 hover:text-slate-900 transition-colors font-medium text-sm"
         >
           <ArrowLeft size={16} /> Back to Team Overview
         </button>
-        <div className="bg-slate-100 border border-slate-200 rounded-lg p-4 mb-6 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-full bg-white border border-slate-200 overflow-hidden shadow-sm">
+        <div className="bg-slate-100 border border-slate-300 rounded-sm p-4 mb-6 flex items-center gap-4">
+            <div className="w-12 h-12 rounded-none bg-white border border-slate-300 overflow-hidden ">
                 <img src={selectedMember.avatarUrl} alt={selectedMember.name} className="w-full h-full object-cover" />
             </div>
             <div>
@@ -65,7 +65,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
                 <p className="text-sm text-slate-700">{dataService.getJobProfile(selectedMember.jobProfileId || '')?.title || 'No Job Profile'}</p>
             </div>
             <div className="ml-auto">
-                <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide">
+                <span className="bg-slate-200 text-slate-900 px-3 py-1 rounded-none text-xs font-bold uppercase tracking-wide">
                     Viewing Profile
                 </span>
             </div>
@@ -93,17 +93,17 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
                 });
 
                 return (
-                    <div key={job.id} className="bg-white rounded-lg shadow-md border border-slate-200 overflow-hidden">
+                    <div key={job.id} className="bg-white rounded-sm  border border-slate-300 overflow-hidden">
                         <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                             <div>
                                 <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                                    <Briefcase size={20} className="text-blue-700" />
+                                    <Briefcase size={20} className="text-slate-900" />
                                     {job.title}
                                 </h3>
                                 <p className="text-slate-700 text-sm mt-1">{job.description}</p>
                             </div>
                             <div className="flex items-center gap-2">
-                                <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide flex items-center gap-1">
+                                <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-none text-xs font-bold uppercase tracking-wide flex items-center gap-1">
                                     <Users size={14} /> {employeesInJob.length} Active
                                 </span>
                             </div>
@@ -117,18 +117,18 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
                                 </h4>
                                 <div className="space-y-4">
                                     {Object.entries(job.requirements).map(([level, reqs]) => (
-                                        <div key={level} className="bg-slate-100 rounded-lg p-4 border border-slate-100">
+                                        <div key={level} className="bg-slate-100 rounded-sm p-4 border border-slate-100">
                                             <div className="flex items-center justify-between mb-3">
-                                                <span className="text-xs font-bold bg-white border border-slate-200 px-2 py-1 rounded text-slate-700">Level: {level}</span>
+                                                <span className="text-xs font-bold bg-white border border-slate-300 px-2 py-1 rounded-none text-slate-700">Level: {level}</span>
                                                 <span className="text-[10px] text-slate-600 uppercase font-semibold">{reqs.length} Skills Required</span>
                                             </div>
                                             <div className="flex flex-wrap gap-2">
                                                 {reqs.map((req, idx) => {
                                                     const skill = dataService.getSkill(req.skillId);
                                                     return (
-                                                        <div key={idx} className="text-xs bg-white border border-slate-200 px-2 py-1 rounded text-slate-600 flex items-center gap-1" title={`Required Level: ${req.requiredLevel}`}>
+                                                        <div key={idx} className="text-xs bg-white border border-slate-300 px-2 py-1 rounded-none text-slate-600 flex items-center gap-1" title={`Required Level: ${req.requiredLevel}`}>
                                                             <span>{skill?.name}</span>
-                                                            <span className="bg-blue-50 text-blue-700 px-1 rounded font-bold text-[10px]">L{req.requiredLevel}</span>
+                                                            <span className="bg-slate-50 text-slate-900 px-1 rounded-none font-bold text-[10px]">L{req.requiredLevel}</span>
                                                         </div>
                                                     );
                                                 })}
@@ -144,14 +144,14 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
                                     <Users size={16} className="text-slate-600" /> Current Team Status
                                 </h4>
                                 {employeesInJob.length > 0 ? (
-                                    <div className="bg-slate-50 rounded-lg border border-slate-100 p-4 space-y-3">
+                                    <div className="bg-slate-50 rounded-sm border border-slate-100 p-4 space-y-3">
                                         {employeesInJob.map(emp => {
                                             const stats = getMemberStats(emp);
                                             return (
-                                                <div key={emp.id} className="bg-white p-3 rounded border border-slate-200 shadow-sm hover:border-blue-300 transition-colors cursor-pointer" onClick={() => setSelectedMember(emp)}>
+                                                <div key={emp.id} className="bg-white p-3 rounded-none border border-slate-300  hover:border-slate-300 transition-colors cursor-pointer" onClick={() => setSelectedMember(emp)}>
                                                     <div className="flex justify-between items-center mb-2">
                                                         <div className="flex items-center gap-2">
-                                                            <div className="w-8 h-8 rounded-full bg-slate-100 overflow-hidden border border-slate-200">
+                                                            <div className="w-8 h-8 rounded-none bg-slate-100 overflow-hidden border border-slate-300">
                                                                 <img src={emp.avatarUrl} alt={emp.name} className="w-full h-full object-cover" />
                                                             </div>
                                                             <div>
@@ -161,13 +161,13 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                        <span className={`text-xs font-bold ${stats.compliance >= 80 ? 'text-green-700' : stats.compliance >= 50 ? 'text-cyan-700' : 'text-emerald-700'}`}>
+                                                        <span className={`text-xs font-bold ${stats.compliance >= 80 ? 'text-slate-700' : stats.compliance >= 50 ? 'text-slate-700' : 'text-slate-700'}`}>
                                                             {stats.compliance}%
                                                         </span>
                                                     </div>
-                                                    <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                                                    <div className="w-full bg-slate-100 rounded-none h-2 overflow-hidden">
                                                         <div 
-                                                            className={`h-full rounded-full ${stats.compliance >= 80 ? 'bg-green-500' : stats.compliance >= 50 ? 'bg-cyan-500' : 'bg-emerald-500'}`} 
+                                                            className={`h-full rounded-none ${stats.compliance >= 80 ? 'bg-slate-500' : stats.compliance >= 50 ? 'bg-slate-500' : 'bg-slate-500'}`} 
                                                             style={{ width: `${stats.compliance}%` }}
                                                         ></div>
                                                     </div>
@@ -176,7 +176,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
                                         })}
                                     </div>
                                 ) : (
-                                    <div className="h-64 w-full bg-slate-50 rounded-lg border border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-600">
+                                    <div className="h-64 w-full bg-slate-50 rounded-sm border border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-600">
                                         <Users size={32} className="mb-2 opacity-50" />
                                         <p className="text-sm font-medium">No team members in this role yet.</p>
                                     </div>
@@ -188,7 +188,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
             })}
             
             {managedJobs.length === 0 && (
-                <div className="p-12 text-center bg-slate-50 rounded-lg border border-dashed border-slate-300">
+                <div className="p-12 text-center bg-slate-50 rounded-sm border border-dashed border-slate-300">
                     <Briefcase size={48} className="mx-auto text-slate-500 mb-4" />
                     <h3 className="text-lg font-medium text-slate-900">No Job Profiles Found</h3>
                     <p className="text-slate-700 text-sm mt-1">There are no job profiles associated with your department.</p>
@@ -222,7 +222,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
 
     return (
       <div className="space-y-6">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+        <div className="bg-white p-6 rounded-none  border border-slate-300">
           <div className="flex flex-col md:flex-row gap-4 items-center">
             <div className="relative flex-1 w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
@@ -231,7 +231,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
                 placeholder="Search by name, department, job title, certificates, or location..." 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 rounded-lg border border-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                className="w-full pl-10 pr-4 py-3 rounded-sm border border-slate-300 focus:ring-2 focus:ring-slate-900 focus:border-slate-900 outline-none transition-all"
               />
             </div>
             <div className="text-sm text-slate-500 font-medium whitespace-nowrap">
@@ -246,9 +246,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
             const job = dataService.getJobProfile(u.jobProfileId || '');
             
             return (
-              <div key={u.id} className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col h-full">
+              <div key={u.id} className="bg-white rounded-none  border border-slate-300 p-6 flex flex-col h-full">
                 <div className="flex items-start gap-4 mb-4">
-                  <div className="w-12 h-12 rounded-full bg-slate-100 border border-slate-200 overflow-hidden flex-shrink-0">
+                  <div className="w-12 h-12 rounded-none bg-slate-100 border border-slate-300 overflow-hidden flex-shrink-0">
                     <img src={u.avatarUrl} alt={u.name} className="w-full h-full object-cover" />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -257,12 +257,12 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
                     <div className="flex items-center gap-2 mt-1">
                       <span className="text-slate-500 text-xs truncate">{dept?.name || 'No Department'}</span>
                       <span className="text-slate-300">•</span>
-                      <span className="text-blue-600 font-bold text-[10px] uppercase tracking-wider bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">{u.location || 'N/A'}</span>
+                      <span className="text-slate-800 font-bold text-[10px] uppercase tracking-wider bg-slate-50 px-1.5 py-0.5 rounded-none border border-slate-300">{u.location || 'N/A'}</span>
                     </div>
                   </div>
                   <a 
                     href={`mailto:${u.email}`}
-                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-full transition-colors flex-shrink-0"
+                    className="p-2 text-slate-800 hover:bg-slate-50 rounded-none transition-colors flex-shrink-0"
                     title="Contact Employee"
                   >
                     <Mail size={20} />
@@ -271,14 +271,14 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
                 
                 <div className="mt-auto pt-4 border-t border-slate-100">
                   <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                    <Award size={14} className="text-blue-600" /> Certificates Achieved
+                    <Award size={14} className="text-slate-800" /> Certificates Achieved
                   </h4>
                   {u.certificates && u.certificates.length > 0 ? (
                     <div className="flex flex-wrap gap-2">
                       {u.certificates.map(cert => (
-                        <div key={cert.id} className="bg-blue-50 border border-blue-100 text-blue-800 px-2.5 py-1.5 rounded text-xs">
+                        <div key={cert.id} className="bg-slate-50 border border-slate-300 text-slate-800 px-2.5 py-1.5 rounded-none text-xs">
                           <span className="font-semibold">{cert.name}</span>
-                          <span className="text-blue-600/70 ml-1">({new Date(cert.dateAchieved).getFullYear()})</span>
+                          <span className="text-slate-800/70 ml-1">({new Date(cert.dateAchieved).getFullYear()})</span>
                         </div>
                       ))}
                     </div>
@@ -291,7 +291,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
           })}
           
           {filteredUsers.length === 0 && (
-            <div className="col-span-full p-12 text-center bg-slate-50 rounded-lg border border-dashed border-slate-300">
+            <div className="col-span-full p-12 text-center bg-slate-50 rounded-sm border border-dashed border-slate-300">
               <Search size={48} className="mx-auto text-slate-400 mb-4" />
               <h3 className="text-lg font-medium text-slate-900">No Matches Found</h3>
               <p className="text-slate-600 text-sm mt-1">Try adjusting your search terms to find the right talent.</p>
@@ -305,45 +305,45 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
   return (
     <div className="space-y-8 pb-12">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-end border-b border-slate-200 pb-6">
+      <div className="flex flex-col md:flex-row justify-between items-end border-b border-slate-300 pb-6">
         <div>
           <h2 className="text-xl font-bold text-slate-900 tracking-tight">Manager Dashboard</h2>
           <div className="flex items-center gap-2 mt-1 text-xs text-slate-600">
-             <Users size={14} className="text-blue-700" />
+             <Users size={14} className="text-slate-900" />
              <span>Managing {subordinates.length} Team Members across {managedJobs.length} Roles</span>
           </div>
         </div>
         
         {/* View Toggle */}
-        <div className="flex bg-slate-100 p-1 rounded-lg">
+        <div className="flex bg-slate-100 p-1 rounded-sm">
             <button 
                 onClick={() => setActiveView('TEAM')}
-                className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeView === 'TEAM' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-700 hover:text-slate-700'}`}
+                className={`px-4 py-2 rounded-sm text-sm font-bold transition-all ${activeView === 'TEAM' ? 'bg-white text-slate-900 ' : 'text-slate-700 hover:text-slate-700'}`}
             >
                 Team Overview
             </button>
             <button 
                 onClick={() => setActiveView('JOBS')}
-                className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeView === 'JOBS' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-700 hover:text-slate-700'}`}
+                className={`px-4 py-2 rounded-sm text-sm font-bold transition-all ${activeView === 'JOBS' ? 'bg-white text-slate-900 ' : 'text-slate-700 hover:text-slate-700'}`}
             >
                 Job Profiles
             </button>
             <button 
                 onClick={() => setActiveView('MATRIX')}
-                className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeView === 'MATRIX' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-700 hover:text-slate-700'}`}
+                className={`px-4 py-2 rounded-sm text-sm font-bold transition-all ${activeView === 'MATRIX' ? 'bg-white text-slate-900 ' : 'text-slate-700 hover:text-slate-700'}`}
             >
                 Matrix
             </button>
             <button 
                 onClick={() => setActiveView('APPROVALS')}
-                className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeView === 'APPROVALS' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-700 hover:text-slate-700'}`}
+                className={`px-4 py-2 rounded-sm text-sm font-bold transition-all ${activeView === 'APPROVALS' ? 'bg-white text-slate-900 ' : 'text-slate-700 hover:text-slate-700'}`}
             >
                 Approvals
             </button>
             {canSearchTalent && (
                 <button 
                     onClick={() => setActiveView('TALENT_SEARCH')}
-                    className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeView === 'TALENT_SEARCH' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-700 hover:text-slate-700'}`}
+                    className={`px-4 py-2 rounded-sm text-sm font-bold transition-all ${activeView === 'TALENT_SEARCH' ? 'bg-white text-slate-900 ' : 'text-slate-700 hover:text-slate-700'}`}
                 >
                     Talent Search
                 </button>
@@ -362,52 +362,52 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
                     <div 
                         key={member.id} 
                         onClick={() => setSelectedMember(member)}
-                        className="bg-white rounded-lg shadow-panel border border-slate-100 p-6 cursor-pointer hover:border-blue-400 hover:shadow-lg transition-all group relative overflow-hidden"
+                        className="bg-white rounded-sm  border border-slate-100 p-6 cursor-pointer hover:border-slate-400 hover: transition-all group relative overflow-hidden"
                     >
-                        <div className="absolute top-0 left-0 w-1 h-full bg-slate-200 group-hover:bg-blue-500 transition-colors"></div>
+                        <div className="absolute top-0 left-0 w-1 h-full bg-slate-200 group-hover:bg-slate-800 transition-colors"></div>
                         
                         <div className="flex items-start justify-between mb-4 pl-3">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 overflow-hidden">
+                                <div className="w-10 h-10 rounded-none bg-slate-100 border border-slate-300 overflow-hidden">
                                     <img src={member.avatarUrl} alt={member.name} className="w-full h-full object-cover" />
                                 </div>
                                 <div>
-                                    <h4 className="font-bold text-slate-900 leading-tight group-hover:text-blue-700 transition-colors">{member.name}</h4>
+                                    <h4 className="font-bold text-slate-900 leading-tight group-hover:text-slate-900 transition-colors">{member.name}</h4>
                                     <div className="flex items-center gap-2 mt-0.5">
                                         <p className="text-xs text-slate-700">{jobTitle}</p>
                                         <span className="text-slate-300">•</span>
-                                        <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-tight">ITP Active</span>
+                                        <span className="text-[10px] font-bold text-slate-600 uppercase tracking-tight">ITP Active</span>
                                     </div>
                                 </div>
                             </div>
-                            <div className="bg-slate-50 p-1.5 rounded-full text-slate-600 group-hover:bg-blue-50 group-hover:text-blue-700 transition-colors">
+                            <div className="bg-slate-50 p-1.5 rounded-none text-slate-600 group-hover:bg-slate-50 group-hover:text-slate-900 transition-colors">
                                 <ChevronRight size={18} />
                             </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4 pl-3 mt-6">
-                            <div className="bg-slate-50 rounded p-3 border border-slate-100">
+                            <div className="bg-slate-50 rounded-none p-3 border border-slate-100">
                                 <div className="text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Compliance</div>
                                 <div className="flex items-center gap-2 mb-2">
-                                    <span className={`text-lg font-bold ${stats.compliance >= 80 ? 'text-green-700' : stats.compliance >= 50 ? 'text-cyan-700' : 'text-emerald-700'}`}>
+                                    <span className={`text-lg font-bold ${stats.compliance >= 80 ? 'text-slate-700' : stats.compliance >= 50 ? 'text-slate-700' : 'text-slate-700'}`}>
                                         {stats.compliance}%
                                     </span>
-                                    {stats.compliance >= 80 ? <CheckCircle size={14} className="text-green-700"/> : <TrendingUp size={14} className="text-cyan-700"/>}
+                                    {stats.compliance >= 80 ? <CheckCircle size={14} className="text-slate-700"/> : <TrendingUp size={14} className="text-slate-700"/>}
                                 </div>
-                                <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                                <div className="w-full bg-slate-200 rounded-none h-1.5 overflow-hidden">
                                     <div 
-                                        className={`h-full rounded-full ${stats.compliance >= 80 ? 'bg-green-500' : stats.compliance >= 50 ? 'bg-cyan-500' : 'bg-emerald-500'}`} 
+                                        className={`h-full rounded-none ${stats.compliance >= 80 ? 'bg-slate-500' : stats.compliance >= 50 ? 'bg-slate-500' : 'bg-slate-500'}`} 
                                         style={{ width: `${stats.compliance}%` }}
                                     ></div>
                                 </div>
                             </div>
-                            <div className="bg-slate-50 rounded p-3 border border-slate-100">
+                            <div className="bg-slate-50 rounded-none p-3 border border-slate-100">
                                 <div className="text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Critical Gaps</div>
                                 <div className="flex items-center gap-2">
-                                    <span className={`text-lg font-bold ${stats.gaps === 0 ? 'text-slate-700' : 'text-emerald-700'}`}>
+                                    <span className={`text-lg font-bold ${stats.gaps === 0 ? 'text-slate-700' : 'text-slate-700'}`}>
                                         {stats.gaps}
                                     </span>
-                                    {stats.gaps > 0 && <AlertCircle size={14} className="text-emerald-700"/>}
+                                    {stats.gaps > 0 && <AlertCircle size={14} className="text-slate-700"/>}
                                 </div>
                             </div>
                         </div>
@@ -416,7 +416,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
             })}
 
             {subordinates.length === 0 && (
-                <div className="col-span-full p-12 text-center bg-slate-50 rounded-lg border border-dashed border-slate-300">
+                <div className="col-span-full p-12 text-center bg-slate-50 rounded-sm border border-dashed border-slate-300">
                     <Users size={48} className="mx-auto text-slate-500 mb-4" />
                     <h3 className="text-lg font-medium text-slate-900">No Team Members Found</h3>
                     <p className="text-slate-700 text-sm mt-1">You don't have any direct reports assigned to you yet.</p>

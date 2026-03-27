@@ -18,13 +18,13 @@ const NavItem = memo(({ id, label, icon: Icon, activeTab, onSwitchTab }: { id: s
   return (
     <button
       onClick={() => onSwitchTab(id)}
-      className={`relative flex items-center gap-2 px-3 py-2 text-sm font-medium transition-all duration-200 rounded-md group whitespace-nowrap flex-shrink-0 ${
+      className={`relative flex items-center gap-2 px-3 py-2 text-sm font-medium transition-all duration-200 rounded-sm group whitespace-nowrap flex-shrink-0 ${
         isActive 
-          ? 'text-blue-700 bg-blue-50 shadow-sm border border-blue-100' 
-          : 'text-slate-600 hover:text-blue-700 hover:bg-slate-100'
+          ? 'text-slate-900 bg-slate-50  border border-slate-300' 
+          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
       }`}
     >
-      <Icon size={18} className={`${isActive ? 'text-blue-700' : 'text-slate-600 group-hover:text-blue-700'}`} />
+      <Icon size={18} className={`${isActive ? 'text-slate-900' : 'text-slate-600 group-hover:text-slate-900'}`} />
       <span className="hidden md:inline">{label}</span>
     </button>
   );
@@ -35,18 +35,18 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans">
       {/* Top Navbar - Modern Style */}
-      <header className="bg-white border-b border-slate-200 shadow-sm z-50 sticky top-0">
+      <header className="bg-white border-b border-slate-300  z-50 sticky top-0">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-20 items-center">
             
             {/* Logo Section */}
             <div className="flex items-center gap-4 flex-shrink-0">
-               <div className="w-16 h-16 rounded-xl overflow-hidden flex items-center justify-center py-1">
+               <div className="w-16 h-16 rounded-none overflow-hidden flex items-center justify-center py-1">
                     <Logo className="w-full h-full" />
                </div>
                <div className="hidden lg:flex flex-col">
                  <span className="font-bold text-lg tracking-tight leading-none text-slate-900">EPROM CMS</span>
-                 <span className="text-[10px] text-blue-700 font-bold uppercase tracking-widest mt-1">EPROM Competency program</span>
+                 <span className="text-[10px] text-slate-900 font-bold uppercase tracking-widest mt-1">EPROM Competency program</span>
                </div>
             </div>
 
@@ -79,19 +79,19 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
               {user.role !== Role.ADMIN && <NotificationBell user={user} onNavigate={onSwitchTab} />}
 
               {/* User Profile */}
-              <div className="flex items-center gap-3 pl-6 border-l border-slate-200">
+              <div className="flex items-center gap-3 pl-6 border-l border-slate-300">
                 <div className="text-right hidden sm:block">
                     <p className="text-sm font-bold text-slate-900 leading-none">{user.name}</p>
                     <p className="text-[10px] text-slate-700 uppercase mt-1">
                         {user.role === Role.ADMIN ? 'Administrator' : (user.orgLevel ? ORG_LEVEL_LABELS[user.orgLevel] : 'Employee')}
                     </p>
                 </div>
-                <div className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden shadow-sm text-slate-700">
+                <div className="w-10 h-10 rounded-none bg-slate-100 border border-slate-300 flex items-center justify-center overflow-hidden  text-slate-700">
                     {user.avatarUrl ? <img src={user.avatarUrl} alt="avatar" /> : <UserCircle size={24} />}
                 </div>
                 <button 
                   onClick={onLogout}
-                  className="p-2 text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-full transition-colors"
+                  className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-200 rounded-none transition-colors"
                   title="Sign Out"
                 >
                   <LogOut size={18} />

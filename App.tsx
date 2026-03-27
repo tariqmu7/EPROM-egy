@@ -88,7 +88,7 @@ const App: React.FC = () => {
   if (isLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-slate-600 gap-4">
-        <Loader2 className="animate-spin text-blue-700" size={48} />
+        <Loader2 className="animate-spin text-slate-900" size={48} />
         <p className="font-bold tracking-widest text-xs uppercase animate-pulse">Initializing System...</p>
       </div>
     );
@@ -107,12 +107,12 @@ const App: React.FC = () => {
             
             <div className="relative z-10">
                 <div className="flex items-center gap-4 mb-12">
-                   <div className="w-20 h-20 rounded-xl overflow-hidden flex items-center justify-center bg-white p-2">
+                   <div className="w-20 h-20 rounded-none overflow-hidden flex items-center justify-center bg-white p-2">
                         <Logo className="w-full h-full" />
                    </div>
                    <div className="flex flex-col">
                      <span className="font-bold text-3xl tracking-tight leading-none text-white">EPROM CMS</span>
-                     <span className="text-xs text-blue-400 font-bold uppercase tracking-widest mt-1">EPROM Competency program</span>
+                     <span className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">EPROM Competency program</span>
                    </div>
                 </div>
             </div>
@@ -126,11 +126,11 @@ const App: React.FC = () => {
                 </p>
                 <div className="flex items-center gap-4 text-sm font-medium text-slate-600">
                     <div className="flex items-center gap-2">
-                        <CheckCircle size={16} className="text-blue-400" />
+                        <CheckCircle size={16} className="text-slate-400" />
                         <span>Skill Gap Analysis</span>
                     </div>
                     <div className="flex items-center gap-2">
-                        <CheckCircle size={16} className="text-blue-400" />
+                        <CheckCircle size={16} className="text-slate-400" />
                         <span>360° Assessments</span>
                     </div>
                 </div>
@@ -142,12 +142,12 @@ const App: React.FC = () => {
             <div className="w-full max-w-md animate-in fade-in slide-in-from-bottom-4 duration-500">
                 {/* Mobile Logo */}
                 <div className="flex lg:hidden items-center gap-4 mb-10 justify-center">
-                   <div className="w-20 h-20 rounded-xl overflow-hidden flex items-center justify-center bg-white shadow-sm border border-slate-200 p-2">
+                   <div className="w-20 h-20 rounded-none overflow-hidden flex items-center justify-center bg-white  border border-slate-300 p-2">
                         <Logo className="w-full h-full" />
                    </div>
                    <div className="flex flex-col text-left">
                      <span className="font-bold text-3xl tracking-tight leading-none text-slate-900">EPROM CMS</span>
-                     <span className="text-xs text-blue-700 font-bold uppercase tracking-widest mt-1">EPROM Competency program</span>
+                     <span className="text-xs text-slate-900 font-bold uppercase tracking-widest mt-1">EPROM Competency program</span>
                    </div>
                 </div>
 
@@ -162,11 +162,11 @@ const App: React.FC = () => {
                 
                 <form onSubmit={handleAuth} className="space-y-5">
                     {signupSuccess && (
-                        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-xl flex items-start gap-3">
-                            <CheckCircle size={20} className="mt-0.5 flex-shrink-0 text-emerald-700" />
+                        <div className="bg-slate-50 border border-slate-200 text-slate-800 p-4 rounded-none flex items-start gap-3">
+                            <CheckCircle size={20} className="mt-0.5 flex-shrink-0 text-slate-700" />
                             <div className="text-sm">
                                 <p className="font-bold">Registration Successful</p>
-                                <p className="text-emerald-700 mt-1">Your profile is pending approval.</p>
+                                <p className="text-slate-700 mt-1">Your profile is pending approval.</p>
                             </div>
                         </div>
                     )}
@@ -180,7 +180,7 @@ const App: React.FC = () => {
                                     type="text" 
                                     value={fullName}
                                     onChange={(e) => setFullName(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-slate-900 placeholder:text-slate-600 shadow-sm"
+                                    className="w-full pl-10 pr-4 py-3 rounded-none border border-slate-300 bg-white focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 outline-none transition-all text-slate-900 placeholder:text-slate-600 "
                                     placeholder="e.g. John Smith"
                                     required={!isLoginMode}
                                 />
@@ -196,7 +196,7 @@ const App: React.FC = () => {
                                 type="email" 
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-slate-900 placeholder:text-slate-600 shadow-sm"
+                                className="w-full pl-10 pr-4 py-3 rounded-none border border-slate-300 bg-white focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 outline-none transition-all text-slate-900 placeholder:text-slate-600 "
                                 placeholder="name@company.com"
                                 required
                             />
@@ -207,7 +207,7 @@ const App: React.FC = () => {
                         <div className="flex items-center justify-between mb-1.5">
                             <label className="block text-sm font-medium text-slate-700">Password</label>
                             {isLoginMode && (
-                                <a href="#" className="text-sm text-blue-700 hover:text-blue-700 font-medium">Forgot password?</a>
+                                <a href="#" className="text-sm text-slate-900 hover:text-slate-900 font-medium">Forgot password?</a>
                             )}
                         </div>
                         <div className="relative">
@@ -216,7 +216,7 @@ const App: React.FC = () => {
                                 type="password" 
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-slate-900 placeholder:text-slate-600 shadow-sm"
+                                className="w-full pl-10 pr-4 py-3 rounded-none border border-slate-300 bg-white focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 outline-none transition-all text-slate-900 placeholder:text-slate-600 "
                                 placeholder="••••••••"
                                 required
                             />
@@ -224,7 +224,7 @@ const App: React.FC = () => {
                     </div>
                     
                     {error && (
-                        <div className="bg-red-50 border border-red-100 text-red-600 p-3 rounded-xl text-sm flex items-center gap-2 font-medium">
+                        <div className="bg-slate-50 border border-slate-100 text-slate-600 p-3 rounded-none text-sm flex items-center gap-2 font-medium">
                             <ShieldCheck size={16}/> {error}
                         </div>
                     )}
@@ -232,7 +232,7 @@ const App: React.FC = () => {
                     <button 
                         type="submit" 
                         disabled={authLoading}
-                        className="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium py-3 rounded-xl transition-all flex items-center justify-center gap-2 mt-6 group disabled:opacity-70 disabled:cursor-not-allowed"
+                        className="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium py-3 rounded-none transition-all flex items-center justify-center gap-2 mt-6 group disabled:opacity-70 disabled:cursor-not-allowed"
                     >
                         {authLoading ? <Loader2 className="animate-spin" size={20} /> : (
                             <>
@@ -257,18 +257,18 @@ const App: React.FC = () => {
                 </form>
 
                 {CONFIG.SOURCE === 'MOCK' && isLoginMode && (
-                    <div className="mt-12 pt-8 border-t border-slate-200">
+                    <div className="mt-12 pt-8 border-t border-slate-300">
                         <p className="text-[10px] text-slate-600 mb-4 font-bold uppercase tracking-widest text-center">Development Access</p>
                         <div className="flex flex-col gap-2">
-                            <button onClick={() => { setEmail('sarah.ahmed@midor.com.eg'); setPassword('any'); }} className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl shadow-sm text-sm font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-all flex justify-between items-center">
+                            <button onClick={() => { setEmail('sarah.ahmed@midor.com.eg'); setPassword('any'); }} className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-none  text-sm font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-all flex justify-between items-center">
                                 <span>Employee</span>
                                 <span className="text-slate-600 text-xs">Sarah</span>
                             </button>
-                            <button onClick={() => { setEmail('sameh.i@zohr.com.eg'); setPassword('any'); }} className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl shadow-sm text-sm font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-all flex justify-between items-center">
+                            <button onClick={() => { setEmail('sameh.i@zohr.com.eg'); setPassword('any'); }} className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-none  text-sm font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-all flex justify-between items-center">
                                 <span>Manager (SH)</span>
                                 <span className="text-slate-600 text-xs">Sameh</span>
                             </button>
-                            <button onClick={() => { setEmail('admin@egpc.com.eg'); setPassword('any'); }} className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl shadow-sm text-sm font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-all flex justify-between items-center">
+                            <button onClick={() => { setEmail('admin@egpc.com.eg'); setPassword('any'); }} className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-none  text-sm font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-all flex justify-between items-center">
                                 <span>Admin</span>
                                 <span className="text-slate-600 text-xs">Mahmoud</span>
                             </button>
@@ -287,7 +287,7 @@ const App: React.FC = () => {
     if (activeTab.startsWith('admin-') && user.role !== Role.ADMIN) {
       return (
         <div className="flex flex-col items-center justify-center h-[60vh] p-12 text-center animate-fade-in">
-          <div className="bg-red-50 text-red-500 p-6 rounded-full mb-6">
+          <div className="bg-slate-50 text-slate-500 p-6 rounded-none mb-6">
             <Lock size={48} />
           </div>
           <h2 className="text-3xl font-bold text-slate-900 mb-3">Access Denied</h2>
@@ -296,7 +296,7 @@ const App: React.FC = () => {
           </p>
           <button 
             onClick={() => setActiveTab('emp-dashboard')}
-            className="bg-blue-600 text-white px-6 py-2.5 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+            className="bg-slate-800 text-white px-6 py-2.5 rounded-sm font-medium hover:bg-slate-900 transition-colors"
           >
             Return to Dashboard
           </button>
@@ -307,7 +307,7 @@ const App: React.FC = () => {
     if (activeTab === 'manager-dashboard' && !dataService.isManager(user)) {
       return (
         <div className="flex flex-col items-center justify-center h-[60vh] p-12 text-center animate-fade-in">
-          <div className="bg-orange-50 text-orange-500 p-6 rounded-full mb-6">
+          <div className="bg-slate-50 text-slate-500 p-6 rounded-none mb-6">
             <Lock size={48} />
           </div>
           <h2 className="text-3xl font-bold text-slate-900 mb-3">Managerial Access Required</h2>
@@ -316,7 +316,7 @@ const App: React.FC = () => {
           </p>
           <button 
             onClick={() => setActiveTab('emp-dashboard')}
-            className="bg-blue-600 text-white px-6 py-2.5 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+            className="bg-slate-800 text-white px-6 py-2.5 rounded-sm font-medium hover:bg-slate-900 transition-colors"
           >
             Return to Dashboard
           </button>

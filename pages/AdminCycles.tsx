@@ -43,8 +43,8 @@ export const AdminCycles: React.FC = () => {
       id: 'baseline',
       name: 'The Baseline Assessment (Initial)',
       icon: Activity,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-50',
+      color: 'text-slate-800',
+      bgColor: 'bg-slate-50',
       when: 'Upon hiring, transferring to a new role, or moving to a new facility.',
       goal: 'Establish the baseline. You cannot manage what you have not measured. Even a 20-year veteran gets a baseline assessment to prove they meet your site\'s specific standards, not just their previous employer\'s.'
     },
@@ -52,8 +52,8 @@ export const AdminCycles: React.FC = () => {
       id: 'time-based',
       name: 'The Time-Based Cycle (The Matrix Standard)',
       icon: Calendar,
-      color: 'text-emerald-600',
-      bgColor: 'bg-emerald-50',
+      color: 'text-slate-600',
+      bgColor: 'bg-slate-50',
       when: 'Automated tracking based on criticality (High-Risk: 1-2 years, Medium-Risk: 3 years).',
       goal: 'Ensure continuous compliance. High-Risk tasks (e.g., PTW, LOTO, Confined Space) require frequent reassessment. Medium-Risk tasks (e.g., Pump alignment, RCA) are retained well if done regularly.'
     },
@@ -61,8 +61,8 @@ export const AdminCycles: React.FC = () => {
       id: 'event-driven',
       name: 'The Event-Driven Assessment (Triggered)',
       icon: Zap,
-      color: 'text-amber-600',
-      bgColor: 'bg-amber-50',
+      color: 'text-slate-600',
+      bgColor: 'bg-slate-50',
       when: 'Post-Incident, New Equipment/SOPs, or Prolonged Absence (6-12 months).',
       goal: 'Immediate reassessment based on specific events. Resets the clock before the standard 3-year mark to ensure safety and compliance after critical changes or incidents.'
     },
@@ -70,8 +70,8 @@ export const AdminCycles: React.FC = () => {
       id: 'behavioral',
       name: 'The Behavioral Cycle (360-Degree Evaluation)',
       icon: Users,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-50',
+      color: 'text-slate-600',
+      bgColor: 'bg-slate-50',
       when: 'Annually (often tied to standard performance review periods).',
       goal: 'Measure safety culture, teamwork, and communication. Lighter to execute than technical evidence, done yearly to track trends in leadership and attitude.'
     }
@@ -79,20 +79,20 @@ export const AdminCycles: React.FC = () => {
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
-      <div className="pb-6 border-b border-slate-200 flex justify-between items-end">
+      <div className="pb-6 border-b border-slate-300 flex justify-between items-end">
         <div>
           <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Evaluation Cycles Settings</h2>
           <p className="text-slate-700 text-sm mt-1">Configure and trigger the 4 Standard Evaluation Cycles.</p>
         </div>
-        <div className="bg-slate-100 p-2 rounded-lg border border-slate-200 flex items-center gap-2 text-sm text-slate-600 font-medium">
+        <div className="bg-slate-100 p-2 rounded-sm border border-slate-300 flex items-center gap-2 text-sm text-slate-600 font-medium">
           <Settings size={16} />
           <span>System Configured</span>
         </div>
       </div>
 
       {successMessage && (
-        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-lg flex items-center gap-3 animate-fade-in">
-          <CheckCircle size={20} className="text-emerald-600" />
+        <div className="bg-slate-50 border border-slate-200 text-slate-800 px-4 py-3 rounded-sm flex items-center gap-3 animate-fade-in">
+          <CheckCircle size={20} className="text-slate-600" />
           <p className="font-medium">{successMessage}</p>
         </div>
       )}
@@ -101,10 +101,10 @@ export const AdminCycles: React.FC = () => {
         {cycles.map((cycle) => {
           const Icon = cycle.icon;
           return (
-            <div key={cycle.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+            <div key={cycle.id} className="bg-white rounded-none  border border-slate-300 overflow-hidden flex flex-col">
               <div className="p-6 flex-grow">
                 <div className="flex items-center gap-4 mb-4">
-                  <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${cycle.bgColor} ${cycle.color}`}>
+                  <div className={`w-12 h-12 rounded-sm flex items-center justify-center ${cycle.bgColor} ${cycle.color}`}>
                     <Icon size={24} />
                   </div>
                   <h3 className="text-lg font-bold text-slate-900 leading-tight">{cycle.name}</h3>
@@ -128,11 +128,11 @@ export const AdminCycles: React.FC = () => {
                       <Settings size={14} /> Configuration
                     </h4>
                     {editingId !== cycle.id ? (
-                      <button onClick={() => setEditingId(cycle.id)} className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1">
+                      <button onClick={() => setEditingId(cycle.id)} className="text-xs text-slate-800 hover:text-slate-800 font-medium flex items-center gap-1">
                         <Edit3 size={12} /> Edit
                       </button>
                     ) : (
-                      <button onClick={() => handleSaveConfig(cycle.id)} className="text-xs text-emerald-600 hover:text-emerald-800 font-medium flex items-center gap-1">
+                      <button onClick={() => handleSaveConfig(cycle.id)} className="text-xs text-slate-600 hover:text-slate-800 font-medium flex items-center gap-1">
                         <Save size={12} /> Save
                       </button>
                     )}
@@ -146,7 +146,7 @@ export const AdminCycles: React.FC = () => {
                         disabled={editingId !== cycle.id}
                         value={configs['baseline'].triggers.join(', ')}
                         onChange={(e) => setConfigs({...configs, baseline: { triggers: e.target.value.split(',').map(s => s.trim()) }})}
-                        className="w-full text-sm border border-slate-300 rounded px-2 py-1.5 disabled:bg-slate-50 disabled:text-slate-500"
+                        className="w-full text-sm border border-slate-300 rounded-none px-2 py-1.5 disabled:bg-slate-50 disabled:text-slate-500"
                       />
                     </div>
                   )}
@@ -160,7 +160,7 @@ export const AdminCycles: React.FC = () => {
                           disabled={editingId !== cycle.id}
                           value={configs['time-based'].highRiskDuration}
                           onChange={(e) => setConfigs({...configs, 'time-based': { ...configs['time-based'], highRiskDuration: parseInt(e.target.value) }})}
-                          className="w-full text-sm border border-slate-300 rounded px-2 py-1.5 disabled:bg-slate-50 disabled:text-slate-500"
+                          className="w-full text-sm border border-slate-300 rounded-none px-2 py-1.5 disabled:bg-slate-50 disabled:text-slate-500"
                         />
                       </div>
                       <div>
@@ -170,7 +170,7 @@ export const AdminCycles: React.FC = () => {
                           disabled={editingId !== cycle.id}
                           value={configs['time-based'].mediumRiskDuration}
                           onChange={(e) => setConfigs({...configs, 'time-based': { ...configs['time-based'], mediumRiskDuration: parseInt(e.target.value) }})}
-                          className="w-full text-sm border border-slate-300 rounded px-2 py-1.5 disabled:bg-slate-50 disabled:text-slate-500"
+                          className="w-full text-sm border border-slate-300 rounded-none px-2 py-1.5 disabled:bg-slate-50 disabled:text-slate-500"
                         />
                       </div>
                     </div>
@@ -184,7 +184,7 @@ export const AdminCycles: React.FC = () => {
                         disabled={editingId !== cycle.id}
                         value={configs['event-driven'].triggers.join(', ')}
                         onChange={(e) => setConfigs({...configs, 'event-driven': { triggers: e.target.value.split(',').map(s => s.trim()) }})}
-                        className="w-full text-sm border border-slate-300 rounded px-2 py-1.5 disabled:bg-slate-50 disabled:text-slate-500"
+                        className="w-full text-sm border border-slate-300 rounded-none px-2 py-1.5 disabled:bg-slate-50 disabled:text-slate-500"
                       />
                     </div>
                   )}
@@ -198,7 +198,7 @@ export const AdminCycles: React.FC = () => {
                           disabled={editingId !== cycle.id}
                           value={configs['behavioral'].duration}
                           onChange={(e) => setConfigs({...configs, 'behavioral': { ...configs['behavioral'], duration: parseInt(e.target.value) }})}
-                          className="w-full text-sm border border-slate-300 rounded px-2 py-1.5 disabled:bg-slate-50 disabled:text-slate-500"
+                          className="w-full text-sm border border-slate-300 rounded-none px-2 py-1.5 disabled:bg-slate-50 disabled:text-slate-500"
                         />
                       </div>
                       <div>
@@ -208,7 +208,7 @@ export const AdminCycles: React.FC = () => {
                           disabled={editingId !== cycle.id}
                           value={configs['behavioral'].tiedTo}
                           onChange={(e) => setConfigs({...configs, 'behavioral': { ...configs['behavioral'], tiedTo: e.target.value }})}
-                          className="w-full text-sm border border-slate-300 rounded px-2 py-1.5 disabled:bg-slate-50 disabled:text-slate-500"
+                          className="w-full text-sm border border-slate-300 rounded-none px-2 py-1.5 disabled:bg-slate-50 disabled:text-slate-500"
                         />
                       </div>
                     </div>
@@ -216,11 +216,11 @@ export const AdminCycles: React.FC = () => {
                 </div>
               </div>
               
-              <div className="bg-slate-50 p-4 border-t border-slate-200 flex justify-end">
+              <div className="bg-slate-50 p-4 border-t border-slate-300 flex justify-end">
                 <button 
                   onClick={() => handleTrigger(cycle.name)}
                   disabled={activeCycle === cycle.name}
-                  className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 hover:text-slate-900 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 hover:text-slate-900 rounded-sm text-sm font-medium transition-colors disabled:opacity-50"
                 >
                   {activeCycle === cycle.name ? (
                     <>Processing...</>

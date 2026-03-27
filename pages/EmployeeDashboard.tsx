@@ -187,23 +187,23 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
         
         {/* Left Column: Profile Info */}
         <div className="lg:col-span-4 space-y-6">
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="h-32 bg-gradient-to-r from-blue-600 to-indigo-700"></div>
+          <div className="bg-white rounded-none  border border-slate-300 overflow-hidden">
+            <div className="h-32 bg-gradient-to-r from-slate-600 to-slate-700"></div>
             <div className="px-6 pb-6">
               <div className="relative -mt-16 mb-4">
-                <div className="w-32 h-32 rounded-2xl border-4 border-white bg-slate-100 overflow-hidden shadow-md">
+                <div className="w-32 h-32 rounded-none border-4 border-white bg-slate-100 overflow-hidden ">
                   <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
                 </div>
               </div>
               
               <div className="space-y-1">
                 <h2 className="text-2xl font-bold text-slate-900">{user.name}</h2>
-                <p className="text-blue-600 font-semibold">{jobProfile.title}</p>
+                <p className="text-slate-800 font-semibold">{jobProfile.title}</p>
                 <div className="flex items-center gap-2 mt-2">
-                  <span className="bg-blue-50 text-blue-700 px-2.5 py-0.5 rounded-full font-bold uppercase text-[10px] tracking-wider border border-blue-100">
+                  <span className="bg-slate-50 text-slate-900 px-2.5 py-0.5 rounded-none font-bold uppercase text-[10px] tracking-wider border border-slate-300">
                     Level {userLevel}
                   </span>
-                  <span className="bg-slate-50 text-slate-600 px-2.5 py-0.5 rounded-full font-bold uppercase text-[10px] tracking-wider border border-slate-100">
+                  <span className="bg-slate-50 text-slate-600 px-2.5 py-0.5 rounded-none font-bold uppercase text-[10px] tracking-wider border border-slate-100">
                     {user.role}
                   </span>
                 </div>
@@ -211,7 +211,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
 
               <div className="mt-8 space-y-4">
                 <div className="flex items-center gap-3 text-slate-600">
-                  <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400">
+                  <div className="w-8 h-8 rounded-sm bg-slate-50 flex items-center justify-center text-slate-400">
                     <Mail size={18} />
                   </div>
                   <div className="min-w-0">
@@ -221,7 +221,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                 </div>
 
                 <div className="flex items-center gap-3 text-slate-600">
-                  <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400">
+                  <div className="w-8 h-8 rounded-sm bg-slate-50 flex items-center justify-center text-slate-400">
                     <MapPin size={18} />
                   </div>
                   <div className="min-w-0">
@@ -231,7 +231,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                 </div>
 
                 <div className="flex items-center gap-3 text-slate-600">
-                  <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400">
+                  <div className="w-8 h-8 rounded-sm bg-slate-50 flex items-center justify-center text-slate-400">
                     <Briefcase size={18} />
                   </div>
                   <div className="min-w-0">
@@ -241,7 +241,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                 </div>
 
                 <div className="flex items-center gap-3 text-slate-600">
-                  <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400">
+                  <div className="w-8 h-8 rounded-sm bg-slate-50 flex items-center justify-center text-slate-400">
                     <UserIcon size={18} />
                   </div>
                   <div className="min-w-0">
@@ -254,16 +254,16 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
               <div className="mt-8 pt-6 border-t border-slate-100 grid grid-cols-2 gap-3">
                 <button 
                   onClick={handleExportReport}
-                  className="flex flex-col items-center justify-center p-3 rounded-xl border border-slate-100 bg-slate-50 hover:bg-white hover:border-blue-200 hover:shadow-sm transition-all group"
+                  className="flex flex-col items-center justify-center p-3 rounded-none border border-slate-100 bg-slate-50 hover:bg-white hover:border-slate-300 hover: transition-all group"
                 >
-                  <Download size={20} className="text-slate-400 group-hover:text-blue-600 mb-2" />
+                  <Download size={20} className="text-slate-400 group-hover:text-slate-800 mb-2" />
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Export CSV</span>
                 </button>
                 <button 
                   onClick={handleExportPlan}
-                  className="flex flex-col items-center justify-center p-3 rounded-xl border border-slate-100 bg-slate-50 hover:bg-white hover:border-blue-200 hover:shadow-sm transition-all group"
+                  className="flex flex-col items-center justify-center p-3 rounded-none border border-slate-100 bg-slate-50 hover:bg-white hover:border-slate-300 hover: transition-all group"
                 >
-                  <FileText size={20} className="text-slate-400 group-hover:text-blue-600 mb-2" />
+                  <FileText size={20} className="text-slate-400 group-hover:text-slate-800 mb-2" />
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Dev Plan</span>
                 </button>
               </div>
@@ -272,20 +272,20 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
 
           {/* Quick Stats Mini Cards */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
+            <div className="bg-white p-4 rounded-none  border border-slate-300">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Compliance</p>
               <div className="flex items-end gap-1">
                 <span className="text-2xl font-bold text-slate-900">
                   {skillAnalysis.length > 0 ? Math.round((compliant.length / skillAnalysis.length) * 100) : 0}%
                 </span>
-                <TrendingUp size={16} className="text-emerald-500 mb-1" />
+                <TrendingUp size={16} className="text-slate-500 mb-1" />
               </div>
             </div>
-            <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
+            <div className="bg-white p-4 rounded-none  border border-slate-300">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Gaps</p>
               <div className="flex items-end gap-1">
                 <span className="text-2xl font-bold text-slate-900">{gaps.length}</span>
-                <AlertCircle size={16} className="text-amber-500 mb-1" />
+                <AlertCircle size={16} className="text-slate-500 mb-1" />
               </div>
             </div>
           </div>
@@ -295,10 +295,10 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
         <div className="lg:col-span-8 space-y-8">
           
           {/* Certificates Section */}
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+          <div className="bg-white p-6 rounded-none  border border-slate-300">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-2">
-                <Award size={20} className="text-blue-600" />
+                <Award size={20} className="text-slate-800" />
                 <h3 className="font-bold text-slate-900">Certificates Achieved</h3>
               </div>
               <span className="text-xs font-medium text-slate-500">{user.certificates?.length || 0} Total</span>
@@ -307,8 +307,8 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
             {user.certificates && user.certificates.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {user.certificates.map(cert => (
-                  <div key={cert.id} className="p-4 border border-slate-100 rounded-xl bg-slate-50/50 flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 shrink-0">
+                  <div key={cert.id} className="p-4 border border-slate-100 rounded-none bg-slate-50/50 flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-sm bg-slate-200 flex items-center justify-center text-slate-800 shrink-0">
                       <ShieldCheck size={20} />
                     </div>
                     <div className="min-w-0">
@@ -320,7 +320,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                 ))}
               </div>
             ) : (
-              <div className="p-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
+              <div className="p-8 text-center bg-slate-50 rounded-none border border-dashed border-slate-300">
                 <Award size={32} className="mx-auto text-slate-300 mb-3" />
                 <p className="text-sm text-slate-500 font-medium">No professional certificates recorded yet.</p>
               </div>
@@ -328,19 +328,19 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
           </div>
 
           {/* Job Fit Analysis Section */}
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+          <div className="bg-white p-6 rounded-none  border border-slate-300">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-2">
-                <Target size={20} className="text-emerald-600" />
+                <Target size={20} className="text-slate-600" />
                 <h3 className="font-bold text-slate-900">Job Fit Analysis</h3>
               </div>
-              <div className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-100">
+              <div className="px-3 py-1 rounded-none bg-slate-50 text-slate-700 text-xs font-bold border border-slate-100">
                 {skillAnalysis.length > 0 ? Math.round((compliant.length / skillAnalysis.length) * 100) : 0}% Match
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
+              <div className="p-4 rounded-none bg-slate-50 border border-slate-100">
                 <div className="flex items-center gap-2 mb-2 text-slate-500">
                   <ShieldCheck size={16} />
                   <span className="text-[10px] font-bold uppercase tracking-wider">Certificates</span>
@@ -348,7 +348,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                 <p className="text-xl font-bold text-slate-900">{user.certificates?.length || 0}</p>
                 <p className="text-[10px] text-slate-500 mt-1">Professional Validations</p>
               </div>
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
+              <div className="p-4 rounded-none bg-slate-50 border border-slate-100">
                 <div className="flex items-center gap-2 mb-2 text-slate-500">
                   <Zap size={16} />
                   <span className="text-[10px] font-bold uppercase tracking-wider">Assessments</span>
@@ -360,19 +360,19 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
           </div>
 
           {/* Skill Profile Section */}
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+          <div className="bg-white p-6 rounded-none  border border-slate-300">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-2">
-                <Activity size={20} className="text-blue-600" />
+                <Activity size={20} className="text-slate-800" />
                 <h3 className="font-bold text-slate-900">Competency Profile</h3>
               </div>
               <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-wider">
                 <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                  <div className="w-2 h-2 rounded-none bg-slate-800"></div>
                   <span className="text-slate-500">Current</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full bg-slate-200"></div>
+                  <div className="w-2 h-2 rounded-none bg-slate-200"></div>
                   <span className="text-slate-500">Target</span>
                 </div>
               </div>
@@ -384,19 +384,19 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                   <div className="flex justify-between items-start">
                     <div>
                       <h4 className="font-bold text-slate-800 text-sm">{s.skill?.name}</h4>
-                      <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">{s.skill?.category}</p>
+                      <p className="text-[10px] font-bold text-slate-800 uppercase tracking-wider">{s.skill?.category}</p>
                     </div>
                     <div className="text-right">
                       <span className="text-xs font-bold text-slate-900">{s.current} / {s.required}</span>
                     </div>
                   </div>
-                  <div className="relative h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="relative h-2 bg-slate-100 rounded-none overflow-hidden">
                     <div 
-                      className="absolute top-0 left-0 h-full bg-slate-200 rounded-full" 
+                      className="absolute top-0 left-0 h-full bg-slate-200 rounded-none" 
                       style={{ width: `${(s.required / 5) * 100}%` }}
                     ></div>
                     <div 
-                      className={`absolute top-0 left-0 h-full rounded-full transition-all duration-500 ${s.current >= s.required ? 'bg-emerald-500' : 'bg-blue-500'}`} 
+                      className={`absolute top-0 left-0 h-full rounded-none transition-all duration-500 ${s.current >= s.required ? 'bg-slate-500' : 'bg-slate-800'}`} 
                       style={{ width: `${(s.current / 5) * 100}%` }}
                     ></div>
                   </div>
@@ -406,15 +406,15 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
           </div>
 
           {/* Individual Training Plan (ITP) Section */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="bg-white rounded-none  border border-slate-300 overflow-hidden">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
               <div className="flex items-center gap-2">
-                <TrendingUp size={20} className="text-blue-600" />
+                <TrendingUp size={20} className="text-slate-800" />
                 <h3 className="font-bold text-slate-900">Individual Training Plan (ITP)</h3>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Plan ID: {itp?.userId.split('_')[1] || 'NEW'}</span>
-                <span className="bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">Active</span>
+                <span className="bg-slate-800 text-white text-[10px] font-bold px-2 py-0.5 rounded-none uppercase tracking-wider">Active</span>
               </div>
             </div>
             
@@ -423,14 +423,14 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                 <div className="space-y-6">
                   {itp.recommendations.map((rec, idx) => (
                     <div key={idx} className="relative pl-6 border-l-2 border-slate-100 pb-6 last:pb-0">
-                      <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-white shadow-sm ${rec.priority === 'HIGH' ? 'bg-red-500' : 'bg-blue-500'}`}></div>
+                      <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-none border-2 border-white  ${rec.priority === 'HIGH' ? 'bg-slate-500' : 'bg-slate-800'}`}></div>
                       
                       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-3">
                         <div>
                           <div className="flex items-center gap-2">
                             <h4 className="font-bold text-slate-900">{rec.skillName}</h4>
                             {rec.priority === 'HIGH' && (
-                              <span className="bg-red-50 text-red-600 text-[9px] font-bold px-1.5 py-0.5 rounded border border-red-100 uppercase tracking-tighter">Critical Gap</span>
+                              <span className="bg-slate-50 text-slate-600 text-[9px] font-bold px-1.5 py-0.5 rounded-none border border-slate-100 uppercase tracking-tighter">Critical Gap</span>
                             )}
                           </div>
                           <p className="text-xs text-slate-500 mt-0.5">Recommendation: {rec.recommendation}</p>
@@ -444,7 +444,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                 </div>
               ) : (
                 <div className="py-12 text-center">
-                  <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <div className="w-16 h-16 bg-slate-50 text-slate-600 rounded-none flex items-center justify-center mx-auto mb-4">
                     <CheckCircle size={32} />
                   </div>
                   <h4 className="text-lg font-bold text-slate-900">No Training Required</h4>
@@ -459,10 +459,10 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
           </div>
 
           {/* Career Path & Development Plan Section */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="bg-white rounded-none  border border-slate-300 overflow-hidden">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
               <div className="flex items-center gap-2">
-                <GraduationCap size={20} className="text-indigo-600" />
+                <GraduationCap size={20} className="text-slate-600" />
                 <h3 className="font-bold text-slate-900">Career Path & Development Plan</h3>
               </div>
             </div>
@@ -472,19 +472,19 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                 <div className="space-y-8">
                   {careerPath.map((step, idx) => (
                     <div key={idx} className="relative pl-8 border-l-2 border-slate-100 pb-8 last:pb-0">
-                      <div className={`absolute -left-[11px] top-0 w-5 h-5 rounded-full border-4 border-white shadow-sm flex items-center justify-center ${step.status === 'CURRENT' ? 'bg-emerald-500' : 'bg-indigo-500'}`}>
-                        {step.status === 'CURRENT' && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}
+                      <div className={`absolute -left-[11px] top-0 w-5 h-5 rounded-none border-4 border-white  flex items-center justify-center ${step.status === 'CURRENT' ? 'bg-slate-500' : 'bg-slate-500'}`}>
+                        {step.status === 'CURRENT' && <div className="w-1.5 h-1.5 bg-white rounded-none"></div>}
                       </div>
                       
                       <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 -mt-1">
                         <div>
                           <div className="flex items-center gap-2 mb-1">
                             <h4 className="font-bold text-slate-900 text-lg">{step.title}</h4>
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${step.status === 'CURRENT' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-indigo-50 text-indigo-700 border border-indigo-100'}`}>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-none uppercase tracking-wider ${step.status === 'CURRENT' ? 'bg-slate-50 text-slate-700 border border-slate-100' : 'bg-slate-50 text-slate-700 border border-slate-100'}`}>
                               {step.level}
                             </span>
                             {step.status === 'CURRENT' && (
-                              <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">Current Role</span>
+                              <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded-none uppercase tracking-wider">Current Role</span>
                             )}
                           </div>
                           
@@ -501,7 +501,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                           </div>
                         </div>
                         <div className="text-right shrink-0">
-                          <div className="inline-flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
+                          <div className="inline-flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-sm border border-slate-100">
                             <Calendar size={14} className="text-slate-400" />
                             <span className="text-sm font-bold text-slate-700">{step.year}</span>
                           </div>
@@ -512,7 +512,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                 </div>
               ) : (
                 <div className="py-12 text-center">
-                  <div className="w-16 h-16 bg-slate-50 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <div className="w-16 h-16 bg-slate-50 text-slate-400 rounded-none flex items-center justify-center mx-auto mb-4">
                     <Activity size={32} />
                   </div>
                   <h4 className="text-lg font-bold text-slate-900">Career Path Unavailable</h4>
