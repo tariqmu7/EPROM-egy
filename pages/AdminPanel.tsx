@@ -345,7 +345,8 @@ const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void,
                         label="System Role"
                         options={[
                             { value: Role.EMPLOYEE, label: 'Employee' },
-                            { value: Role.ADMIN, label: 'Admin' }
+                            { value: Role.ADMIN, label: 'Admin' },
+                            { value: Role.CEO, label: 'CEO' }
                         ]}
                         value={formData.role || Role.EMPLOYEE} 
                         onChange={val => setFormData({...formData, role: val as Role})}
@@ -365,14 +366,16 @@ const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void,
                         options={generalDeptOptions}
                         value={formData.generalDepartmentId || ''}
                         onChange={handleGeneralDeptChange}
-                        placeholder="Select General Department..."
+                        placeholder={formData.role === Role.CEO ? "Optional for CEO..." : "Select General Department..."}
+                        disabled={formData.role === Role.CEO}
                     />
                     <SearchableSelect 
                         label="Direct Department / Section"
                         options={deptOptions}
                         value={formData.departmentId || ''}
                         onChange={handleDepartmentChange}
-                        placeholder="Select Specific Department..."
+                        placeholder={formData.role === Role.CEO ? "Optional for CEO..." : "Select Specific Department..."}
+                        disabled={formData.role === Role.CEO}
                     />
                     <div className="md:col-span-2">
                         <SearchableSelect 
@@ -497,10 +500,25 @@ const JobForm: React.FC<{ initialData?: JobProfile | null, onSave: (j: JobProfil
   return (
     <form onSubmit={handleSubmit} className="p-8 space-y-8 bg-white text-sm">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="md:col-span-2 bg-slate-50 p-4 border border-slate-200 rounded-none mb-2">
+            <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-1">Auto-Generated Identifier</p>
+            <div className="flex items-center gap-2">
+                <span className="text-xl font-black text-blue-700 tracking-tight">
+                    {dataService.generateJobProfileCode({ 
+                        title: formData.title || 'Untitled', 
+                        departmentId: formData.departmentId || '',
+                        description: '',
+                        requirements: {},
+                        id: ''
+                    })}
+                </span>
+                <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-none font-bold uppercase">System Reference</span>
+            </div>
+        </div>
         <div>
           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Job Title</label>
-          <input required className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none" 
-            value={formData.title || ''} onChange={e => setFormData({...formData, title: e.target.value})} />
+          <input required className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none transition-all" 
+            value={formData.title || ''} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="e.g. Mechanical Engineer"/>
         </div>
         <SearchableSelect label="Department" options={deptOptions} value={formData.departmentId || ''} onChange={val => setFormData({...formData, departmentId: val})} />
         <div className="md:col-span-2">
@@ -698,10 +716,25 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
   return (
     <form onSubmit={handleSubmit} className="p-8 space-y-8 bg-white text-sm">
        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="md:col-span-2 bg-slate-50 p-4 border border-slate-200 rounded-none mb-2">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-1">Auto-Generated Identifier</p>
+              <div className="flex items-center gap-2">
+                  <span className="text-xl font-black text-blue-700 tracking-tight">
+                      {dataService.generateSkillCode({ 
+                          name: formData.name || 'Untitled', 
+                          category: formData.category || 'General',
+                          id: '',
+                          levels: {},
+                          assessmentMethod: '360_EVALUATION'
+                      })}
+                  </span>
+                  <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-none font-bold uppercase">System Reference</span>
+              </div>
+          </div>
          <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Skill Name</label>
-            <input required className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none"
-               value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
+            <input required className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none transition-all"
+               value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="e.g. Project Management"/>
          </div>
          <div>
             <SearchableSelect 
@@ -1030,12 +1063,18 @@ const DepartmentNode: React.FC<{
     const childrenByParent = allDepts.filter(d => d.parentId === dept.id || (!d.parentId && (dept as any).isRoot));
     
     // Find users directly in this department
-    const deptUsers = allUsers.filter(u => u.departmentId === dept.id);
+    // SPECIAL CASE: CEO-role users appear at the ROOT of the company tree
+    const deptUsers = (dept as any).isRoot 
+        ? allUsers.filter(u => u.role === Role.CEO)
+        : allUsers.filter(u => u.departmentId === dept.id);
+        
     const deptJobs = allJobs.filter(j => j.departmentId === dept.id);
 
     // To prevent duplicate rendering, only show departments here if:
     // 1. They have no manager assigned.
-    // 2. OR their manager is NOT in this department's personnel structure (i.e. we aren't rendering that manager right now)
+    // 2. OR their manager is NOT in this department's personnel structure
+    // Special case for Root: show all top-level depts that aren't managed by a CEO here 
+    // (most top-level depts like 'GENERAL' depts are managed by GMs, who are NOT in the ROOT personnel)
     const unmanagedUnits = childrenByParent.filter(d => 
         !d.managerId || !deptUsers.some(u => u.id === d.managerId)
     );
@@ -1559,6 +1598,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
     return jobs.filter(job => 
       searchTerm === '' ||
       job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (job.code || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (depts.find(d => d.id === job.departmentId)?.name || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [jobs, searchTerm, depts]);
@@ -1567,6 +1607,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
     return skills.filter(skill => {
       const matchesSearch = searchTerm === '' ||
         skill.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (skill.code || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         skill.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (skill.assessmentQuestion || '').toLowerCase().includes(searchTerm.toLowerCase());
       
@@ -2038,8 +2079,8 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                        <thead className="bg-slate-50 text-slate-700 font-bold text-xs uppercase tracking-wider border-b border-slate-300">
                            <tr>
                                {view === 'USERS' && <><th className="p-4 pl-6">Employee</th><th className="p-4">Role & Dept</th><th className="p-4">Level</th><th className="p-4">Status</th></>}
-                               {view === 'JOBS' && <><th className="p-4 pl-6">Job Title</th><th className="p-4">Department</th><th className="p-4">Complexity</th></>}
-                               {view === 'SKILLS' && <><th className="p-4 pl-6">Skill Name</th><th className="p-4">Category</th><th className="p-4">Definition</th><th className="p-4">Status</th></>}
+                               {view === 'JOBS' && <><th className="p-4 pl-6">Identifier</th><th className="p-4">Job Title</th><th className="p-4">Department</th><th className="p-4">Complexity</th></>}
+                               {view === 'SKILLS' && <><th className="p-4 pl-6">Identifier</th><th className="p-4">Skill Name</th><th className="p-4">Category</th><th className="p-4">Definition</th><th className="p-4">Status</th></>}
                                <th className="p-4 text-right pr-6">Actions</th>
                            </tr>
                        </thead>
@@ -2084,7 +2125,12 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                                </tr>
                            ))}{view === 'JOBS' && filteredJobs.map(job => (
                                <tr key={job.id} className="hover:bg-slate-50 transition-colors group">
-                                   <td className="p-4 pl-6 font-bold text-slate-900 group-hover:text-slate-900">{job.title}</td>
+                                   <td className="p-4 pl-6">
+                                       <span className="px-2 py-1 bg-blue-50 text-blue-700 border border-blue-100 rounded-none text-[10px] font-black uppercase tracking-widest leading-none">
+                                           {job.code || 'N/A'}
+                                       </span>
+                                   </td>
+                                   <td className="p-4 font-bold text-slate-900 group-hover:text-blue-700 transition-colors">{job.title}</td>
                                    <td className="p-4 text-slate-600">{depts.find(d => d.id === job.departmentId)?.name}</td>
                                    <td className="p-4">
                                        <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded-none text-[10px] font-bold uppercase tracking-wide">{Object.keys(job.requirements).length} Levels Configured</span>
@@ -2098,7 +2144,12 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                                </tr>
                            ))}{view === 'SKILLS' && filteredSkills.map(skill => (
                                <tr key={skill.id} className="hover:bg-slate-50 transition-colors group">
-                                   <td className="p-4 pl-6 font-bold text-slate-900 group-hover:text-slate-900">{skill.name}</td>
+                                   <td className="p-4 pl-6">
+                                       <span className="px-2 py-1 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-none text-[10px] font-black uppercase tracking-widest leading-none">
+                                           {skill.code || 'N/A'}
+                                       </span>
+                                   </td>
+                                   <td className="p-4 font-bold text-slate-900 group-hover:text-blue-700 transition-colors">{skill.name}</td>
                                    <td className="p-4">
                                        <span className="px-2 py-1 bg-slate-50 text-slate-900 border border-slate-300 rounded-none text-[10px] font-bold uppercase tracking-wide">{skill.category}</span>
                                    </td>

@@ -185,11 +185,16 @@ class DataService {
             }
           }
 
-          return {
+          const job = {
             id: doc.id,
             ...data,
             requirements
           } as JobProfile;
+
+          if (!job.code) {
+            job.code = this.generateJobProfileCode(job);
+          }
+          return job;
         });
       }, this.handleError('jobProfiles'))
     );
@@ -199,11 +204,16 @@ class DataService {
       onSnapshot(collection(db, 'skills'), (snapshot) => {
         this.skills = snapshot.docs.map(doc => {
           const data = doc.data();
-          return {
+          const skill = {
             id: doc.id,
             ...data,
             levels: data.levels ? JSON.parse(data.levels) : {}
           } as Skill;
+
+          if (!skill.code) {
+            skill.code = this.generateSkillCode(skill);
+          }
+          return skill;
         });
       }, this.handleError('skills'))
     );
@@ -634,7 +644,7 @@ class DataService {
 
   // --- HIERARCHY & ROLES ---
   isManager(user: User): boolean {
-    if (user.role === Role.ADMIN) return true;
+    if (user.role === Role.ADMIN || user.role === Role.CEO) return true;
     
     // If the employee officially has subordinates they are automatically a manager
     const hasSubordinates = this.users.some(u => u.managerId === user.id);
@@ -1044,13 +1054,45 @@ class DataService {
   }
 
   async addSkill(skill: Skill) { 
+    if (!skill.code) {
+        skill.code = this.generateSkillCode(skill);
+    }
     await this.persistItem('skills', skill);
     await this.logActivity('Defined New Skill', skill.name);
   }
   
+  public generateSkillCode(skill: Skill): string {
+    const catPrefix = (skill.category || 'GEN').substring(0, 3).toUpperCase();
+    const namePrefix = (skill.name || 'SKL').replace(/\s+/g, '').substring(0, 3).toUpperCase();
+    
+    // Count existing skills with this prefix to get a sequential index
+    const existingCount = this.skills.filter(s => s.code?.startsWith(`${catPrefix}-${namePrefix}`)).length;
+    const index = (existingCount + 1).toString().padStart(2, '0');
+    
+    return `${catPrefix}-${namePrefix}-${index}`;
+  }
+
   async addJobProfile(job: JobProfile) { 
+    if (!job.code) {
+        job.code = this.generateJobProfileCode(job);
+    }
     await this.persistItem('jobProfiles', job);
     await this.logActivity('Created Job Profile', job.title);
+  }
+
+  public generateJobProfileCode(job: JobProfile): string {
+    const dept = this.departments.find(d => d.id === job.departmentId);
+    const deptPrefix = (dept?.name || 'GEN').substring(0, 3).toUpperCase();
+    
+    // Title Initials (e.g., "Department Manager" -> "DM")
+    const titleInitials = job.title
+        .split(/\s+/)
+        .map(word => word[0])
+        .join('')
+        .toUpperCase()
+        .substring(0, 4); // Keep it reasonable
+        
+    return `${deptPrefix}-${titleInitials}`;
   }
   
   async addUser(user: User) { 

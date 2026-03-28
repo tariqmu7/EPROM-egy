@@ -1,15 +1,17 @@
 
 export enum Role {
   ADMIN = 'ADMIN',
-  EMPLOYEE = 'EMPLOYEE'
+  EMPLOYEE = 'EMPLOYEE',
+  CEO = 'CEO'
 }
 
 export type UserStatus = 'ACTIVE' | 'PENDING' | 'REJECTED';
 
-// The 7 specific hierarchy levels requested
-export type OrgLevel = 'GM' | 'AGM' | 'DM' | 'SH' | 'SP' | 'JP' | 'FR';
+// Org Hierarchy tiers
+export type OrgLevel = 'CEO' | 'GM' | 'AGM' | 'DM' | 'SH' | 'SP' | 'JP' | 'FR';
 
 export const ORG_LEVEL_LABELS: Record<OrgLevel, string> = {
+  'CEO': 'Chief Executive Officer',
   'GM': 'General Manager',
   'AGM': 'Assistant General Manager',
   'DM': 'Department Manager',
@@ -20,7 +22,7 @@ export const ORG_LEVEL_LABELS: Record<OrgLevel, string> = {
 };
 
 // Strict Hierarchy Order (Top to Bottom)
-export const ORG_HIERARCHY_ORDER: OrgLevel[] = ['GM', 'AGM', 'DM', 'SH', 'SP', 'JP', 'FR'];
+export const ORG_HIERARCHY_ORDER: OrgLevel[] = ['CEO', 'GM', 'AGM', 'DM', 'SH', 'SP', 'JP', 'FR'];
 
 export const PROFICIENCY_LABELS: Record<number, string> = {
   1: 'Awareness',
@@ -45,6 +47,7 @@ export interface Skill {
   status?: 'APPROVED' | 'PENDING';
   assessmentMethod: '360_EVALUATION' | 'DOCUMENT_UPLOAD' | 'ONLINE_ASSESSMENT' | 'INTERVIEW';
   assessmentLink?: string; // Used specifically for ONLINE_ASSESSMENT to link to external forms
+  code?: string; // Automatically generated professional identifier
 }
 
 export interface JobProfileSkill {
@@ -59,6 +62,7 @@ export interface JobProfile {
   departmentId: string;
   // Requirements mapped by OrgLevel (e.g., 'FR' -> skills for freshers)
   requirements: Partial<Record<OrgLevel, JobProfileSkill[]>>;
+  code?: string; // Automatically generated professional identifier
 }
 
 export type DepartmentType = 'GENERAL' | 'DEPARTMENT' | 'SECTION';

@@ -57,9 +57,12 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
                   <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="admin-dashboard" label="Overview" icon={LayoutDashboard} />
                   <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="admin-analytics" label="Analytics" icon={Activity} />
                   <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="admin-cycles" label="Cycles" icon={Calendar} />
-                  <div className="ml-2">
-                    <NotificationBell user={user} onNavigate={onSwitchTab} />
-                  </div>
+                </>
+              ) : user.role === Role.CEO ? (
+                <>
+                  <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="ceo-dashboard" label="Organization" icon={LayoutDashboard} />
+                  <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="admin-depts" label="Org Structure" icon={Building2} />
+                  <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="emp-dashboard" label="My Profile" icon={UserCircle} />
                 </>
               ) : (
                 <>
@@ -83,7 +86,7 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
                 <div className="text-right hidden sm:block">
                     <p className="text-sm font-bold text-slate-900 leading-none">{user.name}</p>
                     <p className="text-[10px] text-slate-700 uppercase mt-1">
-                        {user.role === Role.ADMIN ? 'Administrator' : (user.orgLevel ? ORG_LEVEL_LABELS[user.orgLevel] : 'Employee')}
+                        {user.role === Role.ADMIN ? 'Administrator' : (user.role === Role.CEO ? 'CEO' : (user.orgLevel ? ORG_LEVEL_LABELS[user.orgLevel] : 'Employee'))}
                     </p>
                 </div>
                 <div className="w-10 h-10 rounded-none bg-slate-100 border border-slate-300 flex items-center justify-center overflow-hidden  text-slate-700">

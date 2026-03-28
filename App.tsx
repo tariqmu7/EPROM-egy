@@ -3,20 +3,21 @@ import { Layout } from './components/Layout';
 import { EmployeeDashboard } from './pages/EmployeeDashboard';
 import { ManagerDashboard } from './pages/ManagerDashboard';
 import { AdminPanel } from './pages/AdminPanel';
+import { CEOPanel } from './pages/CEOPanel';
 import { EvidencePortal } from './pages/EvidencePortal';
 import { BehavioralAssessment } from './pages/BehavioralAssessment';
 import { Logo } from './components/Logo';
 import { dataService, CONFIG } from './services/store';
 import { User, Role } from './types';
-import { ShieldCheck, Loader2, Lock, User as UserIcon, CheckCircle, ArrowRight, Activity, X } from 'lucide-react';
+import { ShieldCheck, Loader2, Lock, User as UserIcon, CheckCircle, ArrowRight, Activity, X, ArrowLeft } from 'lucide-react';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   
-  // Auth State
   const [isLoginMode, setIsLoginMode] = useState(true);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
-  const [email, setEmail] = useState('');
+  const [selectedProfileUserId, setSelectedProfileUserId] = useState<string | null>(null);
+    const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [signupSuccess, setSignupSuccess] = useState(false);
@@ -37,6 +38,8 @@ const App: React.FC = () => {
           // Set default tab based on role
           if (currentUser.role === Role.ADMIN) {
               setActiveTab('admin-dashboard');
+          } else if (currentUser.role === Role.CEO) {
+              setActiveTab('ceo-dashboard');
           } else if (dataService.isManager(currentUser)) {
               setActiveTab('manager-dashboard');
           } else {
@@ -70,6 +73,8 @@ const App: React.FC = () => {
                 // Set default tab based on role
                 if (result.user.role === Role.ADMIN) {
                     setActiveTab('admin-dashboard');
+                } else if (result.user.role === Role.CEO) {
+                    setActiveTab('ceo-dashboard');
                 } else if (dataService.isManager(result.user)) {
                     setActiveTab('manager-dashboard');
                 } else {
@@ -341,7 +346,8 @@ const App: React.FC = () => {
   // Router Logic
   const renderContent = () => {
     // Role Validation
-    if (activeTab.startsWith('admin-') && user.role !== Role.ADMIN) {
+    // CEO can access admin-depts (Org Structure)
+    if (activeTab.startsWith('admin-') && user.role !== Role.ADMIN && user.role !== Role.CEO) {
       return (
         <div className="flex flex-col items-center justify-center h-[60vh] p-12 text-center animate-fade-in">
           <div className="bg-slate-50 text-slate-500 p-6 rounded-none mb-6">
@@ -383,6 +389,37 @@ const App: React.FC = () => {
 
     switch(activeTab) {
         case 'emp-dashboard': return <EmployeeDashboard user={user} />;
+        case 'ceo-dashboard': return (
+            <CEOPanel 
+                currentUser={user} 
+                onViewProfile={(id) => {
+                    setSelectedProfileUserId(id);
+                    setActiveTab('ceo-view-profile');
+                }} 
+            />
+        );
+        case 'ceo-view-profile':
+            const targetUser = dataService.getUserById(selectedProfileUserId || '');
+            if (!targetUser) return (
+                <CEOPanel 
+                    currentUser={user} 
+                    onViewProfile={(id) => {
+                        setSelectedProfileUserId(id);
+                        setActiveTab('ceo-view-profile');
+                    }} 
+                />
+            );
+            return (
+                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                    <button 
+                        onClick={() => setActiveTab('ceo-dashboard')}
+                        className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 font-black text-[10px] uppercase tracking-widest hover:bg-slate-900 hover:text-white transition-all shadow-sm"
+                    >
+                        <ArrowLeft size={14} /> Back to Dashboard
+                    </button>
+                    <EmployeeDashboard user={targetUser} />
+                </div>
+            );
         case 'manager-dashboard': return <ManagerDashboard user={user} />;
         case 'emp-assessment': return <BehavioralAssessment currentUser={user} />;
         case 'evidence-portal': return <EvidencePortal currentUser={user} />;
