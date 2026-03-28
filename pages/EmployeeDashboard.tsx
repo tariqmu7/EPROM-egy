@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { User, JobProfile, Skill, IndividualTrainingPlan, ORG_HIERARCHY_ORDER, ORG_LEVEL_LABELS } from '../types';
 import { dataService } from '../services/store';
 import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Tooltip, BarChart, CartesianGrid, XAxis, YAxis, Bar, Legend, Cell } from 'recharts';
-import { AlertCircle, CheckCircle, Award, BookOpen, Activity, TrendingUp, Users, PlayCircle, Calendar, ArrowRight, Download, FileText, Mail, Briefcase, MapPin, User as UserIcon, ShieldCheck, GraduationCap, Target, Zap, Camera } from 'lucide-react';
+import { AlertCircle, CheckCircle, Award, BookOpen, Activity, TrendingUp, Users, PlayCircle, Calendar, ArrowRight, Download, FileText, Mail, Briefcase, MapPin, User as UserIcon, ShieldCheck, GraduationCap, Target, Zap, Camera, Phone, MessageSquare, Building, BadgeCheck, Clock, XCircle, Layers, Shield, LayoutGrid, UserCheck, Building2 } from 'lucide-react';
 import { auth } from '../firebase';
 
 interface EmployeeDashboardProps {
@@ -12,7 +12,21 @@ interface EmployeeDashboardProps {
 export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({ user }) => {
   const jobProfile = useMemo(() => user.jobProfileId ? dataService.getJobProfile(user.jobProfileId) : null, [user.jobProfileId]);
   const userLevel = user.orgLevel;
-  const department = useMemo(() => dataService.getAllDepartments().find(d => d.id === user.departmentId), [user.departmentId]);
+  
+  // Department Hierarchy
+  const depts = useMemo(() => dataService.getAllDepartments(), []);
+  const directDepartment = useMemo(() => depts.find(d => d.id === user.departmentId), [depts, user.departmentId]);
+  const mainDepartment = useMemo(() => {
+    if (!user.departmentId) return null;
+    const findRoot = (id: string): any => {
+      const d = depts.find(dept => dept.id === id);
+      if (!d) return null;
+      if (!d.parentId) return d;
+      return findRoot(d.parentId);
+    };
+    return findRoot(user.departmentId);
+  }, [depts, user.departmentId]);
+
   const manager = useMemo(() => user.managerId ? dataService.getUserById(user.managerId) : null, [user.managerId]);
 
   const itp = useMemo(() => dataService.generateIndividualTrainingPlan(user.id), [user.id]);
@@ -172,12 +186,30 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
         
         {/* Left Column: Profile Info */}
         <div className="lg:col-span-4 space-y-6">
-          <div className="bg-white rounded-none  border border-slate-300 overflow-hidden">
-            <div className="h-32 bg-gradient-to-r from-slate-600 to-slate-700"></div>
-            <div className="px-6 pb-6">
-              <div className="relative -mt-16 mb-4">
+          <div className="bg-white rounded-none border border-slate-300 overflow-hidden shadow-sm">
+            {/* Header / Avatar */}
+            <div className="h-32 bg-slate-900 flex items-end justify-end p-4">
+              <div className="flex gap-2 mb-2">
+                {user.status === 'ACTIVE' ? (
+                  <span className="bg-emerald-500/10 text-emerald-400 text-[10px] font-bold px-3 py-1 border border-emerald-500/20 backdrop-blur-md uppercase tracking-widest flex items-center gap-1.5">
+                    <BadgeCheck size={12} /> Active
+                  </span>
+                ) : user.status === 'REJECTED' ? (
+                  <span className="bg-red-500/10 text-red-400 text-[10px] font-bold px-3 py-1 border border-red-500/20 backdrop-blur-md uppercase tracking-widest flex items-center gap-1.5">
+                    <XCircle size={12} /> Deactivated
+                  </span>
+                ) : (
+                  <span className="bg-amber-500/10 text-amber-400 text-[10px] font-bold px-3 py-1 border border-amber-500/20 backdrop-blur-md uppercase tracking-widest flex items-center gap-1.5">
+                    <Clock size={12} /> Pending Approval
+                  </span>
+                )}
+              </div>
+            </div>
+            
+            <div className="px-8 pb-8">
+              <div className="relative -mt-16 mb-6">
                 <div 
-                  className={`relative w-32 h-32 rounded-none border-4 border-white bg-slate-100 overflow-hidden group ${isOwner ? 'cursor-pointer' : ''}`}
+                  className={`relative w-32 h-32 rounded-none border-4 border-white bg-slate-100 overflow-hidden group shadow-lg ${isOwner ? 'cursor-pointer' : ''}`}
                   onClick={() => isOwner && fileInputRef.current?.click()}
                 >
                   <img src={user.avatarUrl} alt={user.name} className={`w-full h-full object-cover transition-opacity ${isUploading ? 'opacity-50' : 'opacity-100'}`} />
@@ -204,75 +236,143 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                 )}
               </div>
               
-              <div className="space-y-1">
-                <h2 className="text-2xl font-bold text-slate-900">{user.name}</h2>
-                <p className="text-slate-800 font-semibold">{jobProfile.title}</p>
-                <div className="flex items-center gap-2 mt-2">
-                  <span className="bg-slate-50 text-slate-900 px-2.5 py-0.5 rounded-none font-bold uppercase text-[10px] tracking-wider border border-slate-300">
-                    Level {userLevel}
-                  </span>
-                  <span className="bg-slate-50 text-slate-600 px-2.5 py-0.5 rounded-none font-bold uppercase text-[10px] tracking-wider border border-slate-100">
-                    {user.role}
-                  </span>
+              <div className="space-y-1 mb-8">
+                <h2 className="text-2xl font-black text-slate-900 tracking-tight uppercase">{user.name}</h2>
+                <div className="flex items-center gap-2 text-slate-600 font-bold uppercase text-[11px] tracking-widest">
+                  <Briefcase size={14} className="text-slate-400" /> {jobProfile?.title || 'No Job Profile Asset'}
                 </div>
               </div>
 
-              <div className="mt-8 space-y-4">
-                <div className="flex items-center gap-3 text-slate-600">
-                  <div className="w-8 h-8 rounded-sm bg-slate-50 flex items-center justify-center text-slate-400">
-                    <Mail size={18} />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Email Address</p>
-                    <p className="text-sm font-medium truncate">{user.email}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 text-slate-600">
-                  <div className="w-8 h-8 rounded-sm bg-slate-50 flex items-center justify-center text-slate-400">
-                    <MapPin size={18} />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Project Location</p>
-                    <p className="text-sm font-medium truncate">{user.location || 'N/A'}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 text-slate-600">
-                  <div className="w-8 h-8 rounded-sm bg-slate-50 flex items-center justify-center text-slate-400">
-                    <Briefcase size={18} />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Department</p>
-                    <p className="text-sm font-medium truncate">{department?.name || 'Unassigned'}</p>
+              {/* Information Sections */}
+              <div className="space-y-8">
+                {/* 1. Professional Assignment */}
+                <div>
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-100 pb-2">Professional Assignment</h4>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between bg-slate-50 p-3 border border-slate-100">
+                      <div className="flex items-center gap-3">
+                        <Layers size={16} className="text-blue-600" />
+                        <span className="text-xs font-bold text-slate-600 uppercase tracking-widest">Hierarchy</span>
+                      </div>
+                      <span className="bg-blue-600 text-white px-2 py-0.5 text-[10px] font-black tracking-widest">{userLevel}</span>
+                    </div>
+                    <div className="flex items-center justify-between bg-slate-50 p-3 border border-slate-100">
+                      <div className="flex items-center gap-3">
+                        <Shield size={16} className="text-slate-500" />
+                        <span className="text-xs font-bold text-slate-600 uppercase tracking-widest">System Role</span>
+                      </div>
+                      <span className="text-[10px] font-black text-slate-900 uppercase tracking-widest">{user.role}</span>
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3 text-slate-600">
-                  <div className="w-8 h-8 rounded-sm bg-slate-50 flex items-center justify-center text-slate-400">
-                    <UserIcon size={18} />
+                {/* 2. Contact Information */}
+                <div>
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-100 pb-2">Contact Information</h4>
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-4 group cursor-pointer hover:bg-slate-50 p-1 transition-colors">
+                      <div className="w-8 h-8 bg-slate-100 text-slate-600 flex items-center justify-center shrink-0 border border-slate-200">
+                        <Mail size={16} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Email</p>
+                        <p className="text-sm font-bold text-slate-800 truncate">{user.email}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4 group cursor-pointer hover:bg-slate-50 p-1 transition-colors">
+                      <div className="w-8 h-8 bg-slate-100 text-slate-600 flex items-center justify-center shrink-0 border border-slate-200">
+                        <Phone size={16} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Phone</p>
+                        <p className="text-sm font-bold text-slate-800 truncate">{user.phone || 'Not Provided'}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4 group cursor-pointer hover:bg-slate-50 p-1 transition-colors">
+                      <div className="w-8 h-8 bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100">
+                        <MessageSquare size={16} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">WhatsApp</p>
+                        <p className="text-sm font-bold text-emerald-700 truncate">{user.whatsapp || 'Not Provided'}</p>
+                      </div>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Direct Manager</p>
-                    <p className="text-sm font-medium truncate">{manager?.name || 'N/A'}</p>
+                </div>
+
+                {/* 3. Organizational Chart */}
+                <div>
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-100 pb-2">Organizational Chart</h4>
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-4">
+                      <div className="w-8 h-8 bg-slate-100 text-slate-600 flex items-center justify-center shrink-0 border border-slate-200">
+                        <Building size={16} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Main Department</p>
+                        <p className="text-sm font-bold text-slate-800 truncate uppercase">{mainDepartment?.name || 'Unassigned'}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="w-8 h-8 bg-slate-100 text-slate-600 flex items-center justify-center shrink-0 border border-slate-200">
+                        <LayoutGrid size={16} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Direct Section</p>
+                        <p className="text-sm font-bold text-slate-800 truncate uppercase">{directDepartment?.name || 'No Direct Section'}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="w-8 h-8 bg-slate-100 text-slate-600 flex items-center justify-center shrink-0 border border-slate-200">
+                        <UserCheck size={16} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Direct Manager</p>
+                        <p className="text-sm font-bold text-slate-800 truncate uppercase">{manager?.name || 'No Direct Manager'}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. Project Assignment */}
+                <div>
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-100 pb-2">Project Assignment</h4>
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-4">
+                      <div className="w-8 h-8 bg-slate-100 text-slate-600 flex items-center justify-center shrink-0 border border-slate-200">
+                        <Building2 size={16} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Project Name</p>
+                        <p className="text-sm font-bold text-slate-800 truncate uppercase">{user.projectName || 'Unassigned'}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="w-8 h-8 bg-slate-100 text-slate-600 flex items-center justify-center shrink-0 border border-slate-200">
+                        <MapPin size={16} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Project Location</p>
+                        <p className="text-sm font-bold text-slate-800 truncate uppercase">{user.location || 'Site Location General'}</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div className="mt-8 pt-6 border-t border-slate-100 grid grid-cols-2 gap-3">
+              {/* Action Buttons */}
+              <div className="mt-10 pt-8 border-t border-slate-100 grid grid-cols-2 gap-4">
                 <button 
                   onClick={handleExportReport}
-                  className="flex flex-col items-center justify-center p-3 rounded-none border border-slate-100 bg-slate-50 hover:bg-white hover:border-slate-300 hover: transition-all group"
+                  className="flex items-center justify-center gap-3 p-3 bg-white border border-slate-200 text-slate-600 hover:border-slate-400 hover:text-slate-900 transition-all font-bold uppercase text-[9px] tracking-widest"
                 >
-                  <Download size={20} className="text-slate-400 group-hover:text-slate-800 mb-2" />
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Export CSV</span>
+                  <Download size={14} /> Full Report
                 </button>
                 <button 
                   onClick={handleExportPlan}
-                  className="flex flex-col items-center justify-center p-3 rounded-none border border-slate-100 bg-slate-50 hover:bg-white hover:border-slate-300 hover: transition-all group"
+                  className="flex items-center justify-center gap-3 p-3 bg-slate-900 text-white hover:bg-slate-800 transition-all font-bold uppercase text-[9px] tracking-widest"
                 >
-                  <FileText size={20} className="text-slate-400 group-hover:text-slate-800 mb-2" />
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Dev Plan</span>
+                  <FileText size={14} /> Dev Plan
                 </button>
               </div>
             </div>
