@@ -968,7 +968,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <button onClick={() => onNavigate('admin-users')} className="bg-white rounded-none  border border-slate-300 hover: transition-all group overflow-hidden text-left">
+                <div onClick={() => onNavigate('admin-users')} className="bg-white rounded-none cursor-pointer border border-slate-300 hover: transition-all group overflow-hidden text-left">
                     <div className="p-6">
                         <div className="flex justify-between items-start mb-4">
                              <div className="w-12 h-12 bg-blue-50 text-blue-700 rounded-sm flex items-center justify-center group-hover:bg-blue-700 group-hover:text-white transition-colors">
@@ -996,9 +996,9 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                         </div>
                     </div>
                     <div className="h-1 w-full bg-blue-700 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></div>
-                </button>
+                </div>
 
-                <button onClick={() => onNavigate('admin-jobs')} className="bg-white rounded-none  border border-slate-300 hover: transition-all group overflow-hidden text-left">
+                <div onClick={() => onNavigate('admin-jobs')} className="bg-white rounded-none cursor-pointer border border-slate-300 hover: transition-all group overflow-hidden text-left">
                      <div className="p-6">
                         <div className="flex justify-between items-start mb-4">
                              <div className="w-12 h-12 bg-slate-50 text-slate-600 rounded-sm flex items-center justify-center group-hover:bg-slate-600 group-hover:text-white transition-colors">
@@ -1026,9 +1026,9 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                         </div>
                     </div>
                     <div className="h-1 w-full bg-slate-600 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></div>
-                </button>
+                </div>
 
-                <button onClick={() => onNavigate('admin-skills')} className="bg-white rounded-none  border border-slate-300 hover: transition-all group overflow-hidden text-left">
+                <div onClick={() => onNavigate('admin-skills')} className="bg-white rounded-none cursor-pointer border border-slate-300 hover: transition-all group overflow-hidden text-left">
                      <div className="p-6">
                         <div className="flex justify-between items-start mb-4">
                              <div className="w-12 h-12 bg-slate-50 text-slate-700 rounded-sm flex items-center justify-center group-hover:bg-slate-600 group-hover:text-white transition-colors">
@@ -1056,9 +1056,9 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                         </div>
                     </div>
                     <div className="h-1 w-full bg-slate-600 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></div>
-                </button>
+                </div>
 
-                <button onClick={() => onNavigate('admin-depts')} className="bg-white rounded-none  border border-slate-300 hover: transition-all group overflow-hidden text-left">
+                <div onClick={() => onNavigate('admin-depts')} className="bg-white rounded-none cursor-pointer border border-slate-300 hover: transition-all group overflow-hidden text-left">
                      <div className="p-6">
                         <div className="flex justify-between items-start mb-4">
                              <div className="w-12 h-12 bg-slate-50 text-slate-700 rounded-sm flex items-center justify-center group-hover:bg-slate-600 group-hover:text-white transition-colors">
@@ -1086,7 +1086,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                         </div>
                     </div>
                     <div className="h-1 w-full bg-slate-600 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></div>
-                </button>
+                </div>
 
                 <div className="lg:col-span-4 bg-gradient-to-br from-slate-900 to-slate-800 rounded-none  p-8 text-white relative overflow-hidden">
                     <div className="absolute top-0 right-0 -mt-10 -mr-10 h-64 w-64 rounded-none bg-blue-800/10 blur-3xl"></div>

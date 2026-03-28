@@ -20,8 +20,8 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, onComplete, onCanc
     switch (type) {
       case 'USER':
         return [
-          ['Name', 'Email', 'Role (EMPLOYEE/ADMIN)', 'Status (ACTIVE/PENDING)', 'Department Name', 'Job Profile Title', 'Hierarchy Level (GM/AGM/DM/SH/SP/JP/FR)', 'Location'],
-          ['John Doe', 'john@example.com', 'EMPLOYEE', 'ACTIVE', 'Engineering', 'Software Engineer', 'JP', 'Cairo Office']
+          ['Name', 'Email', 'Role (EMPLOYEE/ADMIN)', 'Status (ACTIVE/PENDING)', 'Department Name', 'Job Profile Title', 'Manager Email', 'Hierarchy Level (GM/AGM/DM/SH/SP/JP/FR)', 'Location'],
+          ['John Doe', 'john@example.com', 'EMPLOYEE', 'ACTIVE', 'Engineering', 'Software Engineer', 'manager@example.com', 'JP', 'Cairo Office']
         ];
       case 'JOB':
         return [
@@ -115,7 +115,7 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, onComplete, onCanc
                   departmentId: dept?.id || '',
                   jobProfileId: job?.id,
                   managerId: manager?.id,
-                  orgLevel: (row['Hierarchy Level (JP/LO/SO/SH/DM/AGM/GM)']?.toString().toUpperCase() as OrgLevel),
+                  orgLevel: (row['Hierarchy Level (GM/AGM/DM/SH/SP/JP/FR)']?.toString().toUpperCase() as OrgLevel),
                   location: row['Location']?.toString()
                 };
                 if (newUser.name && newUser.email) {
@@ -129,8 +129,8 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, onComplete, onCanc
                 break;
               }
               case 'JOB': {
-                let title = row['Title']?.toString() || '';
-                let deptName = row['Department Name']?.toString() || '';
+                let title = row['Title']?.toString().trim() || '';
+                let deptName = row['Department Name']?.toString().trim() || '';
                 
                 // If title/dept are missing, use the last one (handles sub-rows for skills)
                 if (!title && lastJobKey) {
@@ -144,8 +144,16 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, onComplete, onCanc
                 const key = `${title}|${deptName}`;
                 lastJobKey = key;
 
-                const dept = depts.find(d => d.name.toLowerCase() === deptName.toLowerCase());
-                if (!dept) break;
+                let dept = depts.find(d => d.name.toLowerCase() === deptName.toLowerCase());
+                if (!dept) {
+                  dept = {
+                    id: Math.random().toString(36).substr(2, 9),
+                    name: deptName,
+                    behavioralSkillIds: []
+                  };
+                  await dataService.addDepartment(dept);
+                  depts.push(dept);
+                }
 
                 let job = jobBatch.get(key);
                 if (!job) {
@@ -161,23 +169,40 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, onComplete, onCanc
                 }
 
                 // Handle skill requirement
-                const skillName = row['Skill Name']?.toString();
+                const skillName = row['Skill Name']?.toString().trim();
                 const reqLevel = parseInt(row['Required Level (1-5)']?.toString());
-                const orgLevel = row['Org Level (GM/AGM/DM/SH/SP/JP/FR)']?.toString().toUpperCase() as OrgLevel;
+                const orgLevelRaw = row['Org Level (GM/AGM/DM/SH/SP/JP/FR)']?.toString() || row['Org Level']?.toString() || row['Hierarchy Level (GM/AGM/DM/SH/SP/JP/FR)']?.toString();
+                const orgLevel = orgLevelRaw?.toString().toUpperCase().trim() as OrgLevel;
 
                 if (skillName && !isNaN(reqLevel) && orgLevel) {
-                  const skill = skills.find(s => s.name.toLowerCase() === skillName.toLowerCase());
-                  if (skill) {
-                    if (!job.requirements[orgLevel]) {
-                      job.requirements[orgLevel] = [];
-                    }
-                    // Avoid duplicate skills for the same level
-                    if (!job.requirements[orgLevel].find(r => r.skillId === skill.id)) {
-                      job.requirements[orgLevel].push({
-                        skillId: skill.id,
-                        requiredLevel: reqLevel
-                      });
-                    }
+                  let skill = skills.find(s => s.name.toLowerCase() === skillName.toLowerCase());
+                  if (!skill) {
+                    skill = {
+                      id: Math.random().toString(36).substr(2, 9),
+                      name: skillName,
+                      category: 'Technical',
+                      levels: {
+                        1: { level: 1, description: '', requiredCertificates: [] },
+                        2: { level: 2, description: '', requiredCertificates: [] },
+                        3: { level: 3, description: '', requiredCertificates: [] },
+                        4: { level: 4, description: '', requiredCertificates: [] },
+                        5: { level: 5, description: '', requiredCertificates: [] },
+                      },
+                      status: 'APPROVED'
+                    };
+                    await dataService.addSkill(skill);
+                    skills.push(skill);
+                  }
+                  
+                  if (!job.requirements[orgLevel]) {
+                    job.requirements[orgLevel] = [];
+                  }
+                  // Avoid duplicate skills for the same level
+                  if (!job.requirements[orgLevel].find((r: any) => r.skillId === skill!.id)) {
+                    job.requirements[orgLevel].push({
+                      skillId: skill.id,
+                      requiredLevel: reqLevel
+                    });
                   }
                 }
                 break;
@@ -191,32 +216,48 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, onComplete, onCanc
                     requiredCertificates: row[`Level ${i} Certs`]?.toString() ? row[`Level ${i} Certs`].toString().split(',').map((s: string) => s.trim()) : []
                   };
                 }
+                const name = row['Name']?.toString() || '';
+                if (!name) break;
+                
+                const existingSkill = skills.find(s => s.name.toLowerCase() === name.toLowerCase());
+                
                 const newSkill: Skill = {
-                  id: Math.random().toString(36).substr(2, 9),
-                  name: row['Name']?.toString() || '',
+                  id: existingSkill ? existingSkill.id : Math.random().toString(36).substr(2, 9),
+                  name: name,
                   category: row['Category (Technical/Safety/Management/Soft Skills/Behavioral)']?.toString() || 'Technical',
                   assessmentQuestion: row['Assessment Question']?.toString() || '',
                   levels,
-                  status: 'APPROVED'
+                  status: existingSkill ? existingSkill.status : 'APPROVED'
                 };
-                if (newSkill.name) {
+                
+                if (existingSkill) {
+                  await dataService.updateSkill(newSkill);
+                } else {
                   await dataService.addSkill(newSkill);
-                  count++;
                 }
+                count++;
                 break;
               }
               case 'DEPT': {
+                const name = row['Name']?.toString() || '';
+                if (!name) break;
+                
                 const manager = users.find(u => u.email.toLowerCase() === (row['Manager Email'] || '').toString().toLowerCase());
+                const existingDept = depts.find(d => d.name.toLowerCase() === name.toLowerCase());
+                
                 const newDept: Department = {
-                  id: Math.random().toString(36).substr(2, 9),
-                  name: row['Name']?.toString() || '',
-                  managerId: manager?.id,
-                  behavioralSkillIds: []
+                  id: existingDept ? existingDept.id : Math.random().toString(36).substr(2, 9),
+                  name: name,
+                  managerId: manager?.id || existingDept?.managerId,
+                  behavioralSkillIds: existingDept ? existingDept.behavioralSkillIds : []
                 };
-                if (newDept.name) {
+                
+                if (existingDept) {
+                  await dataService.updateDepartment(newDept);
+                } else {
                   await dataService.addDepartment(newDept);
-                  count++;
                 }
+                count++;
                 break;
               }
             }
@@ -228,7 +269,12 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, onComplete, onCanc
         // Save all grouped job profiles
         if (type === 'JOB') {
           for (const job of jobBatch.values()) {
-            await dataService.addJobProfile(job);
+            const existingJob = jobs.find(j => j.id === job.id);
+            if (existingJob) {
+              await dataService.updateJobProfile(job);
+            } else {
+              await dataService.addJobProfile(job);
+            }
             count++;
           }
         }

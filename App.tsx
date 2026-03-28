@@ -15,10 +15,12 @@ const App: React.FC = () => {
   
   // Auth State
   const [isLoginMode, setIsLoginMode] = useState(true);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [signupSuccess, setSignupSuccess] = useState(false);
+  const [resetSuccess, setResetSuccess] = useState(false);
   
   const [activeTab, setActiveTab] = useState('emp-dashboard');
   const [error, setError] = useState('');
@@ -49,10 +51,19 @@ const App: React.FC = () => {
   const handleAuth = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setResetSuccess(false);
     setAuthLoading(true);
 
     try {
-        if (isLoginMode) {
+        if (isForgotPassword) {
+            const result = await dataService.resetPassword(email);
+            if (result.success) {
+                setResetSuccess(true);
+                setIsForgotPassword(false);
+            } else {
+                setError(result.error || 'Failed to send reset email');
+            }
+        } else if (isLoginMode) {
             const result = await dataService.loginWithPassword(email, password);
             if (result.user) {
                 setUser(result.user);
@@ -165,10 +176,14 @@ const App: React.FC = () => {
 
                 <div className="mb-10">
                     <h2 className="text-3xl font-bold text-slate-900 tracking-tight">
-                        {isLoginMode ? 'Welcome back' : 'Create an account'}
+                        {isForgotPassword ? 'Reset Password' : isLoginMode ? 'Welcome back' : 'Create an account'}
                     </h2>
                     <p className="text-slate-700 mt-2">
-                        {isLoginMode ? 'Enter your details to access your dashboard.' : 'Join EPROM CMS to manage your professional profile.'}
+                        {isForgotPassword 
+                            ? 'Enter your email and we will send you a reset link.' 
+                            : isLoginMode 
+                                ? 'Enter your details to access your dashboard.' 
+                                : 'Join EPROM CMS to manage your professional profile. If your profile was added by your administrator, sign up here with your work email to set your password and activate your account.'}
                     </p>
                 </div>
                 
@@ -181,13 +196,25 @@ const App: React.FC = () => {
                                 <p className="text-slate-700 mt-1">
                                     {email.toLowerCase() === 'tarekmoh123@gmail.com' 
                                         ? 'Admin account created. You can now sign in.' 
-                                        : 'Your profile is pending administrator approval.'}
+                                        : 'Your profile is pending administrator approval (if new) or activated successfully (if pre-existing).'}
+                                </p>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {resetSuccess && (
+                        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-none flex items-start gap-3">
+                            <CheckCircle size={20} className="mt-0.5 flex-shrink-0 text-emerald-500" />
+                            <div className="text-sm">
+                                <p className="font-bold">Reset Email Sent</p>
+                                <p className="text-slate-700 mt-1">
+                                    If an account exists for {email}, a password reset link has been sent.
                                 </p>
                             </div>
                         </div>
                     )}
 
-                    {!isLoginMode && (
+                    {!isLoginMode && !isForgotPassword && (
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1.5">Full Name</label>
                             <div className="relative">
@@ -198,7 +225,7 @@ const App: React.FC = () => {
                                     onChange={(e) => setFullName(e.target.value)}
                                     className="w-full pl-10 pr-4 py-3 rounded-none border border-slate-300 bg-white focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 outline-none transition-all text-slate-900 placeholder:text-slate-600 "
                                     placeholder="e.g. John Smith"
-                                    required={!isLoginMode}
+                                    required={!isLoginMode && !isForgotPassword}
                                 />
                             </div>
                         </div>
@@ -219,25 +246,27 @@ const App: React.FC = () => {
                         </div>
                     </div>
 
-                    <div>
-                        <div className="flex items-center justify-between mb-1.5">
-                            <label className="block text-sm font-medium text-slate-700">Password</label>
-                            {isLoginMode && (
-                                <a href="#" className="text-sm text-slate-900 hover:text-slate-900 font-medium">Forgot password?</a>
-                            )}
+                    {!isForgotPassword && (
+                        <div>
+                            <div className="flex items-center justify-between mb-1.5">
+                                <label className="block text-sm font-medium text-slate-700">Password</label>
+                                {isLoginMode && (
+                                    <button type="button" onClick={() => { setIsForgotPassword(true); setError(''); setResetSuccess(false); }} className="text-sm text-slate-900 hover:underline font-medium">Forgot password?</button>
+                                )}
+                            </div>
+                            <div className="relative">
+                                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-600" size={18} />
+                                <input 
+                                    type="password" 
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    className="w-full pl-10 pr-4 py-3 rounded-none border border-slate-300 bg-white focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 outline-none transition-all text-slate-900 placeholder:text-slate-600 "
+                                    placeholder="••••••••"
+                                    required={!isForgotPassword}
+                                />
+                            </div>
                         </div>
-                        <div className="relative">
-                            <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-600" size={18} />
-                            <input 
-                                type="password" 
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                className="w-full pl-10 pr-4 py-3 rounded-none border border-slate-300 bg-white focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 outline-none transition-all text-slate-900 placeholder:text-slate-600 "
-                                placeholder="••••••••"
-                                required
-                            />
-                        </div>
-                    </div>
+                    )}
                     
                     {error && (
                         <div className="bg-slate-50 border border-slate-100 text-slate-600 p-3 rounded-none text-sm flex items-center gap-2 font-medium">
@@ -252,23 +281,35 @@ const App: React.FC = () => {
                     >
                         {authLoading ? <Loader2 className="animate-spin" size={20} /> : (
                             <>
-                                {isLoginMode ? 'Sign in' : 'Create account'}
+                                {isForgotPassword ? 'Send Reset Link' : isLoginMode ? 'Sign in' : 'Create account'}
                                 <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform opacity-70" />
                             </>
                         )}
                     </button>
 
-                    <div className="text-center mt-8">
-                        <span className="text-slate-700 text-sm">
-                            {isLoginMode ? "Don't have an account? " : "Already have an account? "}
-                        </span>
-                        <button 
-                            type="button"
-                            onClick={() => { setIsLoginMode(!isLoginMode); setError(''); }}
-                            className="text-sm text-slate-900 font-semibold hover:underline"
-                        >
-                            {isLoginMode ? 'Sign up' : 'Sign in'}
-                        </button>
+                    <div className="text-center mt-8 gap-4 flex flex-col">
+                        {isForgotPassword ? (
+                            <button 
+                                type="button"
+                                onClick={() => { setIsForgotPassword(false); setIsLoginMode(true); setError(''); }}
+                                className="text-sm text-slate-900 font-semibold hover:underline"
+                            >
+                                Back to Sign in
+                            </button>
+                        ) : (
+                            <div>
+                                <span className="text-slate-700 text-sm">
+                                    {isLoginMode ? "Don't have an account? " : "Already have an account? "}
+                                </span>
+                                <button 
+                                    type="button"
+                                    onClick={() => { setIsLoginMode(!isLoginMode); setError(''); setIsForgotPassword(false); }}
+                                    className="text-sm text-slate-900 font-semibold hover:underline"
+                                >
+                                    {isLoginMode ? 'Sign up' : 'Sign in'}
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </form>
 

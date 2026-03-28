@@ -21,7 +21,8 @@ import {
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
   signOut,
-  onAuthStateChanged
+  onAuthStateChanged,
+  sendPasswordResetEmail
 } from 'firebase/auth';
 
 // ==========================================
@@ -498,6 +499,15 @@ class DataService {
       }
 
       return { user: userProfile };
+    } catch (error: any) {
+      return { error: error.message };
+    }
+  }
+
+  async resetPassword(email: string) {
+    try {
+      await sendPasswordResetEmail(auth, email.trim().toLowerCase());
+      return { success: true };
     } catch (error: any) {
       return { error: error.message };
     }
