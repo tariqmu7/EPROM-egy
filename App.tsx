@@ -369,7 +369,7 @@ const App: React.FC = () => {
           </div>
           <h2 className="text-3xl font-bold text-slate-900 mb-3">Managerial Access Required</h2>
           <p className="text-slate-600 max-w-md mb-8">
-            This section is restricted to employees with managerial hierarchy levels (Section Head and above).
+            This section is restricted to managers or employees who have directly reporting subordinates.
           </p>
           <button 
             onClick={() => setActiveTab('emp-dashboard')}

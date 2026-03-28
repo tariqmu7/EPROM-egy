@@ -579,9 +579,64 @@ class DataService {
      await this.persistItem(collectionName, item);
   }
 
+  async uploadAvatar(userId: string, file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = async () => {
+          const canvas = document.createElement('canvas');
+          const MAX_SIZE = 200;
+          let width = img.width;
+          let height = img.height;
+
+          // Square crop and resize
+          const size = Math.min(width, height);
+          const startX = (width - size) / 2;
+          const startY = (height - size) / 2;
+
+          canvas.width = MAX_SIZE;
+          canvas.height = MAX_SIZE;
+          const ctx = canvas.getContext('2d');
+          
+          if (ctx) {
+            ctx.drawImage(img, startX, startY, size, size, 0, 0, MAX_SIZE, MAX_SIZE);
+            // WebP, 80% quality 
+            const dataUrl = canvas.toDataURL('image/webp', 0.8);
+
+            const user = this.getUserById(userId);
+            if (user) {
+              user.avatarUrl = dataUrl;
+              try {
+                await this.updateItem('users', user);
+                resolve(dataUrl);
+              } catch (err) {
+                reject(err);
+              }
+            } else {
+              reject(new Error('User not found'));
+            }
+          } else {
+            reject(new Error('Canvas context not available'));
+          }
+        };
+        img.onerror = reject;
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
   // --- HIERARCHY & ROLES ---
   isManager(user: User): boolean {
     if (user.role === Role.ADMIN) return true;
+    
+    // If the employee officially has subordinates they are automatically a manager
+    const hasSubordinates = this.users.some(u => u.managerId === user.id);
+    if (hasSubordinates) return true;
+
+    // Default fallback to hierarchy level
     const managerialLevels: OrgLevel[] = ['GM', 'AGM', 'DM', 'SH'];
     return user.orgLevel ? managerialLevels.includes(user.orgLevel) : false;
   }
@@ -662,8 +717,11 @@ class DataService {
     );
   }
 
-  getUserSkillScore(userId: string, skillId: string): number {
-    const userAssessments = this.assessments.filter(a => a.subjectId === userId && a.skillId === skillId);
+  getUserSkillScore(userId: string, skillId: string, includeArchived: boolean = false): number {
+    let userAssessments = this.assessments.filter(a => a.subjectId === userId && a.skillId === skillId);
+    if (!includeArchived) {
+      userAssessments = userAssessments.filter(a => !a.isArchived);
+    }
     if (userAssessments.length === 0) return 0;
     
     const selfA = userAssessments.filter(a => a.type === 'SELF');
@@ -729,6 +787,50 @@ class DataService {
   async updateCycle(cycle: AssessmentCycle) {
     await this.updateItem('assessmentCycles', cycle);
     await this.logActivity('Updated Assessment Cycle', cycle.name);
+  }
+
+  async archiveAssessments(filters: { departmentId?: string, jobProfileId?: string, skillId?: string }) {
+    let affectedCount = 0;
+    
+    // Find all users that match the profile filters
+    const matchedUsers = this.users.filter(u => {
+      if (filters.departmentId && u.departmentId !== filters.departmentId) return false;
+      if (filters.jobProfileId && u.jobProfileId !== filters.jobProfileId) return false;
+      return true;
+    });
+
+    const matchedUserIds = matchedUsers.map(u => u.id);
+
+    // Find all active assessments that belong to these users and match the skill filter
+    const activeAssessments = this.assessments.filter(a => 
+      !a.isArchived && 
+      matchedUserIds.includes(a.subjectId) &&
+      (filters.skillId ? a.skillId === filters.skillId : true)
+    );
+
+    // Archive them
+    for (const assessment of activeAssessments) {
+      const archived = { ...assessment, isArchived: true };
+      await this.persistItem('assessments', archived);
+      affectedCount++;
+    }
+
+    // Send notification to affected users
+    if (affectedCount > 0) {
+      const uniqueAffectedUserIds = Array.from(new Set(activeAssessments.map(a => a.subjectId)));
+      for (const uid of uniqueAffectedUserIds) {
+        await this.addNotification({
+          userId: uid,
+          title: 'Skill Matrix Reset',
+          message: 'Your previous assessments for certain skills have been archived. A new evaluation is required to ensure compliance.',
+          type: 'WARNING',
+          actionLink: 'emp-assessment'
+        });
+      }
+      await this.logActivity('Archived Assessments', `Archived ${affectedCount} assessments due to admin reset.`);
+    }
+
+    return affectedCount;
   }
 
   // --- NOTIFICATIONS ---

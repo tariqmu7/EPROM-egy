@@ -2,7 +2,8 @@ import React, { useMemo } from 'react';
 import { User, JobProfile, Skill, IndividualTrainingPlan, ORG_HIERARCHY_ORDER, ORG_LEVEL_LABELS } from '../types';
 import { dataService } from '../services/store';
 import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Tooltip, BarChart, CartesianGrid, XAxis, YAxis, Bar, Legend, Cell } from 'recharts';
-import { AlertCircle, CheckCircle, Award, BookOpen, Activity, TrendingUp, Users, PlayCircle, Calendar, ArrowRight, Download, FileText, Mail, Briefcase, MapPin, User as UserIcon, ShieldCheck, GraduationCap, Target, Zap } from 'lucide-react';
+import { AlertCircle, CheckCircle, Award, BookOpen, Activity, TrendingUp, Users, PlayCircle, Calendar, ArrowRight, Download, FileText, Mail, Briefcase, MapPin, User as UserIcon, ShieldCheck, GraduationCap, Target, Zap, Camera } from 'lucide-react';
+import { auth } from '../firebase';
 
 interface EmployeeDashboardProps {
   user: User;
@@ -15,6 +16,26 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
   const manager = useMemo(() => user.managerId ? dataService.getUserById(user.managerId) : null, [user.managerId]);
 
   const itp = useMemo(() => dataService.generateIndividualTrainingPlan(user.id), [user.id]);
+
+  const [isUploading, setIsUploading] = React.useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const canEditAvatar = auth.currentUser?.uid === user.id || dataService.isManager(user); // Also let managers edit? Actually user means the employee. We'll stick to uid match. Let's just use auth.currentUser?.uid === user.id
+  const isOwner = auth.currentUser?.uid === user.id;
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      await dataService.uploadAvatar(user.id, file);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to upload avatar.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   if (!jobProfile) {
     return (
@@ -191,9 +212,32 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
             <div className="h-32 bg-gradient-to-r from-slate-600 to-slate-700"></div>
             <div className="px-6 pb-6">
               <div className="relative -mt-16 mb-4">
-                <div className="w-32 h-32 rounded-none border-4 border-white bg-slate-100 overflow-hidden ">
-                  <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
+                <div 
+                  className={`relative w-32 h-32 rounded-none border-4 border-white bg-slate-100 overflow-hidden group ${isOwner ? 'cursor-pointer' : ''}`}
+                  onClick={() => isOwner && fileInputRef.current?.click()}
+                >
+                  <img src={user.avatarUrl} alt={user.name} className={`w-full h-full object-cover transition-opacity ${isUploading ? 'opacity-50' : 'opacity-100'}`} />
+                  
+                  {isOwner && (
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Camera size={24} className="text-white" />
+                    </div>
+                  )}
+                  {isUploading && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-6 h-6 border-2 border-slate-900 border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                  )}
                 </div>
+                {isOwner && (
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    className="hidden" 
+                    ref={fileInputRef} 
+                    onChange={handleAvatarUpload} 
+                  />
+                )}
               </div>
               
               <div className="space-y-1">

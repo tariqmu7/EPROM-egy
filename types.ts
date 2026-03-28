@@ -106,6 +106,7 @@ export interface Assessment {
   date: string;
   type: 'SELF' | 'PEER' | 'MANAGER';
   cycleId?: string; // Optional for backward compatibility, but used for generated cycles
+  isArchived?: boolean;
 }
 
 export interface Nomination {
