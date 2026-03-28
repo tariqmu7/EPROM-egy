@@ -1,4 +1,4 @@
-import { User, Role, JobProfile, Skill, Department, Assessment, ActivityLog, ORG_HIERARCHY_ORDER, Notification, AssessmentCycle, Nomination, IndividualTrainingPlan, TrainingRecommendation, OrgLevel, Evidence } from '../types';
+import { User, Role, JobProfile, Skill, Department, Assessment, ActivityLog, ORG_HIERARCHY_ORDER, Notification, AssessmentCycle, Nomination, IndividualTrainingPlan, TrainingRecommendation, OrgLevel, Evidence, PromotionRequirement, CareerProgressionPlan } from '../types';
 import { db, auth } from '../firebase';
 import { 
   collection, 
@@ -282,21 +282,10 @@ class DataService {
         ...evidence,
         status,
         reviewedAt: new Date().toISOString(),
-        reviewedBy: reviewerId
+        reviewedBy: reviewerId,
+        assignedScore: status === 'APPROVED' ? (level || 3) : undefined
       };
       await this.updateItem('evidences', updatedEvidence);
-
-      // If approved, automatically create an assessment
-      if (status === 'APPROVED') {
-        await this.addAssessment({
-          raterId: reviewerId,
-          subjectId: evidence.userId,
-          skillId: evidence.skillId,
-          score: level || 3, // Default to level 3 if not provided
-          comment: `Evidence approved: ${evidence.notes}`,
-          type: 'MANAGER'
-        });
-      }
 
       // Notify user
       await this.addNotification({
@@ -683,6 +672,47 @@ class DataService {
     };
   }
 
+  generateCareerPath(userId: string): CareerProgressionPlan | null {
+    const user = this.getUserById(userId);
+    if (!user || !user.jobProfileId || !user.orgLevel) return null;
+
+    const job = this.getJobProfile(user.jobProfileId);
+    if (!job) return null;
+
+    const currentIndex = ORG_HIERARCHY_ORDER.indexOf(user.orgLevel);
+    // Promotion moves "up" the hierarchy, which is index - 1 (Top is GM at index 0)
+    if (currentIndex <= 0 || currentIndex === -1) return null;
+
+    const nextLevel = ORG_HIERARCHY_ORDER[currentIndex - 1];
+    const requirements = job.requirements[nextLevel] || [];
+    const promReqs: PromotionRequirement[] = [];
+    let isReady = requirements.length > 0;
+    
+    requirements.forEach(req => {
+      const currentScore = this.getUserSkillScore(userId, req.skillId);
+      const gap = Math.max(0, req.requiredLevel - currentScore);
+      const skill = this.getSkill(req.skillId);
+      
+      promReqs.push({
+        skillId: req.skillId,
+        skillName: skill?.name || 'Unknown Skill',
+        currentScore,
+        requiredScore: req.requiredLevel,
+        gap
+      });
+
+      if (gap > 0) isReady = false;
+    });
+
+    return {
+      userId,
+      currentLevel: user.orgLevel,
+      nextLevel: requirements.length > 0 ? nextLevel : null,
+      requirements: promReqs,
+      isReadyForPromotion: isReady && requirements.length > 0
+    };
+  }
+
   // --- PUBLIC METHODS (GETTERS - Synchronous for UI Performance) ---
 
   login(email: string): User | undefined {
@@ -718,39 +748,55 @@ class DataService {
   }
 
   getUserSkillScore(userId: string, skillId: string, includeArchived: boolean = false): number {
-    let userAssessments = this.assessments.filter(a => a.subjectId === userId && a.skillId === skillId);
-    if (!includeArchived) {
-      userAssessments = userAssessments.filter(a => !a.isArchived);
+    const skill = this.getSkill(skillId);
+    if (!skill) return 0;
+
+    // Behavioral (360) Logic
+    if (skill.assessmentMethod === '360_EVALUATION' || !skill.assessmentMethod) {
+      let userAssessments = this.assessments.filter(a => a.subjectId === userId && a.skillId === skillId);
+      if (!includeArchived) {
+        userAssessments = userAssessments.filter(a => !a.isArchived);
+      }
+      if (userAssessments.length === 0) return 0;
+      
+      const selfA = userAssessments.filter(a => a.type === 'SELF');
+      const peerA = userAssessments.filter(a => a.type === 'PEER');
+      const mgrA = userAssessments.filter(a => a.type === 'MANAGER');
+
+      const avgSelf = selfA.length > 0 ? selfA.reduce((s, a) => s + a.score, 0) / selfA.length : null;
+      const avgPeer = peerA.length > 0 ? peerA.reduce((s, a) => s + a.score, 0) / peerA.length : null;
+      const avgMgr = mgrA.length > 0 ? mgrA.reduce((s, a) => s + a.score, 0) / mgrA.length : null;
+
+      let totalWeight = 0;
+      let weightedScore = 0;
+
+      if (avgSelf !== null) { weightedScore += avgSelf * 0.10; totalWeight += 0.10; } // 10% weight
+      if (avgPeer !== null) { weightedScore += avgPeer * 0.30; totalWeight += 0.30; } // 30% weight
+      if (avgMgr  !== null) { weightedScore += avgMgr  * 0.60; totalWeight += 0.60; } // 60% weight
+
+      if (totalWeight === 0) return 0;
+      
+      // Normalize to 100% based on available weights
+      return Math.round(weightedScore / totalWeight);
+    } 
+    // Evidence, Online Assessment, or Interview Logic
+    else {
+      // Find the highest assignedScore from approved evidence submissions for this skill.
+      const relevantEvidence = this.evidences.filter(e => e.userId === userId && e.skillId === skillId && e.status === 'APPROVED' && e.assignedScore);
+      if (relevantEvidence.length === 0) return 0;
+
+      const maxScore = Math.max(...relevantEvidence.map(e => e.assignedScore || 0));
+      return Math.min(Math.max(Math.round(maxScore), 1), 5); // Ensure it's between 1 and 5
     }
-    if (userAssessments.length === 0) return 0;
-    
-    const selfA = userAssessments.filter(a => a.type === 'SELF');
-    const peerA = userAssessments.filter(a => a.type === 'PEER');
-    const mgrA = userAssessments.filter(a => a.type === 'MANAGER');
-
-    const avgSelf = selfA.length > 0 ? selfA.reduce((s, a) => s + a.score, 0) / selfA.length : null;
-    const avgPeer = peerA.length > 0 ? peerA.reduce((s, a) => s + a.score, 0) / peerA.length : null;
-    const avgMgr = mgrA.length > 0 ? mgrA.reduce((s, a) => s + a.score, 0) / mgrA.length : null;
-
-    let totalWeight = 0;
-    let weightedScore = 0;
-
-    if (avgSelf !== null) { weightedScore += avgSelf * 0.10; totalWeight += 0.10; } // 10% weight
-    if (avgPeer !== null) { weightedScore += avgPeer * 0.30; totalWeight += 0.30; } // 30% weight
-    if (avgMgr  !== null) { weightedScore += avgMgr  * 0.60; totalWeight += 0.60; } // 60% weight
-
-    if (totalWeight === 0) return 0;
-    
-    // Normalize to 100% based on available weights
-    return Math.round(weightedScore / totalWeight);
   }
 
-  getAssessments(filters: { raterId?: string, subjectId?: string, cycleId?: string }) {
+  getAssessments(filters: { raterId?: string, subjectId?: string, cycleId?: string, skillId?: string }) {
     return this.assessments.filter(a => {
       const matchRater = filters.raterId ? a.raterId === filters.raterId : true;
       const matchSubject = filters.subjectId ? a.subjectId === filters.subjectId : true;
       const matchCycle = filters.cycleId ? a.cycleId === filters.cycleId : true;
-      return matchRater && matchSubject && matchCycle;
+      const matchSkill = filters.skillId ? a.skillId === filters.skillId : true;
+      return matchRater && matchSubject && matchCycle && matchSkill;
     }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }
 

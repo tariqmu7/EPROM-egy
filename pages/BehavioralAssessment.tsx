@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { dataService } from '../services/store';
 import { User, Skill } from '../types';
 import { Star, MessageSquare, Send, CheckCircle, User as UserIcon } from 'lucide-react';
@@ -66,6 +66,25 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
     return dataService.getAllSkills().filter(s => s.category === 'Behavioral' && department.behavioralSkillIds?.includes(s.id));
   }, [selectedEmployee]);
 
+  const existingAssessment = useMemo(() => {
+    if (!selectedSubjectId || !selectedSkillId) return null;
+    return dataService.getAssessments({ 
+      raterId: currentUser.id, 
+      subjectId: selectedSubjectId, 
+      skillId: selectedSkillId 
+    }).find(Boolean) || null;
+  }, [selectedSubjectId, selectedSkillId, currentUser.id]);
+
+  useEffect(() => {
+    if (existingAssessment) {
+      setRating(existingAssessment.score);
+      setFeedback(existingAssessment.comment || '');
+    } else {
+      setRating(0);
+      setFeedback('');
+    }
+  }, [existingAssessment, selectedSubjectId, selectedSkillId]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedSubjectId || !selectedSkillId || rating === 0) return;
@@ -75,14 +94,22 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
     // Simulate network request
     setTimeout(async () => {
       const isSelf = selectedSubjectId === currentUser.id;
-      await dataService.addAssessment({
-        raterId: currentUser.id, // We store it, but UI can hide it
-        subjectId: selectedSubjectId,
-        skillId: selectedSkillId,
-        score: rating,
-        comment: feedback,
-        type: isSelf ? 'SELF' : 'PEER'
-      });
+      if (existingAssessment) {
+        await dataService.updateAssessment({
+          ...existingAssessment,
+          score: rating,
+          comment: feedback,
+        });
+      } else {
+        await dataService.addAssessment({
+          raterId: currentUser.id, // We store it, but UI can hide it
+          subjectId: selectedSubjectId,
+          skillId: selectedSkillId,
+          score: rating,
+          comment: feedback,
+          type: isSelf ? 'SELF' : 'PEER'
+        });
+      }
 
       setSuccessMessage(isSelf ? 'Self-evaluation submitted successfully.' : 'Feedback submitted successfully.');
       setSelectedSubjectId('');
@@ -240,13 +267,19 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
                 <p className="text-xs text-slate-500 mt-2">Feedback will be shared with the employee and their manager.</p>
               </div>
 
-              <div className="pt-4 border-t border-slate-300 flex justify-end">
+              <div className="pt-4 border-t border-slate-300 flex justify-between items-center">
+                {existingAssessment && (
+                  <p className="text-sm font-medium text-emerald-600 flex items-center gap-1">
+                    <CheckCircle size={16} /> Update your existing evaluation
+                  </p>
+                )}
+                {!existingAssessment && <div></div>}
                 <button 
                   type="submit" 
                   disabled={isSubmitting || !selectedSubjectId || !selectedSkillId || rating === 0}
                   className="bg-blue-700 hover:bg-blue-800 text-white font-medium py-3 px-8 rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 "
                 >
-                  {isSubmitting ? 'Submitting...' : 'Submit Evaluation'}
+                  {isSubmitting ? 'Submitting...' : existingAssessment ? 'Update Evaluation' : 'Submit Evaluation'}
                   {!isSubmitting && <Send size={18} />}
                 </button>
               </div>

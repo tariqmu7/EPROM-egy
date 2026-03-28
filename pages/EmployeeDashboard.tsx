@@ -111,43 +111,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
     };
   }), [gaps]);
 
-  const careerPath = useMemo(() => {
-    const currentIndex = ORG_HIERARCHY_ORDER.indexOf(userLevel);
-    if (currentIndex === -1) return [];
-
-    // The hierarchy is ordered from GM (0) down to FR (6).
-    // So the "next" positions are at lower indices.
-    const path = [];
-    
-    // Add current position
-    path.push({
-      level: userLevel,
-      title: ORG_LEVEL_LABELS[userLevel],
-      status: 'CURRENT',
-      year: new Date().getFullYear(),
-      goals: ['Master current role requirements', 'Complete pending ITP actions']
-    });
-
-    // Add up to 3 future positions
-    let yearOffset = 2;
-    for (let i = currentIndex - 1; i >= Math.max(0, currentIndex - 3); i--) {
-      const nextLevel = ORG_HIERARCHY_ORDER[i];
-      path.push({
-        level: nextLevel,
-        title: ORG_LEVEL_LABELS[nextLevel],
-        status: 'FUTURE',
-        year: new Date().getFullYear() + yearOffset,
-        goals: [
-          `Achieve target competencies for ${ORG_LEVEL_LABELS[nextLevel]}`,
-          'Demonstrate leadership and cross-functional collaboration',
-          'Complete advanced certifications'
-        ]
-      });
-      yearOffset += 3; // Assume 3 years between promotions for mock data
-    }
-
-    return path;
-  }, [userLevel]);
+  const careerPath = useMemo(() => dataService.generateCareerPath(user.id), [user.id]);
 
   // Export Handlers
   const handleExportReport = () => {
@@ -512,55 +476,60 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
             </div>
             
             <div className="p-6">
-              {careerPath.length > 0 ? (
-                <div className="space-y-8">
-                  {careerPath.map((step, idx) => (
-                    <div key={idx} className="relative pl-8 border-l-2 border-slate-100 pb-8 last:pb-0">
-                      <div className={`absolute -left-[11px] top-0 w-5 h-5 rounded-none border-4 border-white  flex items-center justify-center ${step.status === 'CURRENT' ? 'bg-slate-500' : 'bg-slate-500'}`}>
-                        {step.status === 'CURRENT' && <div className="w-1.5 h-1.5 bg-white rounded-none"></div>}
-                      </div>
-                      
-                      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 -mt-1">
-                        <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <h4 className="font-bold text-slate-900 text-lg">{step.title}</h4>
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-none uppercase tracking-wider ${step.status === 'CURRENT' ? 'bg-slate-50 text-slate-700 border border-slate-100' : 'bg-slate-50 text-slate-700 border border-slate-100'}`}>
-                              {step.level}
-                            </span>
-                            {step.status === 'CURRENT' && (
-                              <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded-none uppercase tracking-wider">Current Role</span>
-                            )}
-                          </div>
-                          
-                          <div className="mt-3 space-y-2">
-                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Key Objectives:</p>
-                            <ul className="space-y-1.5">
-                              {step.goals.map((goal, gIdx) => (
-                                <li key={gIdx} className="flex items-start gap-2 text-sm text-slate-600">
-                                  <ArrowRight size={14} className="text-slate-400 mt-0.5 shrink-0" />
-                                  <span>{goal}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <div className="inline-flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-sm border border-slate-100">
-                            <Calendar size={14} className="text-slate-400" />
-                            <span className="text-sm font-bold text-slate-700">{step.year}</span>
-                          </div>
-                        </div>
-                      </div>
+              {careerPath && careerPath.nextLevel ? (
+                <div className="space-y-6">
+                  <div className="flex justify-between items-center mb-6 bg-slate-50 p-4 border border-slate-200">
+                    <div>
+                      <h4 className="font-bold text-slate-900 text-lg">Next Target Level: {ORG_LEVEL_LABELS[careerPath.nextLevel]}</h4>
+                      <p className="text-sm text-slate-600 mt-1">Bridge the competency gaps highlighted below to reach promotional readiness.</p>
                     </div>
-                  ))}
+                    {careerPath.isReadyForPromotion && (
+                      <span className="bg-emerald-100 border border-emerald-300 text-emerald-800 text-sm font-bold px-3 py-1.5 flex items-center gap-2">
+                        <CheckCircle size={16} /> Ready for Promotion!
+                      </span>
+                    )}
+                  </div>
+                  
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                      <thead className="text-xs font-bold text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
+                        <tr>
+                          <th className="px-4 py-3 border-r border-slate-100">Competency Requirement</th>
+                          <th className="px-4 py-3 text-center w-32 border-r border-slate-100">Required Target Level</th>
+                          <th className="px-4 py-3 text-center w-32 border-r border-slate-100">Your Current Score</th>
+                          <th className="px-4 py-3 text-center w-32">Development Gap</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {careerPath.requirements.map(req => (
+                          <tr key={req.skillId} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50">
+                            <td className="px-4 py-3 font-medium text-slate-900 border-r border-slate-100">{req.skillName}</td>
+                            <td className="px-4 py-3 text-center font-bold text-slate-700 border-r border-slate-100">{req.requiredScore}</td>
+                            <td className={`px-4 py-3 text-center font-bold border-r border-slate-100 ${req.currentScore >= req.requiredScore ? 'text-emerald-600' : 'text-blue-600'}`}>
+                              {req.currentScore > 0 ? req.currentScore : '-'}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              {req.gap > 0 ? (
+                                <span className="bg-rose-50 text-rose-700 font-bold px-2 py-1 border border-rose-200 text-xs inline-block min-w-8">
+                                  {req.gap}
+                                </span>
+                              ) : (
+                                <span className="text-emerald-500"><CheckCircle size={16} className="mx-auto" /></span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               ) : (
                 <div className="py-12 text-center">
                   <div className="w-16 h-16 bg-slate-50 text-slate-400 rounded-none flex items-center justify-center mx-auto mb-4">
                     <Activity size={32} />
                   </div>
-                  <h4 className="text-lg font-bold text-slate-900">Career Path Unavailable</h4>
-                  <p className="text-slate-500 text-sm mt-1">Your organizational level is not mapped to a standard career progression.</p>
+                  <h4 className="text-lg font-bold text-slate-900">Career Path Complete</h4>
+                  <p className="text-slate-500 text-sm mt-1">You are currently at or above the maximum hierarchy level defined for tracking.</p>
                 </div>
               )}
             </div>

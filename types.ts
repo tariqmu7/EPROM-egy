@@ -43,6 +43,8 @@ export interface Skill {
   assessmentQuestion?: string;
   levels: Record<number, SkillLevel>; 
   status?: 'APPROVED' | 'PENDING';
+  assessmentMethod: '360_EVALUATION' | 'DOCUMENT_UPLOAD' | 'ONLINE_ASSESSMENT' | 'INTERVIEW';
+  assessmentLink?: string; // Used specifically for ONLINE_ASSESSMENT to link to external forms
 }
 
 export interface JobProfileSkill {
@@ -150,6 +152,7 @@ export interface Evidence {
   submittedAt: string;
   reviewedAt?: string;
   reviewedBy?: string;
+  assignedScore?: number; // 1-5 grading assigned by Manager upon approval
 }
 
 export interface Notification {
@@ -161,4 +164,20 @@ export interface Notification {
   isRead: boolean;
   createdAt: string;
   actionLink?: string; // Optional link to navigate when clicked
+}
+
+export interface PromotionRequirement {
+  skillId: string;
+  skillName: string;
+  currentScore: number;
+  requiredScore: number;
+  gap: number;
+}
+
+export interface CareerProgressionPlan {
+  userId: string;
+  currentLevel: OrgLevel;
+  nextLevel: OrgLevel | null;
+  requirements: PromotionRequirement[];
+  isReadyForPromotion: boolean;
 }

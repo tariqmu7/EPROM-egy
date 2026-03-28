@@ -188,7 +188,8 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, onComplete, onCanc
                         4: { level: 4, description: '', requiredCertificates: [] },
                         5: { level: 5, description: '', requiredCertificates: [] },
                       },
-                      status: 'APPROVED'
+                      status: 'APPROVED',
+                      assessmentMethod: '360_EVALUATION'
                     };
                     await dataService.addSkill(skill);
                     skills.push(skill);
@@ -227,7 +228,8 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, onComplete, onCanc
                   category: row['Category (Technical/Safety/Management/Soft Skills/Behavioral)']?.toString() || 'Technical',
                   assessmentQuestion: row['Assessment Question']?.toString() || '',
                   levels,
-                  status: existingSkill ? existingSkill.status : 'APPROVED'
+                  status: existingSkill ? existingSkill.status : 'APPROVED',
+                  assessmentMethod: existingSkill ? existingSkill.assessmentMethod : '360_EVALUATION'
                 };
                 
                 if (existingSkill) {

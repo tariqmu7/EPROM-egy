@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { dataService } from '../services/store';
 import { User, JobProfile, Skill } from '../types';
-import { Upload, FileText, CheckCircle, Clock, AlertCircle } from 'lucide-react';
+import { Upload, FileText, CheckCircle, Clock, AlertCircle, ExternalLink } from 'lucide-react';
 
 export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser }) => {
   const [selectedSkillId, setSelectedSkillId] = useState<string>('');
@@ -14,6 +14,7 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
   const jobs = useMemo(() => dataService.getAllJobs(), []);
   const skills = useMemo(() => dataService.getAllSkills(), []);
   const myEvidences = useMemo(() => dataService.getEvidences({ userId: currentUser.id }), [currentUser.id]);
+  const selectedSkill = useMemo(() => skills.find(s => s.id === selectedSkillId), [skills, selectedSkillId]);
 
   const myJobProfile = useMemo(() => {
     return jobs.find(j => j.id === currentUser.jobProfileId);
@@ -70,7 +71,8 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
               4: { level: 4, description: 'Advanced', requiredCertificates: [] },
               5: { level: 5, description: 'Expert', requiredCertificates: [] }
             },
-            status: 'PENDING'
+            status: 'PENDING',
+            assessmentMethod: 'DOCUMENT_UPLOAD'
           };
           await dataService.addSkill(newSkill);
           finalSkillId = newSkill.id;
@@ -197,6 +199,18 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
                   />
                   <p className="text-xs text-slate-500 mt-1">This new competency will be submitted to the admin for approval.</p>
                 </div>
+              )}
+
+              {selectedSkill?.assessmentMethod === 'ONLINE_ASSESSMENT' && selectedSkill.assessmentLink && (
+                 <div className="bg-blue-50 border border-blue-200 p-4 rounded-sm flex flex-col gap-3">
+                    <p className="text-sm text-blue-800 font-medium flex items-center gap-2">
+                       <AlertCircle size={16} /> This competency requires an online assessment!
+                    </p>
+                    <p className="text-xs text-blue-700">Please click the link below to complete the assessment. Once finished, take a screenshot or download your certificate and upload it below as your evidence.</p>
+                    <a href={selectedSkill.assessmentLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-sm font-bold text-white bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded-none self-start transition-colors">
+                      <ExternalLink size={16} /> Go to Online Assessment Portal
+                    </a>
+                 </div>
               )}
 
               <div>

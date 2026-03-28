@@ -598,8 +598,10 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
        category: formData.category,
        assessmentQuestion: formData.assessmentQuestion,
        levels: formData.levels as any,
-       status: 'APPROVED'
-    });
+       status: 'APPROVED',
+       assessmentMethod: formData.assessmentMethod || '360_EVALUATION',
+       assessmentLink: formData.assessmentMethod === 'ONLINE_ASSESSMENT' ? formData.assessmentLink : undefined
+    } as Skill);
   };
 
   const updateLevel = (lvl: number, field: string, value: any) => {
@@ -632,12 +634,35 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
                 <option value="Behavioral">Behavioral</option>
             </select>
          </div>
-         <div className="md:col-span-2">
+          <div className="md:col-span-2">
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Assessment Question</label>
             <input className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none"
                placeholder="e.g. How effectively does the employee..."
                value={formData.assessmentQuestion || ''} onChange={e => setFormData({...formData, assessmentQuestion: e.target.value})} />
          </div>
+         
+         <div className="md:col-span-1">
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Assessment Method</label>
+            <select className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none"
+               value={formData.assessmentMethod || '360_EVALUATION'} onChange={e => setFormData({...formData, assessmentMethod: e.target.value as any})}>
+                <option value="360_EVALUATION">360° Evaluation (Self/Peer/Manager)</option>
+                <option value="DOCUMENT_UPLOAD">Evidence Upload (Certificates/Proof)</option>
+                <option value="ONLINE_ASSESSMENT">Online Assessment</option>
+                <option value="INTERVIEW">Managerial Interview</option>
+            </select>
+         </div>
+
+         {formData.assessmentMethod === 'ONLINE_ASSESSMENT' && (
+           <div className="md:col-span-1">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 flex justify-between items-center">
+                <span>Assessment Link</span>
+                <span className="text-slate-400 text-[10px] lowercase">Google Form, etc.</span>
+              </label>
+              <input type="url" className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none"
+                 placeholder="https://docs.google.com/forms/..."
+                 value={formData.assessmentLink || ''} onChange={e => setFormData({...formData, assessmentLink: e.target.value})} />
+           </div>
+         )}
        </div>
 
        <div className="border-t border-slate-300 pt-6">
