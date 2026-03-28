@@ -130,7 +130,7 @@ export const AdminAnalytics: React.FC = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-sm  border border-slate-300 flex items-center gap-4">
-          <div className="w-12 h-12 bg-slate-50 text-slate-900 rounded-sm flex items-center justify-center">
+          <div className="w-12 h-12 bg-blue-50 text-blue-700 rounded-sm flex items-center justify-center">
             <Users size={24} />
           </div>
           <div>
@@ -142,7 +142,7 @@ export const AdminAnalytics: React.FC = () => {
         </div>
         
         <div className="bg-white p-6 rounded-sm  border border-slate-300 flex items-center gap-4">
-          <div className="w-12 h-12 bg-slate-50 text-slate-700 rounded-sm flex items-center justify-center">
+          <div className="w-12 h-12 bg-emerald-50 text-emerald-700 rounded-sm flex items-center justify-center">
             <Activity size={24} />
           </div>
           <div>
@@ -154,7 +154,7 @@ export const AdminAnalytics: React.FC = () => {
         </div>
 
         <div className="bg-white p-6 rounded-sm  border border-slate-300 flex items-center gap-4">
-          <div className="w-12 h-12 bg-slate-50 text-slate-700 rounded-sm flex items-center justify-center">
+          <div className="w-12 h-12 bg-emerald-50 text-emerald-700 rounded-sm flex items-center justify-center">
             <TrendingUp size={24} />
           </div>
           <div>

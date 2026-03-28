@@ -161,13 +161,13 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                        <span className={`text-xs font-bold ${stats.compliance >= 80 ? 'text-slate-700' : stats.compliance >= 50 ? 'text-slate-700' : 'text-slate-700'}`}>
+                                                        <span className={`text-xs font-bold ${stats.compliance >= 80 ? 'text-emerald-700' : stats.compliance >= 50 ? 'text-blue-700' : 'text-slate-700'}`}>
                                                             {stats.compliance}%
                                                         </span>
                                                     </div>
                                                     <div className="w-full bg-slate-100 rounded-none h-2 overflow-hidden">
                                                         <div 
-                                                            className={`h-full rounded-none ${stats.compliance >= 80 ? 'bg-slate-500' : stats.compliance >= 50 ? 'bg-slate-500' : 'bg-slate-500'}`} 
+                                                            className={`h-full rounded-none ${stats.compliance >= 80 ? 'bg-emerald-500' : stats.compliance >= 50 ? 'bg-blue-500' : 'bg-slate-500'}`} 
                                                             style={{ width: `${stats.compliance}%` }}
                                                         ></div>
                                                     </div>
@@ -389,14 +389,14 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
                             <div className="bg-slate-50 rounded-none p-3 border border-slate-100">
                                 <div className="text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Compliance</div>
                                 <div className="flex items-center gap-2 mb-2">
-                                    <span className={`text-lg font-bold ${stats.compliance >= 80 ? 'text-slate-700' : stats.compliance >= 50 ? 'text-slate-700' : 'text-slate-700'}`}>
+                                    <span className={`text-lg font-bold ${stats.compliance >= 80 ? 'text-emerald-700' : stats.compliance >= 50 ? 'text-blue-700' : 'text-slate-700'}`}>
                                         {stats.compliance}%
                                     </span>
-                                    {stats.compliance >= 80 ? <CheckCircle size={14} className="text-slate-700"/> : <TrendingUp size={14} className="text-slate-700"/>}
+                                    {stats.compliance >= 80 ? <CheckCircle size={14} className="text-emerald-500"/> : <TrendingUp size={14} className="text-blue-700"/>}
                                 </div>
                                 <div className="w-full bg-slate-200 rounded-none h-1.5 overflow-hidden">
                                     <div 
-                                        className={`h-full rounded-none ${stats.compliance >= 80 ? 'bg-slate-500' : stats.compliance >= 50 ? 'bg-slate-500' : 'bg-slate-500'}`} 
+                                        className={`h-full rounded-none ${stats.compliance >= 80 ? 'bg-emerald-500' : stats.compliance >= 50 ? 'bg-blue-500' : 'bg-slate-500'}`} 
                                         style={{ width: `${stats.compliance}%` }}
                                     ></div>
                                 </div>
@@ -407,7 +407,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
                                     <span className={`text-lg font-bold ${stats.gaps === 0 ? 'text-slate-700' : 'text-slate-700'}`}>
                                         {stats.gaps}
                                     </span>
-                                    {stats.gaps > 0 && <AlertCircle size={14} className="text-slate-700"/>}
+                                    {stats.gaps > 0 && <AlertCircle size={14} className="text-amber-600"/>}
                                 </div>
                             </div>
                         </div>

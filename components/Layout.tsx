@@ -20,11 +20,11 @@ const NavItem = memo(({ id, label, icon: Icon, activeTab, onSwitchTab }: { id: s
       onClick={() => onSwitchTab(id)}
       className={`relative flex items-center gap-2 px-3 py-2 text-sm font-medium transition-all duration-200 rounded-sm group whitespace-nowrap flex-shrink-0 ${
         isActive 
-          ? 'text-slate-900 bg-slate-50  border border-slate-300' 
+          ? 'text-blue-700 bg-blue-50 border border-blue-200' 
           : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
       }`}
     >
-      <Icon size={18} className={`${isActive ? 'text-slate-900' : 'text-slate-600 group-hover:text-slate-900'}`} />
+      <Icon size={18} className={`${isActive ? 'text-blue-700' : 'text-slate-600 group-hover:text-blue-700'}`} />
       <span className="hidden md:inline">{label}</span>
     </button>
   );

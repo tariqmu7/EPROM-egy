@@ -43,8 +43,8 @@ export const AdminCycles: React.FC = () => {
       id: 'baseline',
       name: 'The Baseline Assessment (Initial)',
       icon: Activity,
-      color: 'text-slate-800',
-      bgColor: 'bg-slate-50',
+      color: 'text-blue-700',
+      bgColor: 'bg-blue-50',
       when: 'Upon hiring, transferring to a new role, or moving to a new facility.',
       goal: 'Establish the baseline. You cannot manage what you have not measured. Even a 20-year veteran gets a baseline assessment to prove they meet your site\'s specific standards, not just their previous employer\'s.'
     },
@@ -52,8 +52,8 @@ export const AdminCycles: React.FC = () => {
       id: 'time-based',
       name: 'The Time-Based Cycle (The Matrix Standard)',
       icon: Calendar,
-      color: 'text-slate-600',
-      bgColor: 'bg-slate-50',
+      color: 'text-emerald-600',
+      bgColor: 'bg-emerald-50',
       when: 'Automated tracking based on criticality (High-Risk: 1-2 years, Medium-Risk: 3 years).',
       goal: 'Ensure continuous compliance. High-Risk tasks (e.g., PTW, LOTO, Confined Space) require frequent reassessment. Medium-Risk tasks (e.g., Pump alignment, RCA) are retained well if done regularly.'
     },
@@ -61,8 +61,8 @@ export const AdminCycles: React.FC = () => {
       id: 'event-driven',
       name: 'The Event-Driven Assessment (Triggered)',
       icon: Zap,
-      color: 'text-slate-600',
-      bgColor: 'bg-slate-50',
+      color: 'text-emerald-600',
+      bgColor: 'bg-emerald-50',
       when: 'Post-Incident, New Equipment/SOPs, or Prolonged Absence (6-12 months).',
       goal: 'Immediate reassessment based on specific events. Resets the clock before the standard 3-year mark to ensure safety and compliance after critical changes or incidents.'
     },
@@ -70,8 +70,8 @@ export const AdminCycles: React.FC = () => {
       id: 'behavioral',
       name: 'The Behavioral Cycle (360-Degree Evaluation)',
       icon: Users,
-      color: 'text-slate-600',
-      bgColor: 'bg-slate-50',
+      color: 'text-emerald-600',
+      bgColor: 'bg-emerald-50',
       when: 'Annually (often tied to standard performance review periods).',
       goal: 'Measure safety culture, teamwork, and communication. Lighter to execute than technical evidence, done yearly to track trends in leadership and attitude.'
     }
@@ -91,8 +91,8 @@ export const AdminCycles: React.FC = () => {
       </div>
 
       {successMessage && (
-        <div className="bg-slate-50 border border-slate-200 text-slate-800 px-4 py-3 rounded-sm flex items-center gap-3 animate-fade-in">
-          <CheckCircle size={20} className="text-slate-600" />
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-sm flex items-center gap-3 animate-fade-in">
+          <CheckCircle size={20} className="text-emerald-500" />
           <p className="font-medium">{successMessage}</p>
         </div>
       )}

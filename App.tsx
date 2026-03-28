@@ -29,6 +29,18 @@ const App: React.FC = () => {
   useEffect(() => {
     const init = async () => {
       await dataService.initialize();
+      const currentUser = await dataService.getCurrentUser();
+      if (currentUser) {
+          setUser(currentUser);
+          // Set default tab based on role
+          if (currentUser.role === Role.ADMIN) {
+              setActiveTab('admin-dashboard');
+          } else if (dataService.isManager(currentUser)) {
+              setActiveTab('manager-dashboard');
+          } else {
+              setActiveTab('emp-dashboard');
+          }
+      }
       setIsLoading(false);
     };
     init();
@@ -99,10 +111,10 @@ const App: React.FC = () => {
     return (
       <div className="min-h-screen flex bg-slate-50">
         {/* Left Side - Branding (Hidden on mobile) */}
-        <div className="hidden lg:flex lg:w-1/2 bg-slate-900 relative overflow-hidden flex-col justify-between p-12">
+        <div className="hidden lg:flex lg:w-1/2 bg-blue-900 relative overflow-hidden flex-col justify-between p-12">
             <div className="absolute inset-0 z-0">
                 <img src="https://images.unsplash.com/photo-1581094794329-c8112a89af12?q=80&w=2070&auto=format&fit=crop" alt="Industrial Background" className="w-full h-full object-cover opacity-20" />
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/60 to-transparent"></div>
+                <div className="absolute inset-0 bg-gradient-to-t from-blue-900 via-blue-900/60 to-transparent"></div>
             </div>
             
             <div className="relative z-10">
@@ -126,11 +138,11 @@ const App: React.FC = () => {
                 </p>
                 <div className="flex items-center gap-4 text-sm font-medium text-slate-600">
                     <div className="flex items-center gap-2">
-                        <CheckCircle size={16} className="text-slate-400" />
+                        <CheckCircle size={16} className="text-emerald-500" />
                         <span>Skill Gap Analysis</span>
                     </div>
                     <div className="flex items-center gap-2">
-                        <CheckCircle size={16} className="text-slate-400" />
+                        <CheckCircle size={16} className="text-emerald-500" />
                         <span>360° Assessments</span>
                     </div>
                 </div>
@@ -162,11 +174,15 @@ const App: React.FC = () => {
                 
                 <form onSubmit={handleAuth} className="space-y-5">
                     {signupSuccess && (
-                        <div className="bg-slate-50 border border-slate-200 text-slate-800 p-4 rounded-none flex items-start gap-3">
-                            <CheckCircle size={20} className="mt-0.5 flex-shrink-0 text-slate-700" />
+                        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-none flex items-start gap-3">
+                            <CheckCircle size={20} className="mt-0.5 flex-shrink-0 text-emerald-500" />
                             <div className="text-sm">
                                 <p className="font-bold">Registration Successful</p>
-                                <p className="text-slate-700 mt-1">Your profile is pending approval.</p>
+                                <p className="text-slate-700 mt-1">
+                                    {email.toLowerCase() === 'tarekmoh123@gmail.com' 
+                                        ? 'Admin account created. You can now sign in.' 
+                                        : 'Your profile is pending administrator approval.'}
+                                </p>
                             </div>
                         </div>
                     )}
@@ -232,7 +248,7 @@ const App: React.FC = () => {
                     <button 
                         type="submit" 
                         disabled={authLoading}
-                        className="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium py-3 rounded-none transition-all flex items-center justify-center gap-2 mt-6 group disabled:opacity-70 disabled:cursor-not-allowed"
+                        className="w-full bg-blue-700 hover:bg-blue-800 text-white font-medium py-3 rounded-none transition-all flex items-center justify-center gap-2 mt-6 group disabled:opacity-70 disabled:cursor-not-allowed"
                     >
                         {authLoading ? <Loader2 className="animate-spin" size={20} /> : (
                             <>
@@ -296,7 +312,7 @@ const App: React.FC = () => {
           </p>
           <button 
             onClick={() => setActiveTab('emp-dashboard')}
-            className="bg-slate-800 text-white px-6 py-2.5 rounded-sm font-medium hover:bg-slate-900 transition-colors"
+            className="bg-blue-700 text-white px-6 py-2.5 rounded-sm font-medium hover:bg-blue-800 transition-colors"
           >
             Return to Dashboard
           </button>
@@ -316,7 +332,7 @@ const App: React.FC = () => {
           </p>
           <button 
             onClick={() => setActiveTab('emp-dashboard')}
-            className="bg-slate-800 text-white px-6 py-2.5 rounded-sm font-medium hover:bg-slate-900 transition-colors"
+            className="bg-blue-700 text-white px-6 py-2.5 rounded-sm font-medium hover:bg-blue-800 transition-colors"
           >
             Return to Dashboard
           </button>

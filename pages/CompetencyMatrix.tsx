@@ -174,7 +174,7 @@ export const CompetencyMatrix: React.FC<{ currentUser: User }> = ({ currentUser 
                         icon = <Clock size={14} />;
                         label = 'Pending Review';
                       } else {
-                        bgColor = 'bg-slate-100 text-slate-800 border-slate-200';
+                        bgColor = 'bg-rose-100 text-rose-800 border-rose-200';
                         icon = <AlertTriangle size={14} />;
                         label = 'Gap / Risk';
                       }

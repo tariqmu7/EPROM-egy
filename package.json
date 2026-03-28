@@ -10,13 +10,15 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "lucide-react": "^0.344.0",
-    "recharts": "^2.12.2",
     "@supabase/supabase-js": "^2.39.7",
     "clsx": "^2.1.0",
-    "tailwind-merge": "^2.2.1"
+    "firebase": "^12.11.0",
+    "lucide-react": "^0.344.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "recharts": "^2.12.2",
+    "tailwind-merge": "^2.2.1",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/react": "^18.3.3",

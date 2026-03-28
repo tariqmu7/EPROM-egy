@@ -2,8 +2,9 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { dataService } from '../services/store';
 import { User, Role, JobProfile, Skill, JobProfileSkill, OrgLevel, ORG_LEVEL_LABELS, Department, ORG_HIERARCHY_ORDER, PROFICIENCY_LABELS } from '../types';
 import { PROFICIENCY_DEFINITIONS } from '../constants';
-import { Plus, Users, Briefcase, ChevronRight, CheckCircle, Shield, ShieldCheck, X, Save, Trash2, ArrowLeft, UserPlus, Building2, Search, Edit2, UserCheck, AlertCircle, Layers, BookOpen, MoreHorizontal, LayoutGrid, Activity, Eye, AlertTriangle } from 'lucide-react';
+import { Plus, Users, Briefcase, ChevronRight, CheckCircle, Shield, ShieldCheck, X, Save, Trash2, ArrowLeft, UserPlus, Building2, Search, Edit2, UserCheck, AlertCircle, Layers, BookOpen, MoreHorizontal, LayoutGrid, Activity, Eye, AlertTriangle, FileSpreadsheet } from 'lucide-react';
 import { SearchableSelect, Option } from '../components/SearchableSelect';
+import { BulkUpload } from '../components/BulkUpload';
 import { AdminAnalytics } from './AdminAnalytics';
 import { AdminCycles } from './AdminCycles';
 
@@ -338,7 +339,7 @@ const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void,
 
             <div className="pt-6 flex justify-end gap-3 border-t border-slate-100">
                 <button type="button" onClick={onCancel} className="px-6 py-2 text-slate-600 hover:bg-slate-100 rounded-sm transition-colors font-bold uppercase tracking-wide text-xs">Cancel</button>
-                <button type="submit" className={`px-6 py-2 text-white rounded-sm transition-all flex items-center gap-2 font-bold uppercase tracking-wide text-xs  hover: ${isPending ? 'bg-slate-800 hover:bg-slate-900' : 'bg-slate-900 hover:bg-slate-800'}`}>
+                <button type="submit" className={`px-6 py-2 text-white rounded-sm transition-all flex items-center gap-2 font-bold uppercase tracking-wide text-xs  hover: ${isPending ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-700 hover:bg-blue-800'}`}>
                     {isPending ? <UserCheck size={16} /> : <Save size={16} />} 
                     {isPending ? 'Approve & Activate' : 'Save Employee'}
                 </button>
@@ -442,7 +443,7 @@ const JobForm: React.FC<{ initialData?: JobProfile | null, onSave: (j: JobProfil
                  const reqsCount = (formData.requirements?.[level] || []).length;
                  return (
                    <button type="button" key={level} onClick={() => setActiveLevel(level)}
-                     className={`w-full flex justify-between items-center px-4 py-3 rounded-sm text-xs font-bold transition-all border ${activeLevel === level ? 'bg-slate-900 text-white border-slate-900 ' : 'bg-white text-slate-700 border-slate-300 hover:border-slate-300'}`}>
+                     className={`w-full flex justify-between items-center px-4 py-3 rounded-sm text-xs font-bold transition-all border ${activeLevel === level ? 'bg-blue-700 text-white border-blue-800 ' : 'bg-white text-slate-700 border-slate-300 hover:border-slate-300'}`}>
                       <div className="flex flex-col items-start">
                         <span>{ORG_LEVEL_LABELS[level]}</span>
                         <span className={`text-[9px] mt-0.5 ${activeLevel === level ? 'text-white/60' : 'text-slate-500'}`}>{reqsCount} Skills Assigned</span>
@@ -567,7 +568,7 @@ const JobForm: React.FC<{ initialData?: JobProfile | null, onSave: (j: JobProfil
 
       <div className="pt-6 flex justify-end gap-3 border-t border-slate-100">
           <button type="button" onClick={onCancel} className="px-6 py-2 text-slate-600 hover:bg-slate-100 rounded-sm font-bold uppercase tracking-wide text-xs transition-colors">Cancel</button>
-          <button type="submit" className="px-6 py-2 bg-slate-900 text-white rounded-sm font-bold uppercase tracking-wide text-xs  hover:bg-slate-800 flex items-center gap-2 transition-all">
+          <button type="submit" className="px-6 py-2 bg-blue-700 text-white rounded-sm font-bold uppercase tracking-wide text-xs  hover:bg-blue-800 flex items-center gap-2 transition-all">
              <Save size={16} /> Save Profile
           </button>
       </div>
@@ -676,7 +677,7 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
 
        <div className="pt-6 flex justify-end gap-3 border-t border-slate-100">
           <button type="button" onClick={onCancel} className="px-6 py-2 text-slate-600 hover:bg-slate-100 rounded-sm font-bold uppercase tracking-wide text-xs transition-colors">Cancel</button>
-          <button type="submit" className="px-6 py-2 bg-slate-900 text-white rounded-sm font-bold uppercase tracking-wide text-xs  hover:bg-slate-800 flex items-center gap-2 transition-all">
+          <button type="submit" className="px-6 py-2 bg-blue-700 text-white rounded-sm font-bold uppercase tracking-wide text-xs  hover:bg-blue-800 flex items-center gap-2 transition-all">
              <Save size={16} /> Save Definition
           </button>
       </div>
@@ -747,7 +748,7 @@ const DepartmentForm: React.FC<{ initialData?: Department | null, onSave: (d: De
 
             <div className="pt-6 flex justify-end gap-3 border-t border-slate-100">
                 <button type="button" onClick={onCancel} className="px-6 py-2 text-slate-600 hover:bg-slate-100 rounded-sm font-bold uppercase tracking-wide text-xs transition-colors">Cancel</button>
-                <button type="submit" className="px-6 py-2 bg-slate-900 text-white rounded-sm font-bold uppercase tracking-wide text-xs  hover:bg-slate-800 flex items-center gap-2 transition-all">
+                <button type="submit" className="px-6 py-2 bg-blue-700 text-white rounded-sm font-bold uppercase tracking-wide text-xs  hover:bg-blue-800 flex items-center gap-2 transition-all">
                     <Save size={16} /> Save Dept
                 </button>
             </div>
@@ -767,6 +768,8 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
   // Search State
   const [searchTerm, setSearchTerm] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [showBulkUpload, setShowBulkUpload] = useState(false);
+  const [bulkType, setBulkType] = useState<'USER' | 'JOB' | 'SKILL' | 'DEPT'>('USER');
 
   // Reset search when view changes
   useEffect(() => {
@@ -832,9 +835,9 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
   }, [depts, searchTerm, users]);
 
 
-  const handleApprove = useCallback((user: User) => {
-    dataService.updateUser({ ...user, status: 'ACTIVE' });
-    dataService.logActivity('Approved User', user.name);
+  const handleApprove = useCallback(async (user: User) => {
+    await dataService.updateUser({ ...user, status: 'ACTIVE' });
+    await dataService.logActivity('Approved User', user.name);
     setRefreshKey(k => k + 1);
   }, []);
 
@@ -848,9 +851,9 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
     handleEdit('SKILL', skill);
   }, []);
 
-  const handleReject = useCallback((user: User) => {
-    dataService.updateUser({ ...user, status: 'REJECTED' });
-    dataService.logActivity('Rejected User', user.name);
+  const handleReject = useCallback(async (user: User) => {
+    await dataService.updateUser({ ...user, status: 'REJECTED' });
+    await dataService.logActivity('Rejected User', user.name);
     setRefreshKey(k => k + 1);
   }, []);
 
@@ -874,25 +877,30 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
       setFormMode(true);
   }, []);
 
-  const handleDelete = useCallback((type: 'USER' | 'JOB' | 'SKILL' | 'DEPT', id: string) => {
+  const handleBulkUpload = useCallback((type: 'USER' | 'JOB' | 'SKILL' | 'DEPT') => {
+    setBulkType(type);
+    setShowBulkUpload(true);
+  }, []);
+
+  const handleDelete = useCallback(async (type: 'USER' | 'JOB' | 'SKILL' | 'DEPT', id: string) => {
       if (window.confirm("Are you sure you want to delete this record? This action cannot be undone.")) {
-          if (type === 'USER') dataService.removeUser(id);
-          if (type === 'JOB') dataService.removeJobProfile(id);
-          if (type === 'SKILL') dataService.removeSkill(id);
-          if (type === 'DEPT') dataService.removeDepartment(id);
+          if (type === 'USER') await dataService.removeUser(id);
+          if (type === 'JOB') await dataService.removeJobProfile(id);
+          if (type === 'SKILL') await dataService.removeSkill(id);
+          if (type === 'DEPT') await dataService.removeDepartment(id);
           setRefreshKey(k => k + 1);
       }
   }, []);
 
-  const handleSave = useCallback((item: any) => {
+  const handleSave = useCallback(async (item: any) => {
       if (formType === 'USER') {
           const exists = users.find(u => u.id === item.id);
-          if (exists) dataService.updateUser(item);
-          else dataService.addUser(item);
+          if (exists) await dataService.updateUser(item);
+          else await dataService.addUser(item);
       }
-      if (formType === 'JOB') editItem ? dataService.updateJobProfile(item) : dataService.addJobProfile(item);
-      if (formType === 'SKILL') editItem ? dataService.updateSkill(item) : dataService.addSkill(item);
-      if (formType === 'DEPT') editItem ? dataService.updateDepartment(item) : dataService.addDepartment(item);
+      if (formType === 'JOB') editItem ? await dataService.updateJobProfile(item) : await dataService.addJobProfile(item);
+      if (formType === 'SKILL') editItem ? await dataService.updateSkill(item) : await dataService.addSkill(item);
+      if (formType === 'DEPT') editItem ? await dataService.updateDepartment(item) : await dataService.addDepartment(item);
 
       setFormMode(false);
       setRefreshKey(k => k + 1);
@@ -933,9 +941,9 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
   if (view === 'OVERVIEW') {
       return (
         <div className="space-y-8">
-            <div className="relative overflow-hidden rounded-none bg-slate-900 p-8 ">
-                <div className="absolute top-0 right-0 -mt-10 -mr-10 h-64 w-64 rounded-none bg-slate-800/10 blur-3xl"></div>
-                <div className="absolute bottom-0 left-0 -mb-10 -ml-10 h-64 w-64 rounded-none bg-slate-800/10 blur-3xl"></div>
+            <div className="relative overflow-hidden rounded-none bg-blue-900 p-8 ">
+                <div className="absolute top-0 right-0 -mt-10 -mr-10 h-64 w-64 rounded-none bg-blue-800/10 blur-3xl"></div>
+                <div className="absolute bottom-0 left-0 -mb-10 -ml-10 h-64 w-64 rounded-none bg-blue-800/10 blur-3xl"></div>
                 
                 <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
                     <div>
@@ -963,22 +971,31 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                 <button onClick={() => onNavigate('admin-users')} className="bg-white rounded-none  border border-slate-300 hover: transition-all group overflow-hidden text-left">
                     <div className="p-6">
                         <div className="flex justify-between items-start mb-4">
-                             <div className="w-12 h-12 bg-slate-50 text-slate-900 rounded-sm flex items-center justify-center group-hover:bg-slate-800 group-hover:text-white transition-colors">
+                             <div className="w-12 h-12 bg-blue-50 text-blue-700 rounded-sm flex items-center justify-center group-hover:bg-blue-700 group-hover:text-white transition-colors">
                                 <Users size={24} />
                             </div>
-                            <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded-none uppercase">Active</span>
+                            <span className="text-xs font-bold bg-emerald-100 text-emerald-800 px-2 py-1 rounded-none uppercase">Active</span>
                         </div>
                         <h3 className="font-bold text-slate-900 text-lg">Workforce Directory</h3>
                         <p className="text-sm text-slate-700 mt-1">Manage employees & hierarchy</p>
                         
-                        <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
+                        <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
                             <span className="text-2xl font-bold text-slate-900">{users.length}</span>
-                            <span className="text-xs font-semibold text-slate-900 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-                                View Records <ChevronRight size={14} />
-                            </span>
+                            <div className="flex gap-2">
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); setBulkType('USER'); setShowBulkUpload(true); }}
+                                    className="p-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-sm border border-blue-200 transition-colors"
+                                    title="Bulk Upload Workforce"
+                                >
+                                    <FileSpreadsheet size={16} />
+                                </button>
+                                <span className="text-xs font-semibold text-slate-900 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                                    View Records <ChevronRight size={14} />
+                                </span>
+                            </div>
                         </div>
                     </div>
-                    <div className="h-1 w-full bg-slate-800 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></div>
+                    <div className="h-1 w-full bg-blue-700 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></div>
                 </button>
 
                 <button onClick={() => onNavigate('admin-jobs')} className="bg-white rounded-none  border border-slate-300 hover: transition-all group overflow-hidden text-left">
@@ -987,16 +1004,25 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                              <div className="w-12 h-12 bg-slate-50 text-slate-600 rounded-sm flex items-center justify-center group-hover:bg-slate-600 group-hover:text-white transition-colors">
                                 <Briefcase size={24} />
                             </div>
-                             <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded-none uppercase">Defined</span>
+                             <span className="text-xs font-bold bg-blue-100 text-blue-800 px-2 py-1 rounded-none uppercase">Defined</span>
                         </div>
                         <h3 className="font-bold text-slate-900 text-lg">Job Profiles</h3>
                         <p className="text-sm text-slate-700 mt-1">Competency requirements</p>
                         
-                        <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
+                        <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
                             <span className="text-2xl font-bold text-slate-900">{jobs.length}</span>
-                            <span className="text-xs font-semibold text-slate-600 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-                                Configure <ChevronRight size={14} />
-                            </span>
+                            <div className="flex gap-2">
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); setBulkType('JOB'); setShowBulkUpload(true); }}
+                                    className="p-2 bg-slate-50 hover:bg-slate-100 text-blue-700 rounded-sm border border-slate-200 transition-colors"
+                                    title="Bulk Upload Job Profiles"
+                                >
+                                    <FileSpreadsheet size={16} />
+                                </button>
+                                <span className="text-xs font-semibold text-slate-600 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                                    Configure <ChevronRight size={14} />
+                                </span>
+                            </div>
                         </div>
                     </div>
                     <div className="h-1 w-full bg-slate-600 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></div>
@@ -1008,16 +1034,25 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                              <div className="w-12 h-12 bg-slate-50 text-slate-700 rounded-sm flex items-center justify-center group-hover:bg-slate-600 group-hover:text-white transition-colors">
                                 <ShieldCheck size={24} />
                             </div>
-                             <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded-none uppercase">Library</span>
+                             <span className="text-xs font-bold bg-emerald-100 text-emerald-800 px-2 py-1 rounded-none uppercase">Library</span>
                         </div>
                         <h3 className="font-bold text-slate-900 text-lg">Skill Standards</h3>
                         <p className="text-sm text-slate-700 mt-1">Proficiency levels & certs</p>
                         
-                        <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
+                        <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
                             <span className="text-2xl font-bold text-slate-900">{skills.length}</span>
-                            <span className="text-xs font-semibold text-slate-700 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-                                Manage <ChevronRight size={14} />
-                            </span>
+                            <div className="flex gap-2">
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); setBulkType('SKILL'); setShowBulkUpload(true); }}
+                                    className="p-2 bg-slate-50 hover:bg-slate-100 text-blue-700 rounded-sm border border-slate-200 transition-colors"
+                                    title="Bulk Upload Skills"
+                                >
+                                    <FileSpreadsheet size={16} />
+                                </button>
+                                <span className="text-xs font-semibold text-slate-700 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                                    Manage <ChevronRight size={14} />
+                                </span>
+                            </div>
                         </div>
                     </div>
                     <div className="h-1 w-full bg-slate-600 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></div>
@@ -1029,26 +1064,35 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                              <div className="w-12 h-12 bg-slate-50 text-slate-700 rounded-sm flex items-center justify-center group-hover:bg-slate-600 group-hover:text-white transition-colors">
                                 <Building2 size={24} />
                             </div>
-                             <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded-none uppercase">Units</span>
+                             <span className="text-xs font-bold bg-blue-100 text-blue-800 px-2 py-1 rounded-none uppercase">Units</span>
                         </div>
                         <h3 className="font-bold text-slate-900 text-lg">Departments</h3>
                         <p className="text-sm text-slate-700 mt-1">Org structure</p>
                         
-                        <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
+                        <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
                             <span className="text-2xl font-bold text-slate-900">{depts.length}</span>
-                            <span className="text-xs font-semibold text-slate-600 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-                                Edit Structure <ChevronRight size={14} />
-                            </span>
+                            <div className="flex gap-2">
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); setBulkType('DEPT'); setShowBulkUpload(true); }}
+                                    className="p-2 bg-slate-50 hover:bg-slate-100 text-blue-700 rounded-sm border border-slate-200 transition-colors"
+                                    title="Bulk Upload Departments"
+                                >
+                                    <FileSpreadsheet size={16} />
+                                </button>
+                                <span className="text-xs font-semibold text-slate-600 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                                    Edit Structure <ChevronRight size={14} />
+                                </span>
+                            </div>
                         </div>
                     </div>
                     <div className="h-1 w-full bg-slate-600 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></div>
                 </button>
 
                 <div className="lg:col-span-4 bg-gradient-to-br from-slate-900 to-slate-800 rounded-none  p-8 text-white relative overflow-hidden">
-                    <div className="absolute top-0 right-0 -mt-10 -mr-10 h-64 w-64 rounded-none bg-slate-800/10 blur-3xl"></div>
+                    <div className="absolute top-0 right-0 -mt-10 -mr-10 h-64 w-64 rounded-none bg-blue-800/10 blur-3xl"></div>
                     <div className="relative z-10">
                         <div className="flex items-center gap-3 mb-4">
-                            <div className="p-2 bg-slate-800/20 rounded-sm">
+                            <div className="p-2 bg-blue-800/20 rounded-sm">
                                 <Activity size={24} className="text-slate-400" />
                             </div>
                             <h3 className="text-xl font-bold">Competency Model Engine</h3>
@@ -1097,7 +1141,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                     </div>
                 </div>
                 
-                <div className="bg-slate-900 rounded-none  border border-slate-800 p-6 text-white relative overflow-hidden">
+                <div className="bg-blue-900 rounded-none border border-blue-800 p-6 text-white relative overflow-hidden">
                      <div className="absolute top-0 right-0 -mt-4 -mr-4 h-32 w-32 rounded-none bg-slate-500/20 blur-2xl"></div>
                      <h3 className="font-bold text-white mb-2 relative z-10">Pending Actions</h3>
                      <p className="text-slate-500 text-sm mb-6 relative z-10">There are pending user registrations requiring approval.</p>
@@ -1154,7 +1198,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                        <button
                            key={tab}
                            onClick={() => setActiveTab(tab)}
-                           className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-none transition-all whitespace-nowrap ${activeTab === tab ? 'bg-slate-900 text-white ' : 'text-slate-600 hover:bg-slate-50'}`}
+                           className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-none transition-all whitespace-nowrap ${activeTab === tab ? 'bg-blue-700 text-white ' : 'text-slate-600 hover:bg-slate-50'}`}
                        >
                            {tab}
                        </button>
@@ -1184,7 +1228,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                                 <button
                                     key={tab}
                                     onClick={() => setActiveTab(tab)}
-                                    className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-none transition-all ${activeTab === tab ? 'bg-slate-900 text-white ' : 'text-slate-600 hover:bg-slate-50'}`}
+                                    className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-none transition-all ${activeTab === tab ? 'bg-blue-700 text-white ' : 'text-slate-600 hover:bg-slate-50'}`}
                                 >
                                     {tab}
                                 </button>
@@ -1192,10 +1236,18 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                         </div>
                     )}
                 </div>
-                <button onClick={() => handleAdd(view === 'USERS' ? 'USER' : view === 'JOBS' ? 'JOB' : view === 'SKILLS' ? 'SKILL' : 'DEPT')}
-                    className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-sm text-xs font-bold uppercase tracking-wide  flex items-center gap-2 transition-all w-full md:w-auto justify-center">
-                    <Plus size={16} /> Add {view === 'USERS' ? 'Employee' : view === 'JOBS' ? 'Profile' : view === 'SKILLS' ? 'Skill' : 'Department'}
-                </button>
+                <div className="flex items-center gap-2 w-full md:w-auto">
+                    <button 
+                        onClick={() => handleBulkUpload(view === 'USERS' ? 'USER' : view === 'JOBS' ? 'JOB' : view === 'SKILLS' ? 'SKILL' : 'DEPT')}
+                        className="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-sm text-xs font-bold uppercase tracking-wide flex items-center gap-2 transition-all flex-1 md:flex-none justify-center"
+                    >
+                        <FileSpreadsheet size={16} className="text-blue-700" /> Bulk Upload
+                    </button>
+                    <button onClick={() => handleAdd(view === 'USERS' ? 'USER' : view === 'JOBS' ? 'JOB' : view === 'SKILLS' ? 'SKILL' : 'DEPT')}
+                        className="bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-sm text-xs font-bold uppercase tracking-wide  flex items-center gap-2 transition-all flex-1 md:flex-none justify-center">
+                        <Plus size={16} /> Add {view === 'USERS' ? 'Employee' : view === 'JOBS' ? 'Profile' : view === 'SKILLS' ? 'Skill' : 'Department'}
+                    </button>
+                </div>
             </div>
 
            {/* Table */}
@@ -1234,11 +1286,11 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                                <td className="p-4">
                                    {user.status === 'PENDING' ? (
                                        <span className="inline-flex items-center gap-1.5 px-2 py-1 bg-slate-50 text-slate-700 border border-slate-100 text-[10px] font-bold uppercase tracking-wide rounded-none">
-                                           <AlertCircle size={10}/> Pending
+                                           <AlertCircle size={10} className="text-amber-500"/> <span className="text-amber-600">Pending</span>
                                        </span>
                                    ) : (
                                        <span className="inline-flex items-center gap-1.5 px-2 py-1 bg-slate-50 text-slate-700 border border-slate-100 text-[10px] font-bold uppercase tracking-wide rounded-none">
-                                           <CheckCircle size={10}/> Active
+                                           <CheckCircle size={10} className="text-emerald-600"/> <span className="text-emerald-700">Active</span>
                                        </span>
                                    )}
                                </td>
@@ -1316,6 +1368,16 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
            </div>
        </div>
        {viewSkill && <SkillDetailsModal skill={viewSkill} onClose={() => setViewSkill(null)} />}
+       {showBulkUpload && (
+         <BulkUpload 
+           type={bulkType} 
+           onComplete={() => {
+             setShowBulkUpload(false);
+             setRefreshKey(k => k + 1);
+           }}
+           onCancel={() => setShowBulkUpload(false)}
+         />
+       )}
     </div>
   );
 });

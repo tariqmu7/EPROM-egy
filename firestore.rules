@@ -1,0 +1,110 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN' ||
+        (request.auth.token.email == "tarekmoh123@gmail.com" && request.auth.token.email_verified == true)
+      );
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      // Allow users to create their own profile, or admins to create any profile
+      allow create: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      // Allow users to update their own profile (but not role), or admins to update any
+      allow update: if isAuthenticated() && (
+        (isOwner(userId) && request.resource.data.role == resource.data.role) || 
+        isAdmin()
+      );
+      // Allow users to delete their own profile (e.g. during migration from bulk upload) or admins
+      allow delete: if isAdmin() || (isAuthenticated() && 'email' in resource.data && resource.data.email.lower() == request.auth.token.email.lower());
+    }
+
+    match /skills/{skillId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /departments/{departmentId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /jobProfiles/{jobProfileId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /assessments/{assessmentId} {
+      allow read: if isAuthenticated();
+      // Users can create assessments where they are the rater
+      allow create: if isAuthenticated() && (request.resource.data.raterId == request.auth.uid || isAdmin());
+      allow update: if isAuthenticated() && (resource.data.raterId == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    match /activityLogs/{logId} {
+      allow read: if isAuthenticated();
+      // Anyone can create a log, but only admins can update/delete
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin();
+    }
+
+    match /evidences/{evidenceId} {
+      allow read: if isAuthenticated();
+      // Users can create their own evidence
+      allow create: if isAuthenticated() && (request.resource.data.userId == request.auth.uid || isAdmin());
+      // Users can update their own evidence (if pending), admins can update any
+      allow update: if isAuthenticated() && (
+        (resource.data.userId == request.auth.uid && resource.data.status == 'PENDING') || 
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /notifications/{notificationId} {
+      // Users can only read their own notifications
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      // System/Admins can create notifications for anyone
+      allow create: if isAuthenticated();
+      // Users can update their own notifications (e.g., mark as read)
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    match /assessmentCycles/{cycleId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /nominations/{nominationId} {
+      allow read: if isAuthenticated();
+      // Users can create nominations
+      allow create: if isAuthenticated() && request.resource.data.nominatorId == request.auth.uid;
+      // Users can update nominations if they are the rater (to approve/reject)
+      allow update: if isAuthenticated() && (resource.data.raterId == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
+    }
+  }
+}

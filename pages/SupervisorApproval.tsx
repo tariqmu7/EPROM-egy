@@ -27,15 +27,15 @@ export const SupervisorApproval: React.FC<{ currentUser: User }> = ({ currentUse
   const pendingEvidences = useMemo(() => allTeamEvidences.filter(e => e.status === 'PENDING'), [allTeamEvidences]);
   const historyEvidences = useMemo(() => allTeamEvidences.filter(e => e.status !== 'PENDING').sort((a, b) => new Date(b.reviewedAt || 0).getTime() - new Date(a.reviewedAt || 0).getTime()), [allTeamEvidences]);
 
-  const handleApprove = (id: string) => {
-    dataService.updateEvidenceStatus(id, 'APPROVED', currentUser.id, selectedLevel);
+  const handleApprove = async (id: string) => {
+    await dataService.updateEvidenceStatus(id, 'APPROVED', currentUser.id, selectedLevel);
     setSelectedEvidence(null);
     setIsViewing(false);
     setSelectedLevel(3); // Reset to default
   };
 
-  const handleReject = (id: string) => {
-    dataService.updateEvidenceStatus(id, 'REJECTED', currentUser.id);
+  const handleReject = async (id: string) => {
+    await dataService.updateEvidenceStatus(id, 'REJECTED', currentUser.id);
     setSelectedEvidence(null);
     setIsViewing(false);
   };
@@ -63,7 +63,7 @@ export const SupervisorApproval: React.FC<{ currentUser: User }> = ({ currentUse
                 className={`flex-1 py-3 px-4 text-sm font-bold flex items-center justify-center gap-2 transition-colors ${activeTab === 'PENDING' ? 'text-slate-900 border-b-2 border-slate-600 bg-white' : 'text-slate-500 hover:text-slate-700'}`}
               >
                 <Clock size={16} /> Pending
-                <span className="bg-slate-100 text-slate-800 text-xs font-bold px-2 py-0.5 rounded-none">{pendingEvidences.length}</span>
+                <span className="bg-amber-100 text-amber-800 text-xs font-bold px-2 py-0.5 rounded-none">{pendingEvidences.length}</span>
               </button>
               <button
                 onClick={() => { setActiveTab('HISTORY'); setSelectedEvidence(null); setIsViewing(false); }}
@@ -94,7 +94,7 @@ export const SupervisorApproval: React.FC<{ currentUser: User }> = ({ currentUse
                   ))}
                   {pendingEvidences.length === 0 && (
                     <div className="p-8 text-center text-slate-500">
-                      <CheckCircle size={32} className="mx-auto mb-3 text-slate-400" />
+                      <CheckCircle size={32} className="mx-auto mb-3 text-emerald-500" />
                       <p>All caught up! No pending evidence.</p>
                     </div>
                   )}
@@ -114,9 +114,9 @@ export const SupervisorApproval: React.FC<{ currentUser: User }> = ({ currentUse
                       <div className="text-xs font-medium text-slate-700 mb-2 truncate">{getSkillName(evidence.skillId)}</div>
                       <div className="flex items-center gap-2 text-xs">
                         {evidence.status === 'APPROVED' ? (
-                          <span className="flex items-center gap-1 text-slate-600 font-medium"><CheckCircle size={14} /> Approved</span>
+                          <span className="flex items-center gap-1 text-emerald-600 font-medium"><CheckCircle size={14} /> Approved</span>
                         ) : (
-                          <span className="flex items-center gap-1 text-slate-600 font-medium"><XCircle size={14} /> Rejected</span>
+                          <span className="flex items-center gap-1 text-rose-600 font-medium"><XCircle size={14} /> Rejected</span>
                         )}
                       </div>
                     </button>
@@ -162,13 +162,13 @@ export const SupervisorApproval: React.FC<{ currentUser: User }> = ({ currentUse
                     <div className="flex gap-2">
                       <button 
                         onClick={() => handleReject(selectedEvidence.id)}
-                        className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-sm text-sm font-medium transition-colors"
+                        className="flex items-center gap-2 px-4 py-2 bg-white border border-rose-200 text-rose-700 hover:bg-rose-50 rounded-sm text-sm font-medium transition-colors"
                       >
                         <XCircle size={16} /> Reject (Gap)
                       </button>
                       <button 
                         onClick={() => handleApprove(selectedEvidence.id)}
-                        className="flex items-center gap-2 px-4 py-2 bg-slate-600 text-white hover:bg-slate-700 rounded-sm text-sm font-medium transition-colors "
+                        className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white hover:bg-emerald-700 rounded-sm text-sm font-medium transition-colors "
                       >
                         <CheckCircle size={16} /> Approve
                       </button>

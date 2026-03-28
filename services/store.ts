@@ -1,620 +1,67 @@
 import { User, Role, JobProfile, Skill, Department, Assessment, ActivityLog, ORG_HIERARCHY_ORDER, Notification, AssessmentCycle, Nomination, IndividualTrainingPlan, TrainingRecommendation, OrgLevel, Evidence } from '../types';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { db, auth } from '../firebase';
+import { 
+  collection, 
+  doc, 
+  getDocs, 
+  getDoc, 
+  setDoc, 
+  updateDoc, 
+  deleteDoc, 
+  query, 
+  where, 
+  orderBy, 
+  limit,
+  onSnapshot,
+  Unsubscribe,
+  serverTimestamp,
+  Timestamp
+} from 'firebase/firestore';
+import { 
+  createUserWithEmailAndPassword, 
+  signInWithEmailAndPassword, 
+  signOut,
+  onAuthStateChanged
+} from 'firebase/auth';
 
 // ==========================================
 // 🔧 APP CONFIGURATION
 // ==========================================
 export const CONFIG = {
-  // 1. CHOOSE YOUR DATA SOURCE: 'MOCK' | 'SUPABASE'
-  // Change this to 'SUPABASE' to use the real backend.
-  SOURCE: 'MOCK', 
-
-  // 2. SUPABASE CONFIGURATION
-  // Get these from your Supabase Project Settings -> API
-  SUPABASE: {
-    url: "https://your-project.supabase.co", // Replace with your actual Supabase URL
-    key: "your-public-anon-key" // Replace with your actual Supabase Key
-  }
+  SOURCE: 'FIREBASE', 
 };
-
-// ==========================================
-// 📦 MOCK DATA (Egypt Oil & Gas Context)
-// ==========================================
-
-const MOCK_SKILLS: Skill[] = [
-  {
-    id: 's_eng_01',
-    name: 'Process Engineering Design',
-    category: 'Technical',
-    assessmentQuestion: 'Can the employee perform process simulations and equipment sizing for oil and gas facilities?',
-    levels: {
-      1: { level: 1, description: 'Understands basic process flow diagrams and P&IDs.', requiredCertificates: [] },
-      2: { level: 2, description: 'Performs simple hydraulic calculations and equipment sizing under supervision.', requiredCertificates: ['Process Engineering Basics'] },
-      3: { level: 3, description: 'Independently develops process simulations (e.g., HYSYS) and prepares equipment data sheets.', requiredCertificates: ['Advanced Process Simulation'] },
-      4: { level: 4, description: 'Leads process design for complex projects and optimizes existing facilities.', requiredCertificates: ['Senior Process Engineer Cert'] },
-      5: { level: 5, description: 'Subject Matter Expert; provides technical governance and reviews critical designs.', requiredCertificates: ['Process Engineering SME'] },
-    }
-  },
-  {
-    id: 's_maint_02',
-    name: 'Predictive Maintenance (Vibration Analysis)',
-    category: 'Technical',
-    assessmentQuestion: 'Demonstrates proficiency in vibration analysis and condition monitoring of rotating equipment.',
-    levels: {
-      1: { level: 1, description: 'Collects vibration data using portable analyzers.', requiredCertificates: [] },
-      2: { level: 2, description: 'Identifies common faults (unbalance, misalignment) from vibration spectra.', requiredCertificates: ['Vibration Analysis Level I'] },
-      3: { level: 3, description: 'Diagnoses complex machinery faults and recommends corrective actions.', requiredCertificates: ['Vibration Analysis Level II'] },
-      4: { level: 4, description: 'Manages condition monitoring programs and performs advanced diagnostics (e.g., ODS, Modal Analysis).', requiredCertificates: ['Vibration Analysis Level III'] },
-      5: { level: 5, description: 'Develops corporate reliability strategies and mentors junior analysts.', requiredCertificates: ['Vibration Analysis Level IV'] },
-    }
-  },
-  {
-    id: 's_mgt_02',
-    name: 'Maintenance Planning & Scheduling',
-    category: 'Management',
-    assessmentQuestion: 'Ability to plan, schedule, and coordinate maintenance activities to minimize downtime.',
-    levels: {
-      1: { level: 1, description: 'Assists in creating work orders and gathering materials.', requiredCertificates: [] },
-      2: { level: 2, description: 'Develops detailed job plans and estimates resources for routine maintenance.', requiredCertificates: ['Maintenance Planning Basics'] },
-      3: { level: 3, description: 'Schedules complex maintenance activities and manages backlog.', requiredCertificates: ['Certified Maintenance Planner'] },
-      4: { level: 4, description: 'Leads turnaround/shutdown planning and optimizes resource allocation.', requiredCertificates: ['Turnaround Management Cert'] },
-      5: { level: 5, description: 'Develops strategic maintenance plans and integrates with production schedules.', requiredCertificates: ['CMRP'] },
-    }
-  },
-  {
-    id: 's_hse_02',
-    name: 'Process Safety Management (PSM)',
-    category: 'Safety',
-    assessmentQuestion: 'Understands and applies Process Safety Management principles to prevent major accidents.',
-    levels: {
-      1: { level: 1, description: 'Aware of basic process safety concepts and major accident hazards.', requiredCertificates: ['HSE Induction'] },
-      2: { level: 2, description: 'Participates in HAZOP/LOPA studies and understands safety critical elements.', requiredCertificates: ['Process Safety Awareness'] },
-      3: { level: 3, description: 'Facilitates risk assessments and manages Management of Change (MOC) processes.', requiredCertificates: ['HAZOP Leader'] },
-      4: { level: 4, description: 'Audits PSM compliance and investigates high-potential process safety incidents.', requiredCertificates: ['Process Safety Auditor'] },
-      5: { level: 5, description: 'Develops corporate PSM frameworks and drives process safety culture.', requiredCertificates: ['Certified Process Safety Professional'] },
-    }
-  },
-  {
-    id: 's_eng_02',
-    name: 'Pipeline Integrity Management',
-    category: 'Technical',
-    assessmentQuestion: 'Proficiency in assessing and managing the integrity of oil and gas pipelines.',
-    levels: {
-      1: { level: 1, description: 'Understands basic pipeline components and corrosion mechanisms.', requiredCertificates: [] },
-      2: { level: 2, description: 'Assists in analyzing inline inspection (ILI) data and cathodic protection surveys.', requiredCertificates: ['Pipeline Integrity Basics'] },
-      3: { level: 3, description: 'Develops integrity management plans and calculates fitness-for-service.', requiredCertificates: ['API 1160'] },
-      4: { level: 4, description: 'Manages complex repair projects and optimizes inspection intervals.', requiredCertificates: ['Senior Pipeline Engineer'] },
-      5: { level: 5, description: 'Subject Matter Expert; develops corporate pipeline integrity standards.', requiredCertificates: ['Pipeline Integrity SME'] },
-    }
-  },
-  {
-    id: 's_mgt_03',
-    name: 'Project Management (Engineering)',
-    category: 'Management',
-    assessmentQuestion: 'Ability to manage engineering projects from concept to commissioning.',
-    levels: {
-      1: { level: 1, description: 'Assists in project tracking and document control.', requiredCertificates: [] },
-      2: { level: 2, description: 'Manages small engineering modifications and coordinates with contractors.', requiredCertificates: ['Project Management Fundamentals'] },
-      3: { level: 3, description: 'Leads multi-disciplinary engineering projects and manages budgets/schedules.', requiredCertificates: ['PMP'] },
-      4: { level: 4, description: 'Directs major capital projects and negotiates complex contracts.', requiredCertificates: ['Advanced Project Management'] },
-      5: { level: 5, description: 'Portfolio Manager; aligns engineering projects with strategic business goals.', requiredCertificates: ['PgMP'] },
-    }
-  },
-  {
-    id: 's_tech_rca',
-    name: 'RCA Standard Compliance',
-    category: 'Technical',
-    assessmentQuestion: 'Does the latest RCA report meet the SMRP standard for root cause analysis?',
-    levels: {
-      1: { level: 1, description: 'Understands basic RCA terminology.', requiredCertificates: [] },
-      2: { level: 2, description: 'Participates in RCA sessions and contributes data.', requiredCertificates: [] },
-      3: { level: 3, description: 'Conducts standard RCA investigations using 5-Whys or Fishbone.', requiredCertificates: ['RCA Practitioner'] },
-      4: { level: 4, description: 'Leads complex RCA investigations and verifies against SMRP standards.', requiredCertificates: ['SMRP RCA Leader'] },
-      5: { level: 5, description: 'SME in RCA; audits corporate investigations and develops standards.', requiredCertificates: ['CMRP'] },
-    }
-  },
-  {
-    id: 's_beh_listening',
-    name: 'Field Investigation Listening',
-    category: 'Behavioral',
-    assessmentQuestion: 'Does this engineer actively listen to field input during failure investigations?',
-    levels: {
-      1: { level: 1, description: 'Rarely seeks field input.', requiredCertificates: [] },
-      2: { level: 2, description: 'Listens when prompted by others.', requiredCertificates: [] },
-      3: { level: 3, description: 'Consistently seeks and listens to field input during investigations.', requiredCertificates: [] },
-      4: { level: 4, description: 'Actively encourages field staff to share insights and incorporates them into reports.', requiredCertificates: [] },
-      5: { level: 5, description: 'Role model for collaborative investigation; builds trust with field teams.', requiredCertificates: [] },
-    }
-  },
-  {
-    id: 's_tech_pump',
-    name: 'Pump Alignment (Physical)',
-    category: 'Technical',
-    assessmentQuestion: 'Can the technician physically perform precision pump alignment using laser or dial indicators?',
-    levels: {
-      1: { level: 1, description: 'Assists in setting up alignment tools.', requiredCertificates: [] },
-      2: { level: 2, description: 'Performs rough alignment under supervision.', requiredCertificates: [] },
-      3: { level: 3, description: 'Independently performs precision alignment to within tolerance.', requiredCertificates: ['Alignment Specialist'] },
-      4: { level: 4, description: 'Performs complex alignments on high-speed or multi-stage pumps.', requiredCertificates: ['Master Aligner'] },
-      5: { level: 5, description: 'Trains others in precision alignment techniques and troubleshoots chronic issues.', requiredCertificates: [] },
-    }
-  },
-  {
-    id: 's_beh_safety',
-    name: 'Safety Protocol Adherence',
-    category: 'Behavioral',
-    assessmentQuestion: 'Does this technician consistently follow safety protocols (like LOTO) even when rushing?',
-    levels: {
-      1: { level: 1, description: 'Follows protocols only when supervised.', requiredCertificates: [] },
-      2: { level: 2, description: 'Generally follows protocols but may skip steps under pressure.', requiredCertificates: [] },
-      3: { level: 3, description: 'Consistently follows all safety protocols regardless of schedule pressure.', requiredCertificates: [] },
-      4: { level: 4, description: 'Promotes safety protocols to others and intervenes in unsafe acts.', requiredCertificates: [] },
-      5: { level: 5, description: 'Safety champion; develops and improves site safety procedures.', requiredCertificates: [] },
-    }
-  },
-  {
-    id: 's_beh_mentor',
-    name: 'Mentorship & Knowledge Sharing',
-    category: 'Behavioral',
-    assessmentQuestion: 'Is the employee willing to mentor junior staff and share technical knowledge?',
-    levels: {
-      1: { level: 1, description: 'Keeps knowledge to themselves.', requiredCertificates: [] },
-      2: { level: 2, description: 'Shares knowledge only when asked directly.', requiredCertificates: [] },
-      3: { level: 3, description: 'Willingly mentors junior staff and shares lessons learned.', requiredCertificates: [] },
-      4: { level: 4, description: 'Actively seeks opportunities to mentor and develop others.', requiredCertificates: [] },
-      5: { level: 5, description: 'Recognized mentor; formalizes knowledge sharing programs.', requiredCertificates: [] },
-    }
-  },
-  {
-    id: 's_tech_cmms',
-    name: 'CMMS Scheduling & Audit',
-    category: 'Technical',
-    assessmentQuestion: 'Are work order schedules in CMMS accurate, optimized, and compliant with site standards?',
-    levels: {
-      1: { level: 1, description: 'Enters basic work order data.', requiredCertificates: [] },
-      2: { level: 2, description: 'Creates simple schedules for routine tasks.', requiredCertificates: [] },
-      3: { level: 3, description: 'Optimizes multi-week schedules and manages resource leveling.', requiredCertificates: ['CMMS Specialist'] },
-      4: { level: 4, description: 'Audits CMMS data for accuracy and compliance; optimizes scheduling workflows.', requiredCertificates: [] },
-      5: { level: 5, description: 'CMMS Administrator; develops corporate scheduling standards and integrations.', requiredCertificates: [] },
-    }
-  },
-  {
-    id: 's_beh_clarity',
-    name: 'Work Package Clarity',
-    category: 'Behavioral',
-    assessmentQuestion: 'Are the work packages provided clear, accurate, and ready for execution?',
-    levels: {
-      1: { level: 1, description: 'Packages often missing critical info or parts.', requiredCertificates: [] },
-      2: { level: 2, description: 'Packages are functional but require clarification from field staff.', requiredCertificates: [] },
-      3: { level: 3, description: 'Packages are clear, accurate, and ready for execution without rework.', requiredCertificates: [] },
-      4: { level: 4, description: 'Packages include advanced details (e.g., specific torque values, rigging plans).', requiredCertificates: [] },
-      5: { level: 5, description: 'Sets the standard for planning excellence; packages are used as templates.', requiredCertificates: [] },
-    }
-  }
-];
-
-const MOCK_DEPTS: Department[] = [
-  { id: 'd_eng_design', name: 'Engineering Design & Projects', behavioralSkillIds: ['s_beh_listening', 's_beh_mentor'] },
-  { id: 'd_maint_exec', name: 'Maintenance Execution', behavioralSkillIds: ['s_beh_safety', 's_beh_mentor'] },
-  { id: 'd_reliability', name: 'Reliability & Integrity', behavioralSkillIds: ['s_beh_listening', 's_beh_clarity'] },
-  { id: 'd_tech_services', name: 'Technical Services', behavioralSkillIds: ['s_beh_clarity', 's_beh_mentor'] }
-];
-
-const MOCK_JOBS: JobProfile[] = [
-  {
-    id: 'j_proc_eng',
-    title: 'Senior Process Engineer',
-    description: 'Leads process design and optimization for oil and gas facilities.',
-    departmentId: 'd_eng_design',
-    requirements: {
-      'JP': [
-        { skillId: 's_eng_01', requiredLevel: 4 },
-        { skillId: 's_hse_02', requiredLevel: 3 },
-        { skillId: 's_mgt_03', requiredLevel: 2 },
-      ],
-      'FR': [
-        { skillId: 's_eng_01', requiredLevel: 2 },
-        { skillId: 's_hse_02', requiredLevel: 1 },
-      ]
-    }
-  },
-  {
-    id: 'j_rel_eng',
-    title: 'Reliability Engineer',
-    description: 'Implements predictive maintenance and condition monitoring programs.',
-    departmentId: 'd_reliability',
-    requirements: {
-      'JP': [
-        { skillId: 's_maint_02', requiredLevel: 3 },
-        { skillId: 's_mgt_02', requiredLevel: 2 },
-      ],
-      'FR': [
-        { skillId: 's_maint_02', requiredLevel: 1 },
-      ]
-    }
-  },
-  {
-    id: 'j_maint_mgr',
-    title: 'Maintenance Manager',
-    description: 'Oversees all maintenance activities and turnaround planning.',
-    departmentId: 'd_maint_exec',
-    requirements: {
-      'DM': [
-        { skillId: 's_mgt_02', requiredLevel: 5 },
-        { skillId: 's_maint_02', requiredLevel: 3 },
-        { skillId: 's_hse_02', requiredLevel: 4 },
-        { skillId: 's_mgt_03', requiredLevel: 4 },
-      ]
-    }
-  },
-  {
-    id: 'j_pipe_eng',
-    title: 'Pipeline Integrity Engineer',
-    description: 'Manages the integrity and inspection of pipeline networks.',
-    departmentId: 'd_reliability',
-    requirements: {
-      'JP': [
-        { skillId: 's_eng_02', requiredLevel: 3 },
-        { skillId: 's_hse_02', requiredLevel: 2 },
-      ],
-      'FR': [
-        { skillId: 's_eng_02', requiredLevel: 1 },
-      ]
-    }
-  },
-  {
-    id: 'j_eng_mgr',
-    title: 'Engineering Manager',
-    description: 'Directs the engineering department and major capital projects.',
-    departmentId: 'd_eng_design',
-    requirements: {
-      'DM': [
-        { skillId: 's_mgt_03', requiredLevel: 5 },
-        { skillId: 's_eng_01', requiredLevel: 4 },
-        { skillId: 's_hse_02', requiredLevel: 4 },
-      ]
-    }
-  },
-  {
-    id: 'j_rel_eng_pilot',
-    title: 'Reliability Engineer (Pilot)',
-    description: 'Focuses on RCA standards and field collaboration.',
-    departmentId: 'd_reliability',
-    requirements: {
-      'JP': [
-        { skillId: 's_tech_rca', requiredLevel: 4 },
-        { skillId: 's_beh_listening', requiredLevel: 3 },
-        { skillId: 's_maint_02', requiredLevel: 3 },
-      ]
-    }
-  },
-  {
-    id: 'j_mech_tech_pilot',
-    title: 'Senior Mechanical Technician (Pilot)',
-    description: 'Expert in pump alignment and safety protocols.',
-    departmentId: 'd_maint_exec',
-    requirements: {
-      'SP': [
-        { skillId: 's_tech_pump', requiredLevel: 3 },
-        { skillId: 's_beh_safety', requiredLevel: 4 },
-        { skillId: 's_beh_mentor', requiredLevel: 3 },
-      ]
-    }
-  },
-  {
-    id: 'j_plan_eng_pilot',
-    title: 'Maintenance Planning Engineer (Pilot)',
-    description: 'Responsible for CMMS scheduling and work package quality.',
-    departmentId: 'd_maint_exec',
-    requirements: {
-      'JP': [
-        { skillId: 's_tech_cmms', requiredLevel: 4 },
-        { skillId: 's_beh_clarity', requiredLevel: 4 },
-        { skillId: 's_mgt_02', requiredLevel: 3 },
-      ]
-    }
-  }
-];
-
-const MOCK_USERS: User[] = [
-  {
-    id: 'u_admin',
-    name: 'Eng. Mahmoud Fawzy',
-    email: 'admin@egpc.com.eg',
-    role: Role.ADMIN,
-    status: 'ACTIVE',
-    departmentId: 'd_tech_services',
-    orgLevel: 'GM',
-    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=MahmoudF',
-    certificates: [
-      { id: 'cert_1', name: 'PMP Certification', issuer: 'PMI', dateAchieved: '2020-05-12' },
-      { id: 'cert_2', name: 'Certified Reliability Engineer', issuer: 'ASQ', dateAchieved: '2018-11-20' }
-    ],
-    location: 'EGPC HQ'
-  },
-  {
-    id: 'u_mgr_eng',
-    name: 'Eng. Sameh Ibrahim',
-    email: 'sameh.i@zohr.com.eg',
-    role: Role.EMPLOYEE,
-    status: 'ACTIVE',
-    departmentId: 'd_eng_design',
-    jobProfileId: 'j_eng_mgr',
-    orgLevel: 'DM',
-    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Sameh',
-    certificates: [
-      { id: 'cert_3', name: 'Process Safety Management', issuer: 'NEBOSH', dateAchieved: '2021-08-15' }
-    ],
-    location: 'APC'
-  },
-  {
-    id: 'u_mgr_maint',
-    name: 'Eng. Youssef Ali',
-    email: 'youssef.a@midor.com.eg',
-    role: Role.EMPLOYEE,
-    status: 'ACTIVE',
-    departmentId: 'd_maint_exec',
-    jobProfileId: 'j_maint_mgr',
-    orgLevel: 'DM',
-    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Youssef',
-    certificates: [
-      { id: 'cert_4', name: 'Maintenance and Reliability Professional', issuer: 'SMRP', dateAchieved: '2019-02-10' }
-    ],
-    location: 'MIDOR'
-  },
-  {
-    id: 'u_emp_sarah',
-    name: 'Eng. Sarah Ahmed',
-    email: 'sarah.ahmed@midor.com.eg',
-    role: Role.EMPLOYEE,
-    status: 'ACTIVE',
-    departmentId: 'd_eng_design',
-    managerId: 'u_mgr_eng',
-    jobProfileId: 'j_proc_eng',
-    orgLevel: 'JP',
-    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Sarah',
-    certificates: [
-      { id: 'cert_5', name: 'HAZOP Leader Certification', issuer: 'TUV', dateAchieved: '2023-01-22' },
-      { id: 'cert_6', name: 'Advanced Process Control', issuer: 'Honeywell', dateAchieved: '2022-06-14' }
-    ],
-    location: 'MIDOR'
-  },
-  {
-    id: 'u_emp_ali',
-    name: 'Eng. Ali Hassan',
-    email: 'ali.hassan@zohr.com.eg',
-    role: Role.EMPLOYEE,
-    status: 'ACTIVE',
-    departmentId: 'd_reliability',
-    managerId: 'u_mgr_maint',
-    jobProfileId: 'j_rel_eng',
-    orgLevel: 'JP',
-    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Ali',
-    certificates: [
-      { id: 'cert_7', name: 'Vibration Analysis ISO Category III', issuer: 'Mobius Institute', dateAchieved: '2022-11-05' }
-    ],
-    location: 'ANOPC'
-  },
-  {
-    id: 'u_emp_ahmed',
-    name: 'Eng. Ahmed Hassan',
-    email: 'ahmed.h@zohr.com.eg',
-    role: Role.EMPLOYEE,
-    status: 'ACTIVE',
-    departmentId: 'd_reliability',
-    managerId: 'u_mgr_maint',
-    jobProfileId: 'j_pipe_eng',
-    orgLevel: 'JP',
-    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Ahmed',
-    certificates: [
-      { id: 'cert_8', name: 'API 570 Piping Inspector', issuer: 'API', dateAchieved: '2021-03-18' }
-    ],
-    location: 'AMO'
-  },
-  {
-    id: 'u_emp_mahmoud',
-    name: 'Eng. Mahmoud Ibrahim',
-    email: 'm.ibrahim@zohr.com.eg',
-    role: Role.EMPLOYEE,
-    status: 'ACTIVE',
-    departmentId: 'd_eng_design',
-    managerId: 'u_mgr_eng',
-    jobProfileId: 'j_proc_eng',
-    orgLevel: 'FR',
-    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Mahmoud',
-    certificates: [],
-    location: 'APC'
-  },
-  {
-    id: 'u_emp_fatima',
-    name: 'Eng. Fatima Zahra',
-    email: 'fatima.z@midor.com.eg',
-    role: Role.EMPLOYEE,
-    status: 'ACTIVE',
-    departmentId: 'd_reliability',
-    managerId: 'u_mgr_maint',
-    jobProfileId: 'j_rel_eng_pilot',
-    orgLevel: 'JP',
-    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Fatima',
-    certificates: [
-      { id: 'cert_9', name: 'Process Simulation with HYSYS', issuer: 'AspenTech', dateAchieved: '2022-09-30' }
-    ],
-    location: 'MIDOR'
-  },
-  {
-    id: 'u_pilot_tech',
-    name: 'Hassan Mahmoud',
-    email: 'hassan.m@midor.com.eg',
-    role: Role.EMPLOYEE,
-    status: 'ACTIVE',
-    departmentId: 'd_maint_exec',
-    managerId: 'u_mgr_maint',
-    jobProfileId: 'j_mech_tech_pilot',
-    orgLevel: 'SP',
-    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Hassan',
-    certificates: [],
-    location: 'MIDOR'
-  },
-  {
-    id: 'u_pilot_planner',
-    name: 'Eng. Khaled Said',
-    email: 'khaled.s@midor.com.eg',
-    role: Role.EMPLOYEE,
-    status: 'ACTIVE',
-    departmentId: 'd_maint_exec',
-    managerId: 'u_mgr_maint',
-    jobProfileId: 'j_plan_eng_pilot',
-    orgLevel: 'JP',
-    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Khaled',
-    certificates: [],
-    location: 'MIDOR'
-  },
-  {
-    id: 'u_peer_planner',
-    name: 'Eng. Omar Farouk',
-    email: 'omar.f@midor.com.eg',
-    role: Role.EMPLOYEE,
-    status: 'ACTIVE',
-    departmentId: 'd_maint_exec',
-    orgLevel: 'JP',
-    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Omar',
-    location: 'MIDOR'
-  },
-  {
-    id: 'u_peer_tech',
-    name: 'Tarek Ibrahim',
-    email: 'tarek.i@midor.com.eg',
-    role: Role.EMPLOYEE,
-    status: 'ACTIVE',
-    departmentId: 'd_maint_exec',
-    orgLevel: 'FR',
-    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Tarek',
-    location: 'MIDOR'
-  },
-  {
-    id: 'u_peer_supervisor',
-    name: 'Eng. Mostafa Bakr',
-    email: 'mostafa.b@midor.com.eg',
-    role: Role.EMPLOYEE,
-    status: 'ACTIVE',
-    departmentId: 'd_maint_exec',
-    orgLevel: 'SH',
-    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Mostafa',
-    location: 'MIDOR'
-  },
-  {
-    id: 'u_emp_hassan',
-    name: 'Eng. Hassan Mostafa',
-    email: 'h.mostafa@petrobel.com.eg',
-    role: Role.EMPLOYEE,
-    status: 'ACTIVE',
-    departmentId: 'd_reliability',
-    managerId: 'u_mgr_maint',
-    jobProfileId: 'j_rel_eng',
-    orgLevel: 'FR',
-    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Hassan',
-    certificates: [],
-    location: 'ANOPC'
-  },
-  {
-    id: 'u_emp_nour',
-    name: 'Eng. Nour El Din',
-    email: 'n.eldin@zohr.com.eg',
-    role: Role.EMPLOYEE,
-    status: 'ACTIVE',
-    departmentId: 'd_reliability',
-    managerId: 'u_mgr_maint',
-    jobProfileId: 'j_pipe_eng',
-    orgLevel: 'JP',
-    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Nour',
-    location: 'AMO'
-  },
-  {
-    id: 'u_emp_mariam',
-    name: 'Eng. Mariam Adel',
-    email: 'm.adel@midor.com.eg',
-    role: Role.EMPLOYEE,
-    status: 'ACTIVE',
-    departmentId: 'd_eng_design',
-    managerId: 'u_mgr_eng',
-    jobProfileId: 'j_proc_eng',
-    orgLevel: 'FR',
-    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Mariam',
-    location: 'MIDOR'
-  },
-  {
-    id: 'u_emp_karim',
-    name: 'Eng. Karim Samir',
-    email: 'k.samir@petrobel.com.eg',
-    role: Role.EMPLOYEE,
-    status: 'ACTIVE',
-    departmentId: 'd_reliability',
-    managerId: 'u_mgr_maint',
-    jobProfileId: 'j_rel_eng',
-    orgLevel: 'JP',
-    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Karim',
-    location: 'ANOPC'
-  },
-  {
-    id: 'u_emp_yasmine',
-    name: 'Eng. Yasmine Tarek',
-    email: 'y.tarek@zohr.com.eg',
-    role: Role.EMPLOYEE,
-    status: 'ACTIVE',
-    departmentId: 'd_eng_design',
-    managerId: 'u_mgr_eng',
-    jobProfileId: 'j_proc_eng',
-    orgLevel: 'JP',
-    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Yasmine',
-    location: 'APC'
-  },
-  {
-    id: 'u_pending',
-    name: 'Eng. Omar Youssef',
-    email: 'omar.y@petrobel.com.eg',
-    role: Role.EMPLOYEE,
-    status: 'PENDING',
-    departmentId: '',
-    avatarUrl: 'https://api.dicebear.com/9.x/avataaars/svg?seed=Omar'
-  }
-];
-
-const MOCK_ASSESSMENTS: Assessment[] = [
-  { id: 'a1', raterId: 'u_emp_sarah', subjectId: 'u_emp_sarah', skillId: 's_eng_01', score: 4, comment: 'Successfully completed the HYSYS simulation for the new gas plant.', date: '2024-02-10', type: 'SELF' },
-  { id: 'a2', raterId: 'u_mgr_eng', subjectId: 'u_emp_sarah', skillId: 's_eng_01', score: 4, comment: 'Excellent work on the process design package.', date: '2024-02-12', type: 'MANAGER' },
-  { id: 'a3', raterId: 'u_emp_ali', subjectId: 'u_emp_ali', skillId: 's_maint_02', score: 3, comment: 'Completed Vibration Analysis Level II certification.', date: '2024-01-20', type: 'SELF' },
-  // Pilot Group Assessments
-  { id: 'p1', raterId: 'u_mgr_maint', subjectId: 'u_emp_fatima', skillId: 's_tech_rca', score: 4, comment: 'RCA report verified against SMRP standard. Good technical depth.', date: '2024-03-01', type: 'MANAGER' },
-  { id: 'p2', raterId: 'u_peer_planner', subjectId: 'u_emp_fatima', skillId: 's_beh_listening', score: 5, comment: 'Fatima always listens to our input from the field during investigations.', date: '2024-03-02', type: 'PEER' },
-  { id: 'p3', raterId: 'u_mgr_maint', subjectId: 'u_pilot_tech', skillId: 's_tech_pump', score: 3, comment: 'Observed alignment of Pump P-101; within tolerance but could be faster.', date: '2024-03-01', type: 'MANAGER' },
-  { id: 'p4', raterId: 'u_peer_tech', subjectId: 'u_pilot_tech', skillId: 's_beh_safety', score: 5, comment: 'Hassan never skips LOTO even when we are in a rush. Great safety role model.', date: '2024-03-03', type: 'PEER' },
-  { id: 'p5', raterId: 'u_mgr_maint', subjectId: 'u_pilot_planner', skillId: 's_tech_cmms', score: 4, comment: 'Audit of CMMS schedules shows high compliance and optimization.', date: '2024-03-01', type: 'MANAGER' },
-  { id: 'p6', raterId: 'u_peer_supervisor', subjectId: 'u_pilot_planner', skillId: 's_beh_clarity', score: 4, comment: 'Work packages are clear, accurate, and ready for execution.', date: '2024-03-04', type: 'PEER' },
-];
-
-const MOCK_LOGS: ActivityLog[] = [
-    { id: 'l1', action: 'Updated Competency Matrix', target: 'Senior Process Engineer', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString() },
-    { id: 'l2', action: 'Approved Training Request', target: 'Ali Hassan', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString() },
-    { id: 'l3', action: 'System Audit', target: 'Engineering Design & Projects', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString() },
-    { id: 'l4', action: 'New Employee Registration', target: 'Omar Youssef', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString() }
-];
-
-const MOCK_EVIDENCES: Evidence[] = [
-  {
-    id: 'e1',
-    userId: 'u_emp_fatima',
-    skillId: 's_tech_rca',
-    fileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
-    fileName: 'RCA_Report_P101.pdf',
-    notes: 'Attached is the RCA report for the recent P-101 failure, following SMRP guidelines.',
-    status: 'PENDING',
-    submittedAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString()
-  }
-];
 
 // ==========================================
 // 🚀 DATA SERVICE
 // ==========================================
+
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId: string | undefined;
+    email: string | null | undefined;
+    emailVerified: boolean | undefined;
+    isAnonymous: boolean | undefined;
+    tenantId: string | null | undefined;
+    providerInfo: {
+      providerId: string;
+      displayName: string | null;
+      email: string | null;
+      photoUrl: string | null;
+    }[];
+  }
+}
 
 class DataService {
   private users: User[] = [];
@@ -628,25 +75,171 @@ class DataService {
   private nominations: Nomination[] = [];
   private evidences: Evidence[] = [];
   
-  private supabase: SupabaseClient | null = null;
   public isInitialized = false;
+  private unsubscribers: Unsubscribe[] = [];
+  private authReadyResolver: () => void = () => {};
+  public authReady = new Promise<void>((resolve) => {
+    this.authReadyResolver = resolve;
+  });
 
   constructor() {
-    // We load mock data by default so the app doesn't crash before init
-    this.resetToMock();
+    // Listen to auth state changes
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        // User is signed in, setup listeners
+        this.setupListeners();
+      } else {
+        // User is signed out, clear listeners and data
+        this.clearListeners();
+        this.clearData();
+      }
+      this.authReadyResolver();
+    });
   }
 
-  private resetToMock() {
-    this.users = [...MOCK_USERS];
-    this.jobs = [...MOCK_JOBS];
-    this.skills = [...MOCK_SKILLS];
-    this.assessments = [...MOCK_ASSESSMENTS];
-    this.departments = [...MOCK_DEPTS];
-    this.logs = [...MOCK_LOGS];
+  private handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+    const errInfo: FirestoreErrorInfo = {
+      error: error instanceof Error ? error.message : String(error),
+      authInfo: {
+        userId: auth.currentUser?.uid,
+        email: auth.currentUser?.email,
+        emailVerified: auth.currentUser?.emailVerified,
+        isAnonymous: auth.currentUser?.isAnonymous,
+        tenantId: auth.currentUser?.tenantId,
+        providerInfo: auth.currentUser?.providerData.map(provider => ({
+          providerId: provider.providerId,
+          displayName: provider.displayName,
+          email: provider.email,
+          photoUrl: provider.photoURL
+        })) || []
+      },
+      operationType,
+      path
+    };
+    console.error('Firestore Error: ', JSON.stringify(errInfo));
+    return errInfo;
+  }
+
+  private handleError(collectionName: string) {
+    return (error: any) => {
+      this.handleFirestoreError(error, OperationType.LIST, collectionName);
+    };
+  }
+
+  private clearData() {
+    this.users = [];
+    this.jobs = [];
+    this.skills = [];
+    this.assessments = [];
+    this.departments = [];
+    this.logs = [];
     this.notifications = [];
     this.cycles = [];
     this.nominations = [];
-    this.evidences = [...MOCK_EVIDENCES];
+    this.evidences = [];
+  }
+
+  private clearListeners() {
+    this.unsubscribers.forEach(unsub => unsub());
+    this.unsubscribers = [];
+  }
+
+  private setupListeners() {
+    this.clearListeners(); // Ensure no duplicate listeners
+
+    const userId = auth.currentUser?.uid;
+    if (!userId) return;
+
+    // Users
+    this.unsubscribers.push(
+      onSnapshot(collection(db, 'users'), (snapshot) => {
+        this.users = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            certificates: data.certificates ? JSON.parse(data.certificates) : []
+          } as User;
+        });
+      }, this.handleError('users'))
+    );
+
+    // Jobs
+    this.unsubscribers.push(
+      onSnapshot(collection(db, 'jobProfiles'), (snapshot) => {
+        this.jobs = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            requirements: data.requirements ? JSON.parse(data.requirements) : {}
+          } as JobProfile;
+        });
+      }, this.handleError('jobProfiles'))
+    );
+
+    // Skills
+    this.unsubscribers.push(
+      onSnapshot(collection(db, 'skills'), (snapshot) => {
+        this.skills = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            levels: data.levels ? JSON.parse(data.levels) : {}
+          } as Skill;
+        });
+      }, this.handleError('skills'))
+    );
+
+    // Departments
+    this.unsubscribers.push(
+      onSnapshot(collection(db, 'departments'), (snapshot) => {
+        this.departments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Department));
+      }, this.handleError('departments'))
+    );
+
+    // Assessments
+    this.unsubscribers.push(
+      onSnapshot(collection(db, 'assessments'), (snapshot) => {
+        this.assessments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Assessment));
+      }, this.handleError('assessments'))
+    );
+
+    // Logs
+    this.unsubscribers.push(
+      onSnapshot(query(collection(db, 'activityLogs'), orderBy('timestamp', 'desc'), limit(50)), (snapshot) => {
+        this.logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ActivityLog));
+      }, this.handleError('activityLogs'))
+    );
+
+    // Evidences
+    this.unsubscribers.push(
+      onSnapshot(collection(db, 'evidences'), (snapshot) => {
+        this.evidences = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Evidence));
+      }, this.handleError('evidences'))
+    );
+
+    // Notifications
+    this.unsubscribers.push(
+      onSnapshot(query(collection(db, 'notifications'), where('userId', '==', userId)), (snapshot) => {
+        this.notifications = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification));
+      }, this.handleError('notifications'))
+    );
+
+    // Cycles
+    this.unsubscribers.push(
+      onSnapshot(collection(db, 'assessmentCycles'), (snapshot) => {
+        this.cycles = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AssessmentCycle));
+      }, this.handleError('assessmentCycles'))
+    );
+
+    // Nominations
+    this.unsubscribers.push(
+      onSnapshot(collection(db, 'nominations'), (snapshot) => {
+        this.nominations = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Nomination));
+      }, this.handleError('nominations'))
+    );
   }
 
   // --- Evidences ---
@@ -658,19 +251,20 @@ class DataService {
     return result;
   }
 
-  addEvidence(evidence: Omit<Evidence, 'id' | 'status' | 'submittedAt'>) {
+  async addEvidence(evidence: Omit<Evidence, 'id' | 'status' | 'submittedAt'>) {
+    const id = doc(collection(db, 'evidences')).id;
     const newEvidence: Evidence = {
       ...evidence,
-      id: Math.random().toString(36).substr(2, 9),
+      id,
       status: 'PENDING',
       submittedAt: new Date().toISOString()
     };
-    this.evidences.push(newEvidence);
+    await this.persistItem('evidences', newEvidence);
     
     // Notify manager
     const user = this.users.find(u => u.id === evidence.userId);
     if (user && user.managerId) {
-      this.addNotification({
+      await this.addNotification({
         userId: user.managerId,
         title: 'New Evidence Submitted',
         message: `${user.name} submitted evidence for review.`,
@@ -680,16 +274,20 @@ class DataService {
     return newEvidence;
   }
 
-  updateEvidenceStatus(id: string, status: 'APPROVED' | 'REJECTED', reviewerId: string, level?: number) {
+  async updateEvidenceStatus(id: string, status: 'APPROVED' | 'REJECTED', reviewerId: string, level?: number) {
     const evidence = this.evidences.find(e => e.id === id);
     if (evidence) {
-      evidence.status = status;
-      evidence.reviewedAt = new Date().toISOString();
-      evidence.reviewedBy = reviewerId;
+      const updatedEvidence = {
+        ...evidence,
+        status,
+        reviewedAt: new Date().toISOString(),
+        reviewedBy: reviewerId
+      };
+      await this.updateItem('evidences', updatedEvidence);
 
       // If approved, automatically create an assessment
       if (status === 'APPROVED') {
-        this.addAssessment({
+        await this.addAssessment({
           raterId: reviewerId,
           subjectId: evidence.userId,
           skillId: evidence.skillId,
@@ -700,7 +298,7 @@ class DataService {
       }
 
       // Notify user
-      this.addNotification({
+      await this.addNotification({
         userId: evidence.userId,
         title: `Evidence ${status}`,
         message: `Your evidence submission was ${status.toLowerCase()}.`,
@@ -718,30 +316,31 @@ class DataService {
     return result;
   }
 
-  addNomination(nomination: Omit<Nomination, 'id' | 'date' | 'status'>) {
+  async addNomination(nomination: Omit<Nomination, 'id' | 'date' | 'status'>) {
+    const id = doc(collection(db, 'nominations')).id;
     const newNomination: Nomination = {
       ...nomination,
-      id: Math.random().toString(36).substr(2, 9),
+      id,
       date: new Date().toISOString(),
       status: 'PENDING'
     };
-    this.nominations.push(newNomination);
+    await this.persistItem('nominations', newNomination);
     
     // Add notification to the rater
-    this.addNotification({
+    await this.addNotification({
       userId: nomination.raterId,
       title: 'New Assessment Request',
-      message: `You have been requested to assess ${this.getCurrentUser(nomination.subjectId)?.name}.`,
+      message: `You have been requested to assess ${this.getUserById(nomination.subjectId)?.name}.`,
       type: 'INFO'
     });
 
     return newNomination;
   }
 
-  updateNominationStatus(id: string, status: 'APPROVED' | 'REJECTED') {
-    const index = this.nominations.findIndex(n => n.id === id);
-    if (index !== -1) {
-      this.nominations[index].status = status;
+  async updateNominationStatus(id: string, status: 'APPROVED' | 'REJECTED') {
+    const nomination = this.nominations.find(n => n.id === id);
+    if (nomination) {
+      await this.updateItem('nominations', { ...nomination, status });
     }
   }
 
@@ -749,336 +348,236 @@ class DataService {
   
   async initialize() {
     console.log(`Initializing DataService with SOURCE: ${CONFIG.SOURCE}`);
+    await this.authReady; // Wait for initial auth state
     
-    if (CONFIG.SOURCE === 'SUPABASE') {
-      // Basic validation to prevent "Invalid URL" crash if credentials are missing
-      if (!CONFIG.SUPABASE.url || CONFIG.SUPABASE.url.includes('your-project.supabase.co')) {
-        console.warn("Supabase credentials not set. Falling back to MOCK data.");
-        this.resetToMock();
-        this.isInitialized = true;
-        return;
-      }
-
-      try {
-        this.supabase = createClient(CONFIG.SUPABASE.url, CONFIG.SUPABASE.key);
-        await this.loadFromSupabase();
-      } catch (e) {
-        console.error("Supabase Connection Failed. Falling back to Mock data.", e);
-        this.resetToMock();
-      }
-    } else {
-      // MOCK
-      this.resetToMock();
-    }
-    
+    // If not authenticated, we can't load data yet, but we are initialized
     this.isInitialized = true;
-  }
-
-  // --- SUPABASE LOADERS ---
-
-  private async loadFromSupabase() {
-    if (!this.supabase) return;
-
-    try {
-      const { data: users } = await this.supabase.from('user_profiles').select('*');
-      const { data: jobs } = await this.supabase.from('job_profiles').select('*');
-      const { data: skills } = await this.supabase.from('skills').select('*');
-      const { data: depts } = await this.supabase.from('departments').select('*');
-      const { data: assessments } = await this.supabase.from('assessments').select('*');
-      const { data: logs } = await this.supabase.from('system_logs').select('*').order('timestamp', { ascending: false }).limit(20);
-
-      // Map snake_case from DB to camelCase for UI if necessary, or just cast
-      // Assuming DB columns match Typescript interface largely or we map them:
-      if (users) this.users = users.map(u => ({
-        id: u.id,
-        name: u.name,
-        email: u.email,
-        role: u.role,
-        // FIX: Normalize status to uppercase (handles 'pending' from db vs 'PENDING' in app)
-        status: (u.status ? u.status.toUpperCase() : 'ACTIVE') as any,
-        departmentId: u.department_id,
-        jobProfileId: u.job_profile_id,
-        managerId: u.manager_id,
-        orgLevel: u.org_level,
-        avatarUrl: u.avatar_url
-      }));
-
-      if (jobs) this.jobs = jobs.map(j => ({
-        id: j.id,
-        title: j.title,
-        description: j.description,
-        departmentId: j.department_id,
-        requirements: j.requirements // JSONB auto-parsed
-      }));
-
-      if (skills) this.skills = skills.map(s => ({
-        id: s.id,
-        name: s.name,
-        category: s.category,
-        assessmentQuestion: s.assessment_question,
-        levels: s.levels // JSONB auto-parsed
-      }));
-
-      if (depts) this.departments = depts.map(d => ({
-        id: d.id,
-        name: d.name,
-        managerId: d.manager_id
-      }));
-
-      if (assessments) this.assessments = assessments.map(a => ({
-        id: a.id,
-        raterId: a.rater_id,
-        subjectId: a.subject_id,
-        skillId: a.skill_id,
-        score: a.score,
-        comment: a.comment,
-        date: a.date,
-        type: a.type
-      }));
-
-      if (logs) this.logs = logs.map(l => ({
-        id: l.id,
-        action: l.action,
-        target: l.target,
-        timestamp: l.timestamp
-      }));
-
-    } catch (error) {
-      console.error("Error loading data from Supabase:", error);
-    }
   }
 
   // --- AUTHENTICATION ---
 
   async signUp(email: string, password: string, userData: Partial<User>) {
-    if (CONFIG.SOURCE === 'MOCK') return { error: 'Auth disabled in Mock mode' };
-    if (!this.supabase) return { error: 'Supabase not initialized' };
+    try {
+      const trimmedEmail = email.trim().toLowerCase();
+      const userCredential = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
+      const user = userCredential.user;
 
-    const { data, error } = await this.supabase.auth.signUp({
-      email,
-      password,
-    });
-
-    if (error) return { error: error.message };
-    if (data.user) {
-      // Create user profile with PENDING status
-      const newUserProfile = {
-        id: data.user.id,
-        email: email,
+      const isBootstrapAdmin = trimmedEmail.toLowerCase() === 'tarekmoh123@gmail.com';
+      
+      // Check if a profile already exists for this email (e.g. from bulk upload)
+      const existingProfile = this.users.find(u => u.email.toLowerCase() === trimmedEmail.toLowerCase());
+      
+      const newUserProfile: User = existingProfile ? {
+        ...existingProfile,
+        id: user.uid,
+        name: userData.name || existingProfile.name,
+      } : {
+        id: user.uid,
+        email: trimmedEmail,
         name: userData.name || 'New User',
-        role: Role.EMPLOYEE, // Default
-        // status: 'PENDING', // REMOVED: Rely on DB default to avoid 'Column not found' error if migration pending
-        department_id: null,
-        org_level: null, 
-        avatar_url: `https://ui-avatars.com/api/?name=${userData.name}`
+        role: isBootstrapAdmin ? Role.ADMIN : Role.EMPLOYEE,
+        status: isBootstrapAdmin ? 'ACTIVE' : 'PENDING',
+        departmentId: '',
+        orgLevel: undefined,
+        avatarUrl: `https://ui-avatars.com/api/?name=${userData.name}`
       };
 
-      const { error: profileError } = await this.supabase
-        .from('user_profiles')
-        .insert([newUserProfile]);
-
-      if (profileError) {
-        return { error: 'User created but profile failed: ' + profileError.message };
+      try {
+        await this.persistItem('users', newUserProfile);
+        // If we migrated from an existing profile, delete the old one
+        if (existingProfile && existingProfile.id !== user.uid) {
+          await this.deleteItem('users', existingProfile.id);
+        }
+      } catch (error) {
+        // Error already handled in persistItem
       }
       
-      // Update local state immediately
-      const localUser: User = {
-          id: newUserProfile.id,
-          email: newUserProfile.email,
-          name: newUserProfile.name,
-          role: newUserProfile.role as Role,
-          status: 'PENDING', // We assume pending locally even if DB fallback is used
-          departmentId: '',
-          orgLevel: undefined,
-          avatarUrl: newUserProfile.avatar_url
-      };
-      this.users.push(localUser);
-      this.logActivity('Self-Registration', localUser.name);
-      return { user: localUser };
+      await this.logActivity('Self-Registration', newUserProfile.name);
+      
+      return { user: newUserProfile };
+    } catch (error: any) {
+      return { error: error.message };
     }
-    return { error: 'Unknown error' };
   }
 
   async loginWithPassword(email: string, password: string) {
-    if (CONFIG.SOURCE === 'MOCK') {
-        const mockUser = this.users.find(u => u.email.toLowerCase() === email.toLowerCase());
-        if (!mockUser) return { error: 'User not found in Mock Data' };
-        
-        // Mock Status Check
-        if (mockUser.status === 'PENDING') {
-            return { error: 'Account is pending administrator approval. Please wait.' };
+    try {
+      const trimmedEmail = email.trim().toLowerCase();
+      const userCredential = await signInWithEmailAndPassword(auth, trimmedEmail, password);
+      const user = userCredential.user;
+
+      // Wait a moment for the snapshot listener to populate data
+      // In a real app, you might want a more robust way to wait for the specific user doc
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      const userProfile = this.users.find(u => u.id === user.uid);
+      
+      // Check for other profiles with the same email (duplicates from bulk upload)
+      const duplicates = this.users.filter(u => u.email.toLowerCase() === trimmedEmail.toLowerCase() && u.id !== user.uid);
+      for (const dup of duplicates) {
+        try {
+          await this.deleteItem('users', dup.id);
+        } catch (e) {
+          // Ignore if delete fails
         }
-        if (mockUser.status === 'REJECTED') {
-             return { error: 'Account has been deactivated.' };
+      }
+
+      if (!userProfile) {
+        // Try fetching directly if not in cache yet
+        let docSnap;
+        try {
+          docSnap = await getDoc(doc(db, 'users', user.uid));
+        } catch (error) {
+          this.handleFirestoreError(error, OperationType.GET, `users/${user.uid}`);
+          throw error;
+        }
+        
+        if (!docSnap.exists()) {
+           // Check if there's a profile with this email but a different ID (bulk uploaded)
+           const bulkProfile = this.users.find(u => u.email.toLowerCase() === trimmedEmail.toLowerCase());
+           if (bulkProfile) {
+              // Migrate bulk profile to this UID
+              const migratedProfile = { ...bulkProfile, id: user.uid };
+              try {
+                await this.persistItem('users', migratedProfile);
+                await this.deleteItem('users', bulkProfile.id);
+                return { user: migratedProfile };
+              } catch (error) {
+                // Fallback if migration fails
+              }
+           }
+
+           const isBootstrapAdmin = trimmedEmail.toLowerCase() === 'tarekmoh123@gmail.com';
+           if (isBootstrapAdmin) {
+              // Auto-create profile for bootstrap admin if missing
+              const adminProfile: User = {
+                id: user.uid,
+                email: trimmedEmail,
+                name: 'System Admin',
+                role: Role.ADMIN,
+                status: 'ACTIVE',
+                departmentId: '',
+                avatarUrl: `https://ui-avatars.com/api/?name=Admin`
+              };
+              try {
+                await this.persistItem('users', adminProfile);
+              } catch (error) {
+                // Error already handled in persistItem
+              }
+              return { user: adminProfile };
+           }
+           return { error: 'Profile not found for this user. Please sign up first.' };
         }
 
-        return { user: mockUser };
+        const data = docSnap.data();
+        const profile = {
+          id: docSnap.id,
+          ...data,
+          certificates: data.certificates ? JSON.parse(data.certificates) : []
+        } as User;
+        
+        const isBootstrapAdmin = trimmedEmail.toLowerCase() === 'tarekmoh123@gmail.com';
+        if (profile.status === 'PENDING' && !isBootstrapAdmin) {
+           await signOut(auth);
+           return { error: 'Account is pending administrator approval. Please wait.' };
+        }
+        if (profile.status === 'REJECTED' && !isBootstrapAdmin) {
+           await signOut(auth);
+           return { error: 'Account has been deactivated by the administrator.' };
+        }
+        return { user: profile };
+      }
+      
+      if (userProfile.status === 'PENDING') {
+          await signOut(auth);
+          return { error: 'Account is pending administrator approval. Please wait.' };
+      }
+      if (userProfile.status === 'REJECTED') {
+          await signOut(auth);
+          return { error: 'Account has been deactivated by the administrator.' };
+      }
+
+      return { user: userProfile };
+    } catch (error: any) {
+      return { error: error.message };
     }
-    
-    if (!this.supabase) return { error: 'Supabase not initialized' };
-
-    const { data, error } = await this.supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (error) return { error: error.message };
-    
-    // Auth successful, retrieve profile details
-    if (data.user) {
-        // Ensure local data is fresh
-        await this.loadFromSupabase();
-        const userProfile = this.users.find(u => u.id === data.user?.id);
-        
-        if (!userProfile) return { error: 'Profile not found for this user' };
-        
-        // CHECK STATUS
-        if (userProfile.status === 'PENDING') {
-            // Optional: Sign them out so session doesn't persist
-            await this.supabase.auth.signOut();
-            return { error: 'Account is pending administrator approval. Please wait.' };
-        }
-        if (userProfile.status === 'REJECTED') {
-            await this.supabase.auth.signOut();
-            return { error: 'Account has been deactivated by the administrator.' };
-        }
-
-        return { user: userProfile };
-    }
-    return { error: 'Login failed' };
   }
 
   async signOut() {
-      if (this.supabase) {
-          await this.supabase.auth.signOut();
-      }
+    await signOut(auth);
+  }
+
+  async getCurrentUser() {
+    if (!auth.currentUser) return null;
+    
+    const profile = this.users.find(u => u.id === auth.currentUser?.uid);
+    if (profile) return profile;
+    
+    const docSnap = await getDoc(doc(db, 'users', auth.currentUser.uid));
+    if (docSnap.exists()) {
+       const data = docSnap.data();
+       return {
+         id: docSnap.id,
+         ...data,
+         certificates: data.certificates ? JSON.parse(data.certificates) : []
+       } as User;
+    }
+    return null;
   }
 
   // --- PERSISTENCE HELPERS ---
 
   private async persistItem(collectionName: string, item: any) {
-    if (CONFIG.SOURCE === 'SUPABASE' && this.supabase) {
-      try {
-        // Map collection names to table names and camelCase to snake_case
-        let tableName = '';
-        let payload = {};
-
-        switch(collectionName) {
-            case 'assessments': 
-                tableName = 'assessments';
-                payload = {
-                    id: item.id,
-                    rater_id: item.raterId,
-                    subject_id: item.subjectId,
-                    skill_id: item.skillId,
-                    score: item.score,
-                    comment: item.comment,
-                    date: item.date,
-                    type: item.type
-                };
-                break;
-            case 'skills':
-                tableName = 'skills';
-                payload = {
-                    id: item.id,
-                    name: item.name,
-                    category: item.category,
-                    assessment_question: item.assessmentQuestion,
-                    levels: item.levels
-                };
-                break;
-            case 'jobs':
-                tableName = 'job_profiles';
-                payload = {
-                    id: item.id,
-                    title: item.title,
-                    description: item.description,
-                    department_id: item.departmentId,
-                    requirements: item.requirements
-                };
-                break;
-            case 'departments':
-                tableName = 'departments';
-                payload = {
-                    id: item.id,
-                    name: item.name,
-                    manager_id: item.managerId
-                };
-                break;
-            case 'users':
-                // Creating users directly via persistItem is only for Admin creating mock users or bypassing auth flow
-                tableName = 'user_profiles';
-                payload = {
-                    id: item.id,
-                    email: item.email,
-                    name: item.name,
-                    role: item.role,
-                    status: item.status, // Add status
-                    department_id: item.departmentId,
-                    job_profile_id: item.jobProfileId,
-                    manager_id: item.managerId,
-                    org_level: item.orgLevel,
-                    avatar_url: item.avatarUrl
-                };
-                break;
-            case 'logs':
-                tableName = 'system_logs';
-                payload = {
-                    id: item.id,
-                    action: item.action,
-                    target: item.target,
-                    timestamp: item.timestamp
-                };
-                break;
-        }
-
-        if(tableName) {
-            const { error } = await this.supabase.from(tableName).upsert([payload]);
-            if (error) console.error(`Supabase Insert Error [${tableName}]:`, error);
-        }
-
-      } catch (e) {
-        console.error(`Failed to save to Supabase [${collectionName}]`, e);
+    try {
+      let payload = { ...item };
+      
+      // Serialize complex objects
+      if (collectionName === 'users' && item.certificates) {
+        payload.certificates = JSON.stringify(item.certificates);
       }
+      if (collectionName === 'jobProfiles' && item.requirements) {
+        payload.requirements = JSON.stringify(item.requirements);
+      }
+      if (collectionName === 'skills' && item.levels) {
+        payload.levels = JSON.stringify(item.levels);
+      }
+
+      // Remove undefined values for Firestore
+      Object.keys(payload).forEach(key => {
+        if (payload[key] === undefined) {
+          delete payload[key];
+        }
+      });
+
+      await setDoc(doc(db, collectionName, item.id), payload);
+    } catch (e) {
+      this.handleFirestoreError(e, OperationType.WRITE, `${collectionName}/${item.id}`);
+      throw e;
     }
   }
 
   private async deleteItem(collectionName: string, id: string) {
-    if (CONFIG.SOURCE === 'SUPABASE' && this.supabase) {
-        try {
-            let tableName = '';
-            switch(collectionName) {
-                case 'assessments': tableName = 'assessments'; break;
-                case 'skills': tableName = 'skills'; break;
-                case 'jobs': tableName = 'job_profiles'; break;
-                case 'departments': tableName = 'departments'; break;
-                case 'users': tableName = 'user_profiles'; break;
-            }
-            if (tableName) {
-                const { error } = await this.supabase.from(tableName).delete().eq('id', id);
-                if (error) console.error(`Supabase Delete Error [${tableName}]:`, error);
-            }
-        } catch (e) {
-            console.error(`Failed to delete from Supabase [${collectionName}]`, e);
-        }
+    try {
+      await deleteDoc(doc(db, collectionName, id));
+    } catch (e) {
+      this.handleFirestoreError(e, OperationType.DELETE, `${collectionName}/${id}`);
+      throw e;
     }
   }
 
   private async updateItem(collectionName: string, item: any) {
-     // Re-use persistItem as upsert handles updates based on ID
      await this.persistItem(collectionName, item);
   }
 
   // --- HIERARCHY & ROLES ---
   isManager(user: User): boolean {
     if (user.role === Role.ADMIN) return true;
-    // Hierarchy based check: GM, AGM, DM, SH are managers
     const managerialLevels: OrgLevel[] = ['GM', 'AGM', 'DM', 'SH'];
     return user.orgLevel ? managerialLevels.includes(user.orgLevel) : false;
   }
 
   generateIndividualTrainingPlan(userId: string): IndividualTrainingPlan | null {
-    const user = this.getCurrentUser(userId);
+    const user = this.getUserById(userId);
     if (!user || !user.jobProfileId || !user.orgLevel) return null;
 
     const job = this.getJobProfile(user.jobProfileId);
@@ -1095,7 +594,6 @@ class DataService {
         const skill = this.getSkill(req.skillId);
         const skillName = skill?.name || 'Unknown Skill';
         
-        // Logic for recommendation
         let recommendation = '';
         if (gap >= 2) {
           recommendation = `Intensive training and external certification required for ${skillName}.`;
@@ -1122,14 +620,11 @@ class DataService {
 
   // --- PUBLIC METHODS (GETTERS - Synchronous for UI Performance) ---
 
-  // NOTE: In a real app, 'login' is async. We kept the synchronous signature for Mock compatibility in types
-  // but the UI calls 'loginWithPassword' now.
   login(email: string): User | undefined {
-    // Legacy fallback
     return this.users.find(u => u.email.toLowerCase() === email.toLowerCase());
   }
 
-  getCurrentUser(id: string) { return this.users.find(u => u.id === id); }
+  getUserById(id: string) { return this.users.find(u => u.id === id); }
   getJobProfile(id: string) { return this.jobs.find(j => j.id === id); }
   getAllSkills() { return this.skills; }
   getAllJobs() { return this.jobs; }
@@ -1143,7 +638,7 @@ class DataService {
   }
 
   getPeers(userId: string) {
-    const user = this.getCurrentUser(userId);
+    const user = this.getUserById(userId);
     if (!user) return [];
     
     if (user.managerId) {
@@ -1182,46 +677,40 @@ class DataService {
     return this.cycles.find(c => c.status === 'ACTIVE');
   }
 
-  addCycle(cycle: Omit<AssessmentCycle, 'id'>) {
+  async addCycle(cycle: Omit<AssessmentCycle, 'id'>) {
+    const id = doc(collection(db, 'assessmentCycles')).id;
     const newCycle: AssessmentCycle = {
       ...cycle,
-      id: Math.random().toString(36).substr(2, 9)
+      id
     };
-    this.cycles.push(newCycle);
-    this.persistItem('cycles', newCycle);
-    this.logActivity('Created Assessment Cycle', newCycle.name);
+    await this.persistItem('assessmentCycles', newCycle);
+    await this.logActivity('Created Assessment Cycle', newCycle.name);
 
     // Notify all users about the new cycle
-    this.users.forEach(u => {
-      this.addNotification({
+    for (const u of this.users) {
+      await this.addNotification({
         userId: u.id,
         title: 'New Assessment Cycle',
         message: `The ${newCycle.name} assessment cycle is now active. Due date: ${new Date(newCycle.dueDate).toLocaleDateString()}`,
         type: 'INFO',
         actionLink: 'emp-assessment'
       });
-    });
+    }
   }
 
-  updateCycle(cycle: AssessmentCycle) {
-    const idx = this.cycles.findIndex(c => c.id === cycle.id);
-    if (idx >= 0) {
-      this.cycles[idx] = cycle;
-      this.updateItem('cycles', cycle);
-      this.logActivity('Updated Assessment Cycle', cycle.name);
-    }
+  async updateCycle(cycle: AssessmentCycle) {
+    await this.updateItem('assessmentCycles', cycle);
+    await this.logActivity('Updated Assessment Cycle', cycle.name);
   }
 
   // --- NOTIFICATIONS ---
   
   getNotifications(userId: string): Notification[] {
-    // Generate dynamic notifications based on role
     const user = this.users.find(u => u.id === userId);
     if (!user) return [];
 
     const dynamicNotifications: Notification[] = [];
 
-    // Admin Notifications
     if (user.role === Role.ADMIN) {
       const pendingUsers = this.users.filter(u => u.status === 'PENDING');
       if (pendingUsers.length > 0) {
@@ -1238,16 +727,14 @@ class DataService {
       }
     }
 
-    // Manager Notifications
     if (this.isManager(user) && user.role !== Role.ADMIN) {
       const teamMembers = this.users.filter(u => u.managerId === user.id);
       const teamMemberIds = new Set(teamMembers.map(u => u.id));
       
-      // Find recent assessments for team members
       const recentAssessments = this.assessments.filter(a => 
         teamMemberIds.has(a.subjectId) && 
-        a.raterId !== user.id && // Not rated by this manager
-        new Date(a.date).getTime() > Date.now() - 7 * 24 * 60 * 60 * 1000 // Last 7 days
+        a.raterId !== user.id && 
+        new Date(a.date).getTime() > Date.now() - 7 * 24 * 60 * 60 * 1000
       );
 
       if (recentAssessments.length > 0) {
@@ -1264,69 +751,62 @@ class DataService {
       }
     }
 
-    // Combine dynamic and persistent notifications, sort by date desc
     return [...dynamicNotifications, ...this.notifications.filter(n => n.userId === userId)]
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
-  markNotificationAsRead(notificationId: string) {
-    const idx = this.notifications.findIndex(n => n.id === notificationId);
-    if (idx >= 0) {
-      this.notifications[idx].isRead = true;
-      this.updateItem('notifications', this.notifications[idx]);
+  async markNotificationAsRead(notificationId: string) {
+    const notification = this.notifications.find(n => n.id === notificationId);
+    if (notification) {
+      await this.updateItem('notifications', { ...notification, isRead: true });
     }
   }
 
-  markAllNotificationsAsRead(userId: string) {
-    this.notifications.forEach(n => {
-      if (n.userId === userId) {
-        n.isRead = true;
-        this.updateItem('notifications', n);
-      }
-    });
+  async markAllNotificationsAsRead(userId: string) {
+    const unread = this.notifications.filter(n => n.userId === userId && !n.isRead);
+    for (const n of unread) {
+      await this.updateItem('notifications', { ...n, isRead: true });
+    }
   }
 
-  addNotification(notification: Omit<Notification, 'id' | 'createdAt' | 'isRead'>) {
+  async addNotification(notification: Omit<Notification, 'id' | 'createdAt' | 'isRead'>) {
+    const id = doc(collection(db, 'notifications')).id;
     const newNotification: Notification = {
       ...notification,
-      id: Math.random().toString(36).substr(2, 9),
+      id,
       createdAt: new Date().toISOString(),
       isRead: false
     };
-    this.notifications.unshift(newNotification);
-    this.persistItem('notifications', newNotification);
+    await this.persistItem('notifications', newNotification);
   }
 
   // --- ACTIONS (Async Write-Behind) ---
 
-  public logActivity(action: string, target: string) {
+  public async logActivity(action: string, target: string) {
+    const id = doc(collection(db, 'activityLogs')).id;
     const newLog: ActivityLog = {
-        id: Math.random().toString(36).substr(2, 9),
+        id,
         action,
         target,
         timestamp: new Date().toISOString()
     };
-    this.logs.unshift(newLog); // Add to top
-    if (this.logs.length > 50) this.logs.pop(); // Keep list small locally
-    this.persistItem('logs', newLog);
+    await this.persistItem('activityLogs', newLog);
   }
 
-  addAssessment(assessment: Omit<Assessment, 'id' | 'date'>) {
+  async addAssessment(assessment: Omit<Assessment, 'id' | 'date'>) {
+    const id = doc(collection(db, 'assessments')).id;
     const newAssessment: Assessment = {
       ...assessment,
-      id: Math.random().toString(36).substr(2, 9),
+      id,
       date: new Date().toISOString(),
     };
-    this.assessments.push(newAssessment);
-    this.persistItem('assessments', newAssessment);
+    await this.persistItem('assessments', newAssessment);
     
-    // Log Activity
     const subject = this.users.find(u => u.id === assessment.subjectId)?.name || 'Employee';
-    this.logActivity('Submitted Assessment', `For ${subject}`);
+    await this.logActivity('Submitted Assessment', `For ${subject}`);
 
-    // Notify the subject if it's not a self-assessment
     if (assessment.raterId !== assessment.subjectId) {
-      this.addNotification({
+      await this.addNotification({
         userId: assessment.subjectId,
         title: 'New Assessment Received',
         message: `You received a new assessment.`,
@@ -1336,121 +816,91 @@ class DataService {
     }
   }
 
-  updateAssessment(assessment: Assessment) {
-    const idx = this.assessments.findIndex(a => a.id === assessment.id);
-    if (idx >= 0) {
-      this.assessments[idx] = assessment;
-      this.updateItem('assessments', assessment);
-      
-      const subject = this.users.find(u => u.id === assessment.subjectId)?.name || 'Employee';
-      this.logActivity('Updated Assessment', `For ${subject}`);
-    }
+  async updateAssessment(assessment: Assessment) {
+    await this.updateItem('assessments', assessment);
+    const subject = this.users.find(u => u.id === assessment.subjectId)?.name || 'Employee';
+    await this.logActivity('Updated Assessment', `For ${subject}`);
   }
 
-  addSkill(skill: Skill) { 
-    this.skills.push(skill); 
-    this.persistItem('skills', skill);
-    this.logActivity('Defined New Skill', skill.name);
+  async addSkill(skill: Skill) { 
+    await this.persistItem('skills', skill);
+    await this.logActivity('Defined New Skill', skill.name);
   }
   
-  addJobProfile(job: JobProfile) { 
-    this.jobs.push(job); 
-    this.persistItem('jobs', job);
-    this.logActivity('Created Job Profile', job.title);
+  async addJobProfile(job: JobProfile) { 
+    await this.persistItem('jobProfiles', job);
+    await this.logActivity('Created Job Profile', job.title);
   }
   
-  addUser(user: User) { 
-    this.users.push(user); 
-    this.persistItem('users', user);
-    this.logActivity('Onboarded Employee', user.name);
+  async addUser(user: User) { 
+    await this.persistItem('users', user);
+    await this.logActivity('Onboarded Employee', user.name);
   }
 
-  addDepartment(dept: Department) {
-    this.departments.push(dept);
-    this.persistItem('departments', dept);
-    this.logActivity('Created Department', dept.name);
+  async addDepartment(dept: Department) {
+    await this.persistItem('departments', dept);
+    await this.logActivity('Created Department', dept.name);
   }
 
-  updateDepartment(dept: Department) {
-    const idx = this.departments.findIndex(d => d.id === dept.id);
-    if (idx >= 0) {
-      this.departments[idx] = dept;
-      this.updateItem('departments', dept);
-      this.logActivity('Updated Department', dept.name);
-    }
+  async updateDepartment(dept: Department) {
+    await this.updateItem('departments', dept);
+    await this.logActivity('Updated Department', dept.name);
   }
 
-  updateUser(user: User) {
-    const idx = this.users.findIndex(u => u.id === user.id);
-    if (idx >= 0) {
-      this.users[idx] = user;
-      this.updateItem('users', user);
-      this.logActivity('Updated Profile', user.name);
-    }
+  async updateUser(user: User) {
+    await this.updateItem('users', user);
+    await this.logActivity('Updated Profile', user.name);
   }
   
-  updateJobProfile(job: JobProfile) {
-    const idx = this.jobs.findIndex(j => j.id === job.id);
-    if (idx >= 0) {
-      this.jobs[idx] = job;
-      this.updateItem('jobs', job);
-      this.logActivity('Modified Job Profile', job.title);
-    }
+  async updateJobProfile(job: JobProfile) {
+    await this.updateItem('jobProfiles', job);
+    await this.logActivity('Modified Job Profile', job.title);
   }
   
-  updateSkill(skill: Skill) {
-    const idx = this.skills.findIndex(s => s.id === skill.id);
-    if (idx >= 0) {
-      this.skills[idx] = skill;
-      this.updateItem('skills', skill);
-      this.logActivity('Updated Skill Standard', skill.name);
-    }
+  async updateSkill(skill: Skill) {
+    await this.updateItem('skills', skill);
+    await this.logActivity('Updated Skill Standard', skill.name);
   }
 
-  approveSkill(id: string) {
-    const idx = this.skills.findIndex(s => s.id === id);
-    if (idx >= 0) {
-      this.skills[idx].status = 'APPROVED';
-      this.updateItem('skills', this.skills[idx]);
-      this.logActivity('Approved New Skill', this.skills[idx].name);
+  async approveSkill(id: string) {
+    const skill = this.skills.find(s => s.id === id);
+    if (skill) {
+      await this.updateItem('skills', { ...skill, status: 'APPROVED' });
+      await this.logActivity('Approved New Skill', skill.name);
     }
   }
 
   // --- REMOVE METHODS ---
 
-  removeUser(id: string) {
+  async removeUser(id: string) {
     const user = this.users.find(u => u.id === id);
     if (user) {
-        this.users = this.users.filter(u => u.id !== id);
-        this.deleteItem('users', id);
-        this.logActivity('Removed Employee', user.name);
+        await this.deleteItem('users', id);
+        await this.logActivity('Removed Employee', user.name);
     }
   }
 
-  removeJobProfile(id: string) {
+  async removeJobProfile(id: string) {
     const job = this.jobs.find(j => j.id === id);
     if (job) {
-        this.jobs = this.jobs.filter(j => j.id !== id);
-        this.deleteItem('jobs', id);
-        this.logActivity('Removed Job Profile', job.title);
+        await this.deleteItem('jobProfiles', id);
+        await this.logActivity('Removed Job Profile', job.title);
     }
   }
 
-  removeSkill(id: string) {
+  async removeSkill(id: string) {
     const skill = this.skills.find(s => s.id === id);
     if (skill) {
-        this.skills = this.skills.filter(s => s.id !== id);
-        this.deleteItem('skills', id);
-        this.logActivity('Removed Skill', skill.name);
+        await this.deleteItem('skills', id);
+        await this.logActivity('Removed Skill', skill.name);
     }
   }
 
-  removeDepartment(id: string) {
+  async removeDepartment(id: string) {
     const dept = this.departments.find(d => d.id === id);
     if (dept) {
-        this.departments = this.departments.filter(d => d.id !== id);
-        this.deleteItem('departments', id);
-        this.logActivity('Removed Department', dept.name);
+        await this.deleteItem('departments', id);
+        await this.logActivity('Removed Department', dept.name);
     }
   }
 }

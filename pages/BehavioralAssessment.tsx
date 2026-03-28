@@ -10,14 +10,14 @@ const UserCard = ({ user, isSelected, onClick, role, isSelf }: { user: User, isS
     <button
       type="button"
       onClick={onClick}
-      className={`flex flex-col items-center p-3 rounded-none border-2 transition-all w-40 flex-shrink-0 ${isSelected ? 'border-slate-900 bg-slate-50  scale-105' : 'border-slate-300 bg-white hover:border-slate-300 hover:'}`}
+      className={`flex flex-col items-center p-3 rounded-none border-2 transition-all w-32 flex-shrink-0 ${isSelected ? 'border-slate-900 bg-slate-50  scale-105' : 'border-slate-300 bg-white hover:border-slate-300 hover:'}`}
     >
-      <div className={`w-12 h-12 rounded-none flex items-center justify-center text-lg font-bold mb-2 ${isSelf ? 'bg-slate-800 text-white' : 'bg-slate-200 text-slate-700'}`}>
+      <div className={`w-10 h-10 rounded-none flex items-center justify-center text-lg font-bold mb-2 ${isSelf ? 'bg-blue-700 text-white' : 'bg-slate-200 text-slate-700'}`}>
         {user.name.charAt(0)}
       </div>
-      <div className="text-sm font-bold text-slate-800 text-center w-full leading-tight mb-1" title={user.name}>{user.name}</div>
-      {jobProfile && <div className="text-[10px] text-slate-500 text-center leading-tight mb-1 line-clamp-2" title={jobProfile.title}>{jobProfile.title}</div>}
-      {role && <div className="text-[10px] font-bold text-slate-800 uppercase mt-auto pt-1">{role}</div>}
+      <div className="text-xs font-bold text-slate-800 text-center w-full leading-tight mb-1" title={user.name}>{user.name}</div>
+      {jobProfile && <div className="text-[9px] text-slate-500 text-center leading-tight mb-1 line-clamp-2" title={jobProfile.title}>{jobProfile.title}</div>}
+      {role && <div className="text-[9px] font-bold text-slate-800 uppercase mt-auto pt-1">{role}</div>}
     </button>
   );
 };
@@ -66,16 +66,16 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
     return dataService.getAllSkills().filter(s => s.category === 'Behavioral' && department.behavioralSkillIds?.includes(s.id));
   }, [selectedEmployee]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedSubjectId || !selectedSkillId || rating === 0) return;
 
     setIsSubmitting(true);
 
     // Simulate network request
-    setTimeout(() => {
+    setTimeout(async () => {
       const isSelf = selectedSubjectId === currentUser.id;
-      dataService.addAssessment({
+      await dataService.addAssessment({
         raterId: currentUser.id, // We store it, but UI can hide it
         subjectId: selectedSubjectId,
         skillId: selectedSkillId,
@@ -103,8 +103,8 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
       </div>
 
       {successMessage && (
-        <div className="bg-slate-50 border border-slate-200 text-slate-800 px-4 py-3 rounded-sm flex items-center gap-3">
-          <CheckCircle size={20} className="text-slate-600" />
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-sm flex items-center gap-3">
+          <CheckCircle size={20} className="text-emerald-500" />
           <p className="font-medium">{successMessage}</p>
         </div>
       )}
@@ -113,7 +113,7 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
         <div className="mb-10">
           <label className="block text-sm font-bold text-slate-700 mb-4 text-center">Select Employee for 360° Evaluation</label>
           
-          <div className="flex flex-col items-center gap-6 bg-slate-50 p-8 rounded-none border border-slate-300 overflow-x-auto">
+          <div className="flex flex-col items-center gap-6 bg-slate-50 p-8 rounded-none border border-slate-300 overflow-x-auto no-scrollbar">
             {/* Manager */}
             {manager && (
               <div className="flex flex-col items-center">
@@ -123,12 +123,12 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
             )}
 
             {/* Middle Row: Peers and Self */}
-            <div className="flex items-center justify-center gap-4 min-w-max">
+            <div className="flex items-center justify-center gap-2 min-w-max">
               {/* Peers (Left) */}
               {peers.slice(0, Math.ceil(peers.length / 2)).map(peer => (
-                <div key={peer.id} className="flex items-center gap-4">
+                <div key={peer.id} className="flex items-center gap-2">
                   <UserCard user={peer} isSelected={selectedSubjectId === peer.id} onClick={() => setSelectedSubjectId(peer.id)} role="Peer" />
-                  <div className="w-8 h-px bg-slate-300"></div>
+                  <div className="w-4 h-px bg-slate-300"></div>
                 </div>
               ))}
 
@@ -142,8 +142,8 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
 
               {/* Peers (Right) */}
               {peers.slice(Math.ceil(peers.length / 2)).map(peer => (
-                <div key={peer.id} className="flex items-center gap-4">
-                  <div className="w-8 h-px bg-slate-300"></div>
+                <div key={peer.id} className="flex items-center gap-2">
+                  <div className="w-4 h-px bg-slate-300"></div>
                   <UserCard user={peer} isSelected={selectedSubjectId === peer.id} onClick={() => setSelectedSubjectId(peer.id)} role="Peer" />
                 </div>
               ))}
@@ -244,7 +244,7 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
                 <button 
                   type="submit" 
                   disabled={isSubmitting || !selectedSubjectId || !selectedSkillId || rating === 0}
-                  className="bg-slate-900 hover:bg-slate-800 text-white font-medium py-3 px-8 rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 "
+                  className="bg-blue-700 hover:bg-blue-800 text-white font-medium py-3 px-8 rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 "
                 >
                   {isSubmitting ? 'Submitting...' : 'Submit Evaluation'}
                   {!isSubmitting && <Send size={18} />}

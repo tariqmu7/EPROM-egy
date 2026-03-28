@@ -37,21 +37,21 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ user, onNavi
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
-  const handleMarkAsRead = (e: React.MouseEvent, id: string) => {
+  const handleMarkAsRead = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    dataService.markNotificationAsRead(id);
+    await dataService.markNotificationAsRead(id);
     fetchNotifications();
   };
 
-  const handleMarkAllAsRead = (e: React.MouseEvent) => {
+  const handleMarkAllAsRead = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    dataService.markAllNotificationsAsRead(user.id);
+    await dataService.markAllNotificationsAsRead(user.id);
     fetchNotifications();
   };
 
-  const handleNotificationClick = (notification: Notification) => {
+  const handleNotificationClick = async (notification: Notification) => {
     if (!notification.isRead) {
-      dataService.markNotificationAsRead(notification.id);
+      await dataService.markNotificationAsRead(notification.id);
     }
     if (notification.actionLink) {
       onNavigate(notification.actionLink);
@@ -63,7 +63,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ user, onNavi
     switch (type) {
       case 'INFO': return <Info size={16} className="text-slate-700" />;
       case 'WARNING': return <AlertTriangle size={16} className="text-slate-500" />;
-      case 'SUCCESS': return <CheckCircle size={16} className="text-slate-500" />;
+      case 'SUCCESS': return <CheckCircle size={16} className="text-emerald-500" />;
       case 'ERROR': return <XCircle size={16} className="text-slate-500" />;
       default: return <Info size={16} className="text-slate-700" />;
     }
@@ -77,7 +77,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ user, onNavi
       >
         <Bell size={20} />
         {unreadCount > 0 && (
-          <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-none bg-slate-500 text-[10px] font-bold text-white ring-2 ring-white">
+          <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-none bg-rose-500 text-[10px] font-bold text-white ring-2 ring-white">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
@@ -123,7 +123,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ user, onNavi
                     {!notification.isRead && !notification.id.startsWith('dyn-') && (
                       <button 
                         onClick={(e) => handleMarkAsRead(e, notification.id)}
-                        className="w-2 h-2 rounded-none bg-slate-800 self-center"
+                        className="w-2 h-2 rounded-none bg-blue-600 self-center"
                         title="Mark as read"
                       />
                     )}

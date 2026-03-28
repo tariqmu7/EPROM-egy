@@ -1,0 +1,185 @@
+{
+  "entities": {
+    "Skill": {
+      "title": "Skill",
+      "description": "A competency or skill that can be assessed.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "assessmentQuestion": { "type": "string" },
+        "levels": { "type": "string", "description": "JSON stringified Record<number, SkillLevel>" },
+        "status": { "type": "string", "enum": ["APPROVED", "PENDING"] }
+      },
+      "required": ["name", "category", "levels"]
+    },
+    "Department": {
+      "title": "Department",
+      "description": "An organizational department.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "managerId": { "type": "string" },
+        "behavioralSkillIds": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["name"]
+    },
+    "JobProfile": {
+      "title": "JobProfile",
+      "description": "A job role definition with required skills.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "departmentId": { "type": "string" },
+        "requirements": { "type": "string", "description": "JSON stringified Partial<Record<OrgLevel, JobProfileSkill[]>>" }
+      },
+      "required": ["title", "description", "departmentId", "requirements"]
+    },
+    "User": {
+      "title": "User",
+      "description": "A user of the system (employee or admin).",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["ADMIN", "EMPLOYEE"] },
+        "status": { "type": "string", "enum": ["ACTIVE", "PENDING", "REJECTED"] },
+        "departmentId": { "type": "string" },
+        "orgLevel": { "type": "string" },
+        "jobProfileId": { "type": "string" },
+        "managerId": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "certificates": { "type": "string", "description": "JSON stringified Certificate[]" },
+        "location": { "type": "string" }
+      },
+      "required": ["name", "email", "role", "status"]
+    },
+    "Assessment": {
+      "title": "Assessment",
+      "description": "An evaluation of a user's skill.",
+      "type": "object",
+      "properties": {
+        "raterId": { "type": "string" },
+        "subjectId": { "type": "string" },
+        "skillId": { "type": "string" },
+        "score": { "type": "number" },
+        "comment": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "type": { "type": "string", "enum": ["SELF", "PEER", "MANAGER"] },
+        "cycleId": { "type": "string" }
+      },
+      "required": ["raterId", "subjectId", "skillId", "score", "comment", "date", "type"]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "An audit log entry.",
+      "type": "object",
+      "properties": {
+        "action": { "type": "string" },
+        "target": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["action", "target", "timestamp"]
+    },
+    "Evidence": {
+      "title": "Evidence",
+      "description": "Evidence submitted for a skill assessment.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "skillId": { "type": "string" },
+        "fileUrl": { "type": "string" },
+        "fileName": { "type": "string" },
+        "notes": { "type": "string" },
+        "status": { "type": "string", "enum": ["PENDING", "APPROVED", "REJECTED"] },
+        "submittedAt": { "type": "string", "format": "date-time" },
+        "reviewedAt": { "type": "string", "format": "date-time" },
+        "reviewedBy": { "type": "string" }
+      },
+      "required": ["userId", "skillId", "fileUrl", "fileName", "notes", "status", "submittedAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "A notification for a user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string", "enum": ["INFO", "WARNING", "SUCCESS", "ERROR"] },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "actionLink": { "type": "string" }
+      },
+      "required": ["userId", "title", "message", "type", "isRead", "createdAt"]
+    },
+    "AssessmentCycle": {
+      "title": "AssessmentCycle",
+      "description": "A period during which assessments take place.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "startDate": { "type": "string", "format": "date-time" },
+        "dueDate": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["ACTIVE", "CLOSED"] }
+      },
+      "required": ["name", "startDate", "dueDate", "status"]
+    },
+    "Nomination": {
+      "title": "Nomination",
+      "description": "A request for someone to assess a user.",
+      "type": "object",
+      "properties": {
+        "nominatorId": { "type": "string" },
+        "subjectId": { "type": "string" },
+        "raterId": { "type": "string" },
+        "status": { "type": "string", "enum": ["PENDING", "APPROVED", "REJECTED"] },
+        "date": { "type": "string", "format": "date-time" }
+      },
+      "required": ["nominatorId", "subjectId", "raterId", "status", "date"]
+    }
+  },
+  "firestore": {
+    "/skills/{skillId}": {
+      "schema": { "$ref": "#/entities/Skill" },
+      "description": "Collection of all skills."
+    },
+    "/departments/{departmentId}": {
+      "schema": { "$ref": "#/entities/Department" },
+      "description": "Collection of all departments."
+    },
+    "/jobProfiles/{jobProfileId}": {
+      "schema": { "$ref": "#/entities/JobProfile" },
+      "description": "Collection of all job profiles."
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Collection of all users."
+    },
+    "/assessments/{assessmentId}": {
+      "schema": { "$ref": "#/entities/Assessment" },
+      "description": "Collection of all assessments."
+    },
+    "/activityLogs/{logId}": {
+      "schema": { "$ref": "#/entities/ActivityLog" },
+      "description": "Collection of all activity logs."
+    },
+    "/evidences/{evidenceId}": {
+      "schema": { "$ref": "#/entities/Evidence" },
+      "description": "Collection of all evidences."
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "Collection of all notifications."
+    },
+    "/assessmentCycles/{cycleId}": {
+      "schema": { "$ref": "#/entities/AssessmentCycle" },
+      "description": "Collection of all assessment cycles."
+    },
+    "/nominations/{nominationId}": {
+      "schema": { "$ref": "#/entities/Nomination" },
+      "description": "Collection of all nominations."
+    }
+  }
+}

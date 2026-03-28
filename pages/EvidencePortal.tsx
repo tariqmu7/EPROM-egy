@@ -48,7 +48,7 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
 
     // Simulate file upload by reading as data URL
     const reader = new FileReader();
-    reader.onloadend = () => {
+    reader.onloadend = async () => {
       const base64String = reader.result as string;
       
       let finalSkillId = selectedSkillId;
@@ -72,12 +72,12 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
             },
             status: 'PENDING'
           };
-          dataService.addSkill(newSkill);
+          await dataService.addSkill(newSkill);
           finalSkillId = newSkill.id;
         }
       }
 
-      dataService.addEvidence({
+      await dataService.addEvidence({
         userId: currentUser.id,
         skillId: finalSkillId,
         fileUrl: base64String,
@@ -105,8 +105,8 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
       </div>
 
       {successMessage && (
-        <div className="bg-slate-50 border border-slate-200 text-slate-800 px-4 py-3 rounded-sm flex items-center gap-3">
-          <CheckCircle size={20} className="text-slate-600" />
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-sm flex items-center gap-3">
+          <CheckCircle size={20} className="text-emerald-500" />
           <p className="font-medium">{successMessage}</p>
         </div>
       )}
@@ -131,11 +131,11 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
                         <li key={req.skillId} className="flex items-start justify-between text-sm">
                           <span className="text-slate-700 font-medium">{req.skill.name}</span>
                           {approved ? (
-                            <span title="Verified"><CheckCircle size={16} className="text-slate-500 shrink-0 mt-0.5" /></span>
+                            <span title="Verified"><CheckCircle size={16} className="text-emerald-500 shrink-0 mt-0.5" /></span>
                           ) : pending ? (
-                            <span title="Pending Review"><Clock size={16} className="text-slate-500 shrink-0 mt-0.5" /></span>
+                            <span title="Pending Review"><Clock size={16} className="text-amber-500 shrink-0 mt-0.5" /></span>
                           ) : (
-                            <span title="Evidence Required"><AlertCircle size={16} className="text-slate-500 shrink-0 mt-0.5" /></span>
+                            <span title="Evidence Required"><AlertCircle size={16} className="text-rose-500 shrink-0 mt-0.5" /></span>
                           )}
                         </li>
                       );
@@ -230,7 +230,7 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
                 <button 
                   type="submit" 
                   disabled={isSubmitting || !selectedSkillId || !file}
-                  className="bg-slate-800 hover:bg-slate-900 text-white font-medium py-2.5 px-6 rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="bg-slate-800 hover:bg-blue-700 text-white font-medium py-2.5 px-6 rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   {isSubmitting ? 'Submitting...' : 'Submit for Review'}
                   {!isSubmitting && <Upload size={18} />}

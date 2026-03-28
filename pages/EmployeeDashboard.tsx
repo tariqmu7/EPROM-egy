@@ -12,7 +12,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
   const jobProfile = useMemo(() => user.jobProfileId ? dataService.getJobProfile(user.jobProfileId) : null, [user.jobProfileId]);
   const userLevel = user.orgLevel;
   const department = useMemo(() => dataService.getAllDepartments().find(d => d.id === user.departmentId), [user.departmentId]);
-  const manager = useMemo(() => user.managerId ? dataService.getCurrentUser(user.managerId) : null, [user.managerId]);
+  const manager = useMemo(() => user.managerId ? dataService.getUserById(user.managerId) : null, [user.managerId]);
 
   const itp = useMemo(() => dataService.generateIndividualTrainingPlan(user.id), [user.id]);
 
@@ -39,7 +39,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
   if (levelRequirements.length === 0) {
       return (
         <div className="flex flex-col items-center justify-center h-[60vh] text-slate-700">
-             <CheckCircle size={48} className="mb-4 text-slate-500" />
+             <CheckCircle size={48} className="mb-4 text-emerald-500" />
             <p className="font-medium">No specific competency requirements defined for level: <span className="font-bold text-slate-700">{userLevel}</span>.</p>
         </div>
       );
@@ -278,7 +278,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                 <span className="text-2xl font-bold text-slate-900">
                   {skillAnalysis.length > 0 ? Math.round((compliant.length / skillAnalysis.length) * 100) : 0}%
                 </span>
-                <TrendingUp size={16} className="text-slate-500 mb-1" />
+                <TrendingUp size={16} className="text-emerald-500 mb-1" />
               </div>
             </div>
             <div className="bg-white p-4 rounded-none  border border-slate-300">
@@ -331,7 +331,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
           <div className="bg-white p-6 rounded-none  border border-slate-300">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-2">
-                <Target size={20} className="text-slate-600" />
+                <Target size={20} className="text-blue-600" />
                 <h3 className="font-bold text-slate-900">Job Fit Analysis</h3>
               </div>
               <div className="px-3 py-1 rounded-none bg-slate-50 text-slate-700 text-xs font-bold border border-slate-100">
@@ -396,7 +396,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                       style={{ width: `${(s.required / 5) * 100}%` }}
                     ></div>
                     <div 
-                      className={`absolute top-0 left-0 h-full rounded-none transition-all duration-500 ${s.current >= s.required ? 'bg-slate-500' : 'bg-slate-800'}`} 
+                      className={`absolute top-0 left-0 h-full rounded-none transition-all duration-500 ${s.current >= s.required ? 'bg-emerald-500' : 'bg-blue-600'}`} 
                       style={{ width: `${(s.current / 5) * 100}%` }}
                     ></div>
                   </div>
@@ -414,7 +414,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Plan ID: {itp?.userId.split('_')[1] || 'NEW'}</span>
-                <span className="bg-slate-800 text-white text-[10px] font-bold px-2 py-0.5 rounded-none uppercase tracking-wider">Active</span>
+                <span className="bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-none uppercase tracking-wider">Active</span>
               </div>
             </div>
             
@@ -423,7 +423,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                 <div className="space-y-6">
                   {itp.recommendations.map((rec, idx) => (
                     <div key={idx} className="relative pl-6 border-l-2 border-slate-100 pb-6 last:pb-0">
-                      <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-none border-2 border-white  ${rec.priority === 'HIGH' ? 'bg-slate-500' : 'bg-slate-800'}`}></div>
+                      <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-none border-2 border-white  ${rec.priority === 'HIGH' ? 'bg-emerald-500' : 'bg-blue-600'}`}></div>
                       
                       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-3">
                         <div>
@@ -462,7 +462,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
           <div className="bg-white rounded-none  border border-slate-300 overflow-hidden">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
               <div className="flex items-center gap-2">
-                <GraduationCap size={20} className="text-slate-600" />
+                <GraduationCap size={20} className="text-blue-600" />
                 <h3 className="font-bold text-slate-900">Career Path & Development Plan</h3>
               </div>
             </div>
