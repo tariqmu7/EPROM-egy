@@ -70,8 +70,8 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({ options, val
       </div>
 
       {isOpen && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-300 rounded-sm  max-h-60 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-100">
-          <div className="p-2 border-b border-slate-300 bg-slate-100 sticky top-0">
+        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-300 rounded-sm shadow-xl max-h-96 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-100">
+          <div className="p-2 border-b border-slate-300 bg-slate-100 sticky top-0 shrink-0">
              <div className="relative">
                 <Search size={14} className="absolute left-2.5 top-2.5 text-slate-600"/>
                 <input
@@ -85,7 +85,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({ options, val
                 />
              </div>
           </div>
-          <div className="overflow-y-auto flex-1 custom-scrollbar bg-white">
+          <div className="overflow-y-auto max-h-[300px] min-h-0 flex-1 custom-scrollbar bg-white">
             {filteredOptions.length > 0 ? (
                 filteredOptions.map(option => (
                     <div

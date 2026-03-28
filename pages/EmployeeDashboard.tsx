@@ -57,7 +57,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
 
   const levelRequirements = jobProfile.requirements[userLevel] || [];
   
-  if (levelRequirements.length === 0) {
+  if (!Array.isArray(levelRequirements) || levelRequirements.length === 0) {
       return (
         <div className="flex flex-col items-center justify-center h-[60vh] text-slate-700">
              <CheckCircle size={48} className="mb-4 text-emerald-500" />

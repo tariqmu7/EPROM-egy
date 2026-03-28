@@ -170,10 +170,25 @@ class DataService {
       onSnapshot(collection(db, 'jobProfiles'), (snapshot) => {
         this.jobs = snapshot.docs.map(doc => {
           const data = doc.data();
+          let requirements = {};
+          
+          if (data.requirements) {
+            try {
+              const rawReqs = typeof data.requirements === 'string' ? JSON.parse(data.requirements) : data.requirements;
+              // Ensure every level's requirement is an array
+              requirements = Object.entries(rawReqs).reduce((acc: any, [level, reqs]: [string, any]) => {
+                acc[level] = Array.isArray(reqs) ? reqs : Object.values(reqs || {});
+                return acc;
+              }, {});
+            } catch (e) {
+              console.error('Error parsing requirements for job', doc.id, e);
+            }
+          }
+
           return {
             id: doc.id,
             ...data,
-            requirements: data.requirements ? JSON.parse(data.requirements) : {}
+            requirements
           } as JobProfile;
         });
       }, this.handleError('jobProfiles'))
@@ -727,6 +742,14 @@ class DataService {
   getAllDepartments() { return this.departments; }
   getSkill(id: string) { return this.skills.find(s => s.id === id); }
   getSystemLogs() { return this.logs; }
+
+  getGeneralDeptId(deptId: string | undefined): string | undefined {
+    if (!deptId) return undefined;
+    const dept = this.departments.find(d => d.id === deptId);
+    if (!dept) return undefined;
+    if (dept.type === 'GENERAL' || !dept.parentId) return dept.id;
+    return this.getGeneralDeptId(dept.parentId);
+  }
 
   getSubordinates(managerId: string) {
     return this.users.filter(u => u.managerId === managerId);

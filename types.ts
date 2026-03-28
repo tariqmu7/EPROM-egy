@@ -61,9 +61,13 @@ export interface JobProfile {
   requirements: Partial<Record<OrgLevel, JobProfileSkill[]>>;
 }
 
+export type DepartmentType = 'GENERAL' | 'DEPARTMENT' | 'SECTION';
+
 export interface Department {
   id: string;
   name: string;
+  type?: DepartmentType; // New field for hierarchy level
+  parentId?: string; // Support for hierarchical structure
   managerId?: string;
   behavioralSkillIds?: string[];
 }
@@ -79,15 +83,19 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  phone?: string;
+  whatsapp?: string;
   role: Role;
   status: UserStatus; // New Field
   departmentId: string;
+  generalDepartmentId?: string; // Top-level General Department
   orgLevel?: OrgLevel; // Position in the hierarchy
   jobProfileId?: string;
   managerId?: string; // Direct reporting line (can be inferred from structure or explicit)
   avatarUrl?: string;
   certificates?: Certificate[];
   location?: string;
+  projectName?: string;
 }
 
 export interface AssessmentCycle {

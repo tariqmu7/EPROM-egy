@@ -65,12 +65,14 @@ export const AdminAnalytics: React.FC = () => {
         const levelRequirements = jobProfile.requirements[user.orgLevel] || [];
         const userScores = currentScores[user.id] || {};
         
-        levelRequirements.forEach(req => {
-          const score = userScores[req.skillId] || 0;
-          const gap = Math.max(0, req.requiredLevel - score);
-          totalGap += gap;
-          count++;
-        });
+        if (Array.isArray(levelRequirements)) {
+          levelRequirements.forEach(req => {
+            const score = userScores[req.skillId] || 0;
+            const gap = Math.max(0, req.requiredLevel - score);
+            totalGap += gap;
+            count++;
+          });
+        }
       });
 
       const avgGap = count > 0 ? (totalGap / count).toFixed(2) : 0;

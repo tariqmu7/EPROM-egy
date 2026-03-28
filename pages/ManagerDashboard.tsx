@@ -123,7 +123,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
                                                 <span className="text-[10px] text-slate-600 uppercase font-semibold">{reqs.length} Skills Required</span>
                                             </div>
                                             <div className="flex flex-wrap gap-2">
-                                                {reqs.map((req, idx) => {
+                                                {Array.isArray(reqs) && reqs.map((req, idx) => {
                                                     const skill = dataService.getSkill(req.skillId);
                                                     return (
                                                         <div key={idx} className="text-xs bg-white border border-slate-300 px-2 py-1 rounded-none text-slate-600 flex items-center gap-1" title={`Required Level: ${req.requiredLevel}`}>

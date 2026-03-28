@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { dataService } from '../services/store';
-import { User, Role, JobProfile, Skill, JobProfileSkill, OrgLevel, ORG_LEVEL_LABELS, Department, ORG_HIERARCHY_ORDER, PROFICIENCY_LABELS } from '../types';
+import { User, Role, JobProfile, Skill, JobProfileSkill, OrgLevel, ORG_LEVEL_LABELS, Department, DepartmentType, ORG_HIERARCHY_ORDER, PROFICIENCY_LABELS } from '../types';
 import { PROFICIENCY_DEFINITIONS } from '../constants';
 import { Plus, Users, Briefcase, ChevronRight, CheckCircle, Shield, ShieldCheck, X, Save, Trash2, ArrowLeft, UserPlus, Building2, Search, Edit2, UserCheck, AlertCircle, Layers, BookOpen, MoreHorizontal, LayoutGrid, Activity, Eye, AlertTriangle, FileSpreadsheet } from 'lucide-react';
 import { SearchableSelect, Option } from '../components/SearchableSelect';
@@ -18,7 +18,7 @@ const FormPage: React.FC<{ title: string; onBack: () => void; children: React.Re
         </button>
         <h2 className="text-2xl font-bold text-slate-900">{title}</h2>
       </div>
-      <div className="bg-white rounded-sm  border border-slate-300 overflow-hidden">
+      <div className="bg-white rounded-sm border border-slate-300">
          {children}
       </div>
     </div>
@@ -95,23 +95,45 @@ const SkillDetailsModal: React.FC<{ skill: Skill; onClose: () => void }> = ({ sk
   );
 };
 
+// --- Helper functions ---
+
+
 // --- User Form (Unchanged Logic, styling preserved) ---
 const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void, onCancel: () => void }> = ({ initialData, onSave, onCancel }) => {
-  const [formData, setFormData] = useState<Partial<User>>(initialData || {
-    role: Role.EMPLOYEE,
-    status: 'ACTIVE',
-    departmentId: dataService.getAllDepartments()[0]?.id || ''
+  const departments = dataService.getAllDepartments();
+  const jobProfiles = dataService.getAllJobs();
+  const potentialManagers = dataService.getAllUsers(); 
+
+  const [formData, setFormData] = useState<Partial<User>>(() => {
+    if (initialData) return { ...initialData };
+    
+    const firstDept = departments[0];
+    const genDeptId = dataService.getGeneralDeptId(firstDept?.id);
+    
+    return {
+        role: Role.EMPLOYEE,
+        status: 'ACTIVE',
+        departmentId: firstDept?.id || '',
+        generalDepartmentId: genDeptId
+    };
   });
   const [managerPrompt, setManagerPrompt] = useState(false);
 
   const isPending = initialData?.status === 'PENDING';
   const isNewUser = !initialData;
 
-  const departments = dataService.getAllDepartments();
-  const jobProfiles = dataService.getAllJobs();
-  const potentialManagers = dataService.getAllUsers(); 
-
-  const deptOptions: Option[] = departments.map(d => ({ value: d.id, label: d.name }));
+  const generalDepts = departments.filter(d => d.type === 'GENERAL' || !d.parentId);
+  const generalDeptOptions: Option[] = generalDepts.map(d => ({ value: d.id, label: d.name }));
+  
+  const filteredDepts = departments.filter(d => {
+    if (!formData.generalDepartmentId) return false; // Show nothing if no General Dept selected
+    // Must be part of this General Dept tree AND not the General Dept itself (if that's what "sub" means)
+    // Actually, usually you can be IN the general dept. But I'll stick to descendant check if they say "sub".
+    // Let's keep the descendant check (getGeneralDeptId) but ensure it's indeed from that tree.
+    return dataService.getGeneralDeptId(d.id) === formData.generalDepartmentId;
+  });
+  const deptOptions: Option[] = filteredDepts.map(d => ({ value: d.id, label: d.name }));
+  
   const jobOptions: Option[] = jobProfiles.map(j => ({ value: j.id, label: j.title, subLabel: departments.find(d=>d.id===j.departmentId)?.name }));
 
   const selectedJobProfile = jobProfiles.find(j => j.id === formData.jobProfileId);
@@ -121,9 +143,24 @@ const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void,
     .filter(u => {
         if (u.id === initialData?.id) return false; 
         if (u.status !== 'ACTIVE') return false; 
-        if (contextDepartmentId) {
-            return u.departmentId === contextDepartmentId;
+        
+        // Rule 1: Same General Department
+        const currentGenDeptId = formData.generalDepartmentId || (contextDepartmentId ? dataService.getGeneralDeptId(contextDepartmentId) : undefined);
+        if (currentGenDeptId) {
+            const managerGenDeptId = dataService.getGeneralDeptId(u.departmentId);
+            if (managerGenDeptId !== currentGenDeptId) return false;
         }
+
+        // Rule 2: Higher Hierarchy Level
+        if (formData.orgLevel) {
+            const userLevelIdx = ORG_HIERARCHY_ORDER.indexOf(formData.orgLevel);
+            const managerLevelIdx = ORG_HIERARCHY_ORDER.indexOf(u.orgLevel as OrgLevel);
+            
+            // Index 0 (GM) is higher than Index 6 (FR)
+            // So manager index must be LESS THAN user index
+            if (managerLevelIdx === -1 || managerLevelIdx >= userLevelIdx) return false;
+        }
+
         return true;
     })
     .map(u => ({ 
@@ -136,45 +173,66 @@ const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void,
       const job = jobProfiles.find(j => j.id === val);
       setFormData(prev => {
           let newManagerId = prev.managerId;
-          if (prev.managerId && job) {
+          const newDeptId = job ? job.departmentId : prev.departmentId;
+          const newGenDeptId = dataService.getGeneralDeptId(newDeptId);
+
+          if (prev.managerId) {
               const currentManager = potentialManagers.find(m => m.id === prev.managerId);
-              if (currentManager && currentManager.departmentId !== job.departmentId) {
+              const mGenDeptId = currentManager ? dataService.getGeneralDeptId(currentManager.departmentId) : undefined;
+              if (mGenDeptId !== newGenDeptId) {
                   newManagerId = undefined;
                   setManagerPrompt(true);
-              } else {
-                  setManagerPrompt(false);
               }
-          } else {
-              setManagerPrompt(false);
           }
+
           return {
               ...prev,
               jobProfileId: val,
-              departmentId: job ? job.departmentId : prev.departmentId,
+              departmentId: newDeptId,
+              generalDepartmentId: newGenDeptId,
               managerId: newManagerId
           };
       });
   };
 
+  const handleGeneralDeptChange = (val: string) => {
+      setFormData(prev => {
+          const isStillValid = val && prev.departmentId && dataService.getGeneralDeptId(prev.departmentId) === val;
+          return {
+              ...prev,
+              generalDepartmentId: val,
+              departmentId: isStillValid ? prev.departmentId : val, // If not valid, default to the General Dept itself
+              managerId: undefined // Reset manager as they must be in the new Gen Dept
+          };
+      });
+  };
+
   const handleDepartmentChange = (val: string) => {
+      const genDeptId = dataService.getGeneralDeptId(val);
+      setFormData(prev => ({
+          ...prev,
+          departmentId: val,
+          generalDepartmentId: genDeptId,
+          managerId: prev.managerId // Keep manager, logic in managerOptions will filter if invalid
+      }));
+  };
+
+  const handleOrgLevelChange = (val: string) => {
+      const newLevel = val as OrgLevel;
       setFormData(prev => {
           let newManagerId = prev.managerId;
           if (prev.managerId) {
               const currentManager = potentialManagers.find(m => m.id === prev.managerId);
-              if (currentManager && currentManager.departmentId !== val) {
-                  newManagerId = undefined;
-                  setManagerPrompt(true);
-              } else {
-                  setManagerPrompt(false);
+              if (currentManager) {
+                  const mLevelIdx = ORG_HIERARCHY_ORDER.indexOf(currentManager.orgLevel as OrgLevel);
+                  const uLevelIdx = ORG_HIERARCHY_ORDER.indexOf(newLevel);
+                  if (mLevelIdx >= uLevelIdx) {
+                      newManagerId = undefined;
+                      setManagerPrompt(true);
+                  }
               }
-          } else {
-              setManagerPrompt(false);
           }
-          return {
-              ...prev,
-              departmentId: val,
-              managerId: newManagerId
-          };
+          return { ...prev, orgLevel: newLevel, managerId: newManagerId };
       });
   };
 
@@ -186,14 +244,18 @@ const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void,
       id: initialData?.id || Math.random().toString(36).substr(2, 9),
       name: formData.name,
       email: formData.email,
+      phone: formData.phone,
+      whatsapp: formData.whatsapp,
       role: formData.role || Role.EMPLOYEE,
       status: formData.status || 'ACTIVE', 
       departmentId: formData.departmentId || '',
+      generalDepartmentId: formData.generalDepartmentId,
       jobProfileId: formData.jobProfileId,
       managerId: formData.managerId,
       avatarUrl: formData.avatarUrl,
       orgLevel: formData.orgLevel,
-      location: formData.location
+      location: formData.location,
+      projectName: formData.projectName
     };
     onSave(user);
   };
@@ -218,6 +280,21 @@ const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void,
                         readOnly={!isNewUser} 
                         placeholder="john@company.com"
                     />
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Phone Number</label>
+                    <input type="tel" className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 focus:border-transparent outline-none transition-all placeholder:text-slate-600" 
+                        value={formData.phone || ''} onChange={e => setFormData({...formData, phone: e.target.value})} placeholder="+20..."/>
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">WhatsApp</label>
+                    <input type="tel" className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 focus:border-transparent outline-none transition-all placeholder:text-slate-600" 
+                        value={formData.whatsapp || ''} onChange={e => setFormData({...formData, whatsapp: e.target.value})} placeholder="+20..."/>
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Project Name</label>
+                    <input type="text" className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 focus:border-transparent outline-none transition-all placeholder:text-slate-600" 
+                        value={formData.projectName || ''} onChange={e => setFormData({...formData, projectName: e.target.value})} placeholder="e.g. Expansion Phase II"/>
                 </div>
                 <div>
                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Project Location</label>
@@ -264,43 +341,47 @@ const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void,
                     Organizational Role
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">System Role</label>
-                        <select className="w-full px-3 py-2 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none bg-white text-slate-900"
-                            value={formData.role} onChange={e => setFormData({...formData, role: e.target.value as Role})}>
-                            <option value={Role.EMPLOYEE}>Employee</option>
-                            <option value={Role.ADMIN}>Admin</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Account Status</label>
-                        <select className="w-full px-3 py-2 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none bg-white text-slate-900"
-                            value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})}>
-                            <option value="ACTIVE">Active</option>
-                            <option value="PENDING">Pending Approval</option>
-                            <option value="REJECTED">Rejected</option>
-                        </select>
-                    </div>
                     <SearchableSelect 
-                        label="Department"
+                        label="System Role"
+                        options={[
+                            { value: Role.EMPLOYEE, label: 'Employee' },
+                            { value: Role.ADMIN, label: 'Admin' }
+                        ]}
+                        value={formData.role || Role.EMPLOYEE} 
+                        onChange={val => setFormData({...formData, role: val as Role})}
+                    />
+                    <SearchableSelect 
+                        label="Account Status"
+                        options={[
+                            { value: 'ACTIVE', label: 'Active' },
+                            { value: 'PENDING', label: 'Pending Approval' },
+                            { value: 'REJECTED', label: 'Rejected' }
+                        ]}
+                        value={formData.status || 'ACTIVE'} 
+                        onChange={val => setFormData({...formData, status: val as any})}
+                    />
+                    <SearchableSelect 
+                        label="Main Department (General)"
+                        options={generalDeptOptions}
+                        value={formData.generalDepartmentId || ''}
+                        onChange={handleGeneralDeptChange}
+                        placeholder="Select General Department..."
+                    />
+                    <SearchableSelect 
+                        label="Direct Department / Section"
                         options={deptOptions}
                         value={formData.departmentId || ''}
                         onChange={handleDepartmentChange}
-                        placeholder="Search Department..."
+                        placeholder="Select Specific Department..."
                     />
                     <div className="md:col-span-2">
-                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Hierarchy Level</label>
-                        <select 
-                            required
-                            className="w-full px-3 py-2 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none bg-white text-slate-900"
+                        <SearchableSelect 
+                            label="Hierarchy Level"
+                            placeholder="Select Hierarchy Level..."
+                            options={ORG_HIERARCHY_ORDER.map(level => ({ value: level, label: `${ORG_LEVEL_LABELS[level]} (${level})` }))}
                             value={formData.orgLevel || ''} 
-                            onChange={e => setFormData({...formData, orgLevel: e.target.value as OrgLevel})}
-                        >
-                            <option value="" disabled>Select Hierarchy Level...</option>
-                            {ORG_HIERARCHY_ORDER.map(level => (
-                                <option key={level} value={level}>{ORG_LEVEL_LABELS[level]} ({level})</option>
-                            ))}
-                        </select>
+                            onChange={handleOrgLevelChange}
+                        />
                         <p className="text-[10px] text-slate-600 mt-1">Defines the employee's band/grade within the department structure.</p>
                     </div>
                 </div>
@@ -464,22 +545,20 @@ const JobForm: React.FC<{ initialData?: JobProfile | null, onSave: (j: JobProfil
              </div>
              
              <div className="mb-8 grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-               <div className="md:col-span-1">
-                 <label className="block text-xs font-bold text-slate-600 uppercase tracking-widest mb-2">Filter by Category</label>
-                 <select 
-                   value={skillCategoryFilter}
-                   onChange={(e) => setSkillCategoryFilter(e.target.value)}
-                   className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none"
-                 >
-                   <option value="ALL">All Categories</option>
-                   {SKILL_CATEGORIES.map(cat => (
-                     <option key={cat} value={cat}>{cat}</option>
-                   ))}
-                 </select>
-               </div>
-               <div className="md:col-span-2">
-                 <SearchableSelect label="Add Required Skill" options={skillOptions} value="" onChange={handleAddSkill} placeholder={skillCategoryFilter === 'ALL' ? "Search all skills..." : `Search ${skillCategoryFilter} skills...`} />
-               </div>
+                <div className="md:col-span-1">
+                  <SearchableSelect 
+                    label="Filter by Category"
+                    options={[
+                      { value: 'ALL', label: 'All Categories' },
+                      ...SKILL_CATEGORIES.map(cat => ({ value: cat, label: cat }))
+                    ]}
+                    value={skillCategoryFilter}
+                    onChange={setSkillCategoryFilter}
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <SearchableSelect label="Add Required Skill" options={skillOptions} value="" onChange={handleAddSkill} placeholder={skillCategoryFilter === 'ALL' ? "Search all skills..." : `Search ${skillCategoryFilter} skills...`} />
+                </div>
              </div>
 
              <div className="space-y-8 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
@@ -515,12 +594,13 @@ const JobForm: React.FC<{ initialData?: JobProfile | null, onSave: (j: JobProfil
                                  <div className="flex-1">
                                     <p className="font-bold text-slate-900 text-sm">{skill?.name}</p>
                                  </div>
-                                 <div className="flex items-center gap-2">
-                                     <span className="text-[10px] font-bold text-slate-600 uppercase">Target Level</span>
-                                     <select className="px-2 py-1 bg-slate-100 border border-slate-300 rounded-none text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-slate-900"
-                                       value={req.requiredLevel} onChange={(e) => handleUpdateReq(req.skillId, parseInt(e.target.value))}>
-                                        {[1,2,3,4,5].map(v => <option key={v} value={v}>{v}</option>)}
-                                     </select>
+                                 <div className="flex items-center gap-2 min-w-[120px]">
+                                     <SearchableSelect 
+                                        label="Target Level" 
+                                        options={[1,2,3,4,5].map(v => ({ value: v.toString(), label: v.toString() }))}
+                                        value={req.requiredLevel.toString()} 
+                                        onChange={(val) => handleUpdateReq(req.skillId, parseInt(val))}
+                                     />
                                  </div>
                                  <button type="button" onClick={() => handleRemoveReq(req.skillId)} className="text-slate-500 hover:text-slate-600 p-1 transition-colors"><X size={16} /></button>
                               </div>
@@ -547,12 +627,13 @@ const JobForm: React.FC<{ initialData?: JobProfile | null, onSave: (j: JobProfil
                                   <p className="font-bold text-slate-900 text-sm">{skill?.name}</p>
                                   <p className="text-[10px] text-slate-500 uppercase">{skill?.category}</p>
                                </div>
-                               <div className="flex items-center gap-2">
-                                   <span className="text-[10px] font-bold text-slate-600 uppercase">Target Level</span>
-                                   <select className="px-2 py-1 bg-slate-100 border border-slate-300 rounded-none text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-slate-900"
-                                     value={req.requiredLevel} onChange={(e) => handleUpdateReq(req.skillId, parseInt(e.target.value))}>
-                                      {[1,2,3,4,5].map(v => <option key={v} value={v}>{v}</option>)}
-                                   </select>
+                               <div className="flex items-center gap-2 min-w-[120px]">
+                                   <SearchableSelect 
+                                      label="Target Level" 
+                                      options={[1,2,3,4,5].map(v => ({ value: v.toString(), label: v.toString() }))}
+                                      value={req.requiredLevel.toString()} 
+                                      onChange={(val) => handleUpdateReq(req.skillId, parseInt(val))}
+                                   />
                                </div>
                                <button type="button" onClick={() => handleRemoveReq(req.skillId)} className="text-slate-500 hover:text-slate-600 p-1 transition-colors"><X size={16} /></button>
                             </div>
@@ -623,16 +704,19 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
                value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} />
          </div>
          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Category</label>
-            <select className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none"
-               value={formData.category || ''} onChange={e => setFormData({...formData, category: e.target.value})}>
-                <option value="">Select...</option>
-                <option value="Technical">Technical</option>
-                <option value="Safety">Safety</option>
-                <option value="Management">Management</option>
-                <option value="Soft Skills">Soft Skills</option>
-                <option value="Behavioral">Behavioral</option>
-            </select>
+            <SearchableSelect 
+              label="Category"
+              options={[
+                { value: 'Technical', label: 'Technical' },
+                { value: 'Safety', label: 'Safety' },
+                { value: 'Management', label: 'Management' },
+                { value: 'Soft Skills', label: 'Soft Skills' },
+                { value: 'Behavioral', label: 'Behavioral' }
+              ]}
+              value={formData.category || ''}
+              onChange={val => setFormData({...formData, category: val})}
+              placeholder="Select Category..."
+            />
          </div>
           <div className="md:col-span-2">
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Assessment Question</label>
@@ -642,14 +726,17 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
          </div>
          
          <div className="md:col-span-1">
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Assessment Method</label>
-            <select className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none"
-               value={formData.assessmentMethod || '360_EVALUATION'} onChange={e => setFormData({...formData, assessmentMethod: e.target.value as any})}>
-                <option value="360_EVALUATION">360° Evaluation (Self/Peer/Manager)</option>
-                <option value="DOCUMENT_UPLOAD">Evidence Upload (Certificates/Proof)</option>
-                <option value="ONLINE_ASSESSMENT">Online Assessment</option>
-                <option value="INTERVIEW">Managerial Interview</option>
-            </select>
+            <SearchableSelect 
+              label="Assessment Method"
+              options={[
+                { value: '360_EVALUATION', label: '360° Evaluation (Self/Peer/Manager)' },
+                { value: 'DOCUMENT_UPLOAD', label: 'Evidence Upload (Certificates/Proof)' },
+                { value: 'ONLINE_ASSESSMENT', label: 'Online Assessment' },
+                { value: 'INTERVIEW', label: 'Managerial Interview' }
+              ]}
+              value={formData.assessmentMethod || '360_EVALUATION'}
+              onChange={val => setFormData({...formData, assessmentMethod: val as any})}
+            />
          </div>
 
          {formData.assessmentMethod === 'ONLINE_ASSESSMENT' && (
@@ -713,11 +800,27 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
 // --- Department Form ---
 const DepartmentForm: React.FC<{ initialData?: Department | null, onSave: (d: Department) => void, onCancel: () => void }> = ({ initialData, onSave, onCancel }) => {
     const [name, setName] = useState(initialData?.name || '');
+    const [type, setType] = useState<DepartmentType>(initialData?.type || 'DEPARTMENT');
+    const [parentId, setParentId] = useState(initialData?.parentId || '');
     const [managerId, setManagerId] = useState(initialData?.managerId || '');
     const [behavioralSkillIds, setBehavioralSkillIds] = useState<string[]>(initialData?.behavioralSkillIds || []);
     
     const users = dataService.getAllUsers();
+    const depts = dataService.getAllDepartments();
+    
     const managerOptions = users.map(u => ({ value: u.id, label: u.name, subLabel: u.email }));
+    
+    const typeOptions = [
+        { value: 'GENERAL', label: 'General Department' },
+        { value: 'DEPARTMENT', label: 'Department' },
+        { value: 'SECTION', label: 'Section' }
+    ];
+
+    // Parent options excluding self
+    const parentOptions = [
+        { value: 'EPROM', label: 'EPROM (Root Organization)' },
+        ...depts.filter(d => d.id !== initialData?.id).map(d => ({ value: d.id, label: d.name }))
+    ];
     
     const behavioralSkills = dataService.getAllSkills().filter(s => s.category === 'Behavioral');
 
@@ -732,6 +835,8 @@ const DepartmentForm: React.FC<{ initialData?: Department | null, onSave: (d: De
         onSave({ 
             id: initialData?.id || Math.random().toString(36).substr(2, 9), 
             name, 
+            type,
+            parentId: parentId === 'EPROM' ? undefined : parentId,
             managerId: managerId || undefined,
             behavioralSkillIds
         });
@@ -739,12 +844,31 @@ const DepartmentForm: React.FC<{ initialData?: Department | null, onSave: (d: De
 
     return (
         <form onSubmit={handleSubmit} className="p-8 space-y-6 bg-white text-sm">
-            <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Department Name</label>
-                <input required className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none"
-                    value={name} onChange={e => setName(e.target.value)} />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Department Name</label>
+                    <input required className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none"
+                        value={name} onChange={e => setName(e.target.value)} />
+                </div>
+                
+                <SearchableSelect 
+                    label="Hierarchy Level / Type" 
+                    options={typeOptions} 
+                    value={type} 
+                    onChange={(v) => setType(v as DepartmentType)} 
+                    placeholder="Select Type..." 
+                />
             </div>
-            <SearchableSelect label="Section Head (Optional)" options={managerOptions} value={managerId} onChange={setManagerId} placeholder="Select Manager..." />
+            
+            <SearchableSelect 
+                label="Parent Unit / Organization" 
+                options={parentOptions} 
+                value={parentId || 'EPROM'} 
+                onChange={setParentId} 
+                placeholder="Select Parent..." 
+            />
+
+            <SearchableSelect label="Parent Manager (Direct Dept. Manager)" options={managerOptions} value={managerId} onChange={setManagerId} placeholder="Select Manager..." />
             
             <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-3">Behavioral Competencies</label>
@@ -778,6 +902,272 @@ const DepartmentForm: React.FC<{ initialData?: Department | null, onSave: (d: De
                 </button>
             </div>
         </form>
+    );
+};
+
+// --- Hierarchical Structure Components ---
+const EmployeeNode: React.FC<{
+    user: User;
+    allUsers: User[];
+    allDepts: Department[];
+    allJobs: JobProfile[];
+    onEdit: (d: Department) => void;
+    onDelete: (id: string) => void;
+    onAddChild: (parentId: string) => void;
+    onEditUser: (u: User) => void;
+    level: number;
+    path: string[];
+}> = ({ user, allUsers, allDepts, allJobs, onEdit, onDelete, onAddChild, onEditUser, level, path }) => {
+    // Reports logic: ONLY same-department employees should be nested here
+    const reports = allUsers.filter(u => u.managerId === user.id && u.departmentId === user.departmentId);
+    
+    // Departments where this user is the specific manager, but NOT if they are already in the ancestry (synchronization)
+    const managedDepts = allDepts.filter(d => d.managerId === user.id && !path.includes(d.id));
+    
+    // Dept-specific context for this user's internal unit
+    const userDeptId = user.departmentId;
+    const deptJobs = allJobs.filter(j => j.departmentId === userDeptId);
+    const job = deptJobs.find(j => j.id === user.jobProfileId);
+
+    const [isExpanded, setIsExpanded] = useState(true);
+    const hasChildren = reports.length > 0 || managedDepts.length > 0;
+
+    return (
+        <div className={`ml-${level > 0 ? 6 : 0} border-l border-slate-200 pl-4 py-1 mt-1`}>
+            <div className="flex flex-col gap-1">
+                <div className="flex items-center justify-between group/user bg-slate-50/70 p-2.5 border border-slate-200 rounded-sm text-xs transition-colors hover:border-indigo-400 shadow-sm/50">
+                    <div className="flex items-center gap-3">
+                        {hasChildren ? (
+                            <button 
+                                onClick={() => setIsExpanded(!isExpanded)}
+                                className={`p-0.5 hover:bg-white rounded-sm transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                            >
+                                <ChevronRight size={12} className="text-slate-400" />
+                            </button>
+                        ) : (
+                            <div className="w-4" />
+                        )}
+                        <div className="w-8 h-8 rounded-none bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center text-[10px]">
+                            {user.name[0]}
+                        </div>
+                        <div className="flex flex-col">
+                            <div className="flex items-center gap-2">
+                                <span className="font-bold text-slate-900">{user.name}</span>
+                                <span className="text-indigo-700 font-bold uppercase text-[8px] bg-indigo-50 px-1.5 py-0.5 rounded-none border border-indigo-100">{user.orgLevel || 'N/A'}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 text-slate-500 font-medium">
+                                {job ? <span>{job.title}</span> : <span className="italic">No Profile Assigned</span>}
+                                {user.role === 'ADMIN' && <Shield size={10} className="text-slate-400" />}
+                            </div>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2 opacity-0 group-hover/user:opacity-100 transition-opacity">
+                        <button 
+                            onClick={() => onEditUser(user)} 
+                            className="p-1.5 text-slate-600 hover:bg-white rounded-sm border border-transparent hover:border-slate-200 transition-all" 
+                            title="Edit Employee Profile"
+                        >
+                            <Edit2 size={12}/>
+                        </button>
+                    </div>
+                </div>
+
+                {isExpanded && hasChildren && (
+                    <div className="space-y-1">
+                        {reports.map(report => (
+                            <EmployeeNode 
+                                key={report.id} 
+                                user={report} 
+                                allUsers={allUsers}
+                                allDepts={allDepts} 
+                                allJobs={allJobs} 
+                                onEdit={onEdit}
+                                onDelete={onDelete}
+                                onAddChild={onAddChild}
+                                onEditUser={onEditUser}
+                                level={level + 1}
+                                path={path}
+                            />
+                        ))}
+                        {/* Render managed departments next, providing the link the user requested (Synchronization) */}
+                        {managedDepts.map(d => (
+                            <DepartmentNode 
+                                key={d.id}
+                                dept={d}
+                                allDepts={allDepts}
+                                allJobs={allJobs}
+                                allUsers={allUsers}
+                                onEdit={onEdit}
+                                onDelete={onDelete}
+                                onAddChild={onAddChild}
+                                onEditUser={onEditUser}
+                                level={level + 1}
+                                path={[...path, d.id]}
+                            />
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+const DepartmentNode: React.FC<{ 
+    dept: Department | { id: string; name: string; isRoot: boolean }; 
+    allDepts: Department[]; 
+    allJobs: JobProfile[]; 
+    allUsers: User[];
+    onEdit: (d: Department) => void;
+    onDelete: (id: string) => void;
+    onAddChild: (parentId: string) => void;
+    onEditUser: (u: User) => void;
+    level: number;
+    path: string[];
+}> = ({ dept, allDepts, allJobs, allUsers, onEdit, onDelete, onAddChild, onEditUser, level, path }) => {
+    const [isExpanded, setIsExpanded] = useState(true);
+    
+    // Find departments that are children via parentId
+    const childrenByParent = allDepts.filter(d => d.parentId === dept.id || (!d.parentId && (dept as any).isRoot));
+    
+    // Find users directly in this department
+    const deptUsers = allUsers.filter(u => u.departmentId === dept.id);
+    const deptJobs = allJobs.filter(j => j.departmentId === dept.id);
+
+    // To prevent duplicate rendering, only show departments here if:
+    // 1. They have no manager assigned.
+    // 2. OR their manager is NOT in this department's personnel structure (i.e. we aren't rendering that manager right now)
+    const unmanagedUnits = childrenByParent.filter(d => 
+        !d.managerId || !deptUsers.some(u => u.id === d.managerId)
+    );
+
+    return (
+        <div className="ml-4 md:ml-8 border-l-2 border-slate-200 pl-4 py-2 my-1 transition-all">
+            <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between group bg-white p-3 border border-slate-200 rounded-sm hover:border-blue-500 transition-colors shadow-sm">
+                    <div className="flex items-center gap-3">
+                        <button 
+                            onClick={() => setIsExpanded(!isExpanded)}
+                            className={`p-1 hover:bg-slate-100 rounded-sm transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                        >
+                            <ChevronRight size={16} className="text-slate-400" />
+                        </button>
+                        <div className="flex items-center gap-2">
+                            {(dept as any).isRoot ? <Shield className="text-blue-700" size={18} /> : 
+                             (dept as Department).type === 'GENERAL' ? <Layers className="text-indigo-700" size={18} /> :
+                             (dept as Department).type === 'SECTION' ? <LayoutGrid className="text-slate-500" size={18} /> :
+                             <Building2 className="text-slate-600" size={18} />}
+                            <div className="flex flex-col">
+                                <span className="font-bold text-slate-900">{(dept as any).name}</span>
+                                {!(dept as any).isRoot && (
+                                    <span className="text-[9px] uppercase tracking-tighter text-slate-500 font-bold">
+                                        {(dept as Department).type?.replace('_', ' ') || 'DEPARTMENT'}
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                        <div className="flex gap-2 ml-4">
+                            <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-none font-bold uppercase">{deptJobs.length} Jobs</span>
+                            <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-none font-bold uppercase">{deptUsers.length} Employees</span>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => onAddChild(dept.id)} className="p-1.5 text-blue-700 hover:bg-blue-50 rounded-sm" title="Add Sub-department"><Plus size={16}/></button>
+                        {!(dept as any).isRoot && (
+                            <>
+                                <button onClick={() => onEdit(dept as Department)} className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-sm" title="Edit"><Edit2 size={16}/></button>
+                                <button onClick={() => onDelete(dept.id)} className="p-1.5 text-slate-600 hover:bg-red-50 rounded-sm" title="Delete"><Trash2 size={16}/></button>
+                            </>
+                        )}
+                    </div>
+                </div>
+
+                {isExpanded && (
+                    <div className="space-y-2 mt-1">
+                        {/* Recursive Employee Hierarchy in this Dept */}
+                        {deptUsers.length > 0 && (
+                            <div className="ml-8 space-y-1 mb-6 pr-4">
+                                <div className="flex items-center gap-2 mb-2 text-[10px] uppercase font-bold text-slate-500 tracking-wider">
+                                    <Users size={12} /> Personnel Structure
+                                </div>
+                                {deptUsers.filter(u => {
+                                    // Root employees for THIS department are those whose manager is:
+                                    // 1. Not in this department at all (cross-department reporting)
+                                    // 2. Or they have no manager assigned
+                                    const manager = allUsers.find(m => m.id === u.managerId);
+                                    return !manager || manager.departmentId !== dept.id;
+                                }).map(rootUser => (
+                                    <EmployeeNode 
+                                        key={rootUser.id}
+                                        user={rootUser}
+                                        allUsers={allUsers}
+                                        allDepts={allDepts}
+                                        allJobs={allJobs}
+                                        onEdit={onEdit}
+                                        onDelete={onDelete}
+                                        onAddChild={onAddChild}
+                                        onEditUser={onEditUser}
+                                        level={0}
+                                        path={[...path, (dept as any).id || (dept as any).name]}
+                                    />
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Unmanaged units or units managed by someone outside this dept's direct personnel */}
+                        {unmanagedUnits.length > 0 && (
+                            <div className="ml-0 md:ml-4 space-y-1">
+                                {unmanagedUnits.map(child => (
+                                    <DepartmentNode 
+                                        key={child.id} 
+                                        dept={child} 
+                                        allDepts={allDepts} 
+                                        allJobs={allJobs} 
+                                        allUsers={allUsers} 
+                                        onEdit={onEdit} 
+                                        onDelete={onDelete}
+                                        onAddChild={onAddChild}
+                                        onEditUser={onEditUser}
+                                        level={level + 1}
+                                        path={[...path, dept.id]}
+                                    />
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+const OrgStructureView: React.FC<{
+    depts: Department[];
+    jobs: JobProfile[];
+    users: User[];
+    onEdit: (d: Department) => void;
+    onDelete: (id: string) => void;
+    onAddChild: (parentId: string) => void;
+    onEditUser: (u: User) => void;
+}> = ({ depts, jobs, users, onEdit, onDelete, onAddChild, onEditUser }) => {
+    const rootDept = { id: 'ROOT', name: 'EPROM', isRoot: true };
+
+    return (
+        <div className="p-6 bg-slate-50 min-h-[500px] overflow-x-auto">
+            <div className="inline-block min-w-full">
+                <DepartmentNode 
+                    dept={rootDept} 
+                    allDepts={depts} 
+                    allJobs={jobs} 
+                    allUsers={users} 
+                    onEdit={onEdit} 
+                    onDelete={onDelete}
+                    onAddChild={onAddChild}
+                    onEditUser={onEditUser}
+                    level={0}
+                    path={[]}
+                />
+            </div>
+        </div>
     );
 };
 
@@ -899,6 +1289,12 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
   const handleAdd = useCallback((type: 'USER' | 'JOB' | 'SKILL' | 'DEPT') => {
       setFormType(type);
       setEditItem(null);
+      setFormMode(true);
+  }, []);
+
+  const handleAddChild = useCallback((parentId: string) => {
+      setFormType('DEPT');
+      setEditItem({ parentId: parentId === 'ROOT' ? undefined : parentId });
       setFormMode(true);
   }, []);
 
@@ -1275,121 +1671,133 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                 </div>
             </div>
 
-           {/* Table */}
+           {/* Table or Tree View */}
            <div className="overflow-x-auto">
-               <table className="w-full text-left">
-                   <thead className="bg-slate-50 text-slate-700 font-bold text-xs uppercase tracking-wider border-b border-slate-300">
-                       <tr>
-                           {view === 'USERS' && <><th className="p-4 pl-6">Employee</th><th className="p-4">Role & Dept</th><th className="p-4">Level</th><th className="p-4">Status</th></>}
-                           {view === 'JOBS' && <><th className="p-4 pl-6">Job Title</th><th className="p-4">Department</th><th className="p-4">Complexity</th></>}
-                           {view === 'SKILLS' && <><th className="p-4 pl-6">Skill Name</th><th className="p-4">Category</th><th className="p-4">Definition</th><th className="p-4">Status</th></>}
-                           {view === 'DEPTS' && <><th className="p-4 pl-6">Department Name</th><th className="p-4">Head of Dept</th><th className="p-4">Behavioral Competencies</th></>}
-                           <th className="p-4 text-right pr-6">Actions</th>
-                       </tr>
-                   </thead>
-                   <tbody className="divide-y divide-slate-100 text-sm">
-                       {view === 'USERS' && filteredUsers.map(user => (
-                           <tr key={user.id} className="hover:bg-slate-50 transition-colors group">
-                               <td className="p-4 pl-6">
-                                   <div className="flex items-center gap-3">
-                                       <div className="w-9 h-9 rounded-none bg-slate-50 flex items-center justify-center text-slate-900 font-bold ">
-                                           {user.avatarUrl ? <img src={user.avatarUrl} alt="" className="w-full h-full object-cover rounded-none"/> : user.name[0]}
-                                       </div>
-                                       <div>
-                                           <div className="font-bold text-slate-900 group-hover:text-slate-900 transition-colors">{user.name}</div>
-                                           <div className="text-slate-600 text-xs">{user.email}</div>
-                                       </div>
-                                   </div>
-                               </td>
-                               <td className="p-4">
-                                   <span className="font-semibold text-slate-700 block">{user.role}</span>
-                                   <span className="text-slate-600 text-xs">{depts.find(d => d.id === user.departmentId)?.name || 'Unassigned'}</span>
-                               </td>
-                               <td className="p-4">
-                                   <span className="inline-block px-2 py-0.5 bg-slate-100 border border-slate-300 text-slate-600 text-[10px] font-bold uppercase tracking-wide rounded-none">{user.orgLevel || 'N/A'}</span>
-                               </td>
-                               <td className="p-4">
-                                   {user.status === 'PENDING' ? (
-                                       <span className="inline-flex items-center gap-1.5 px-2 py-1 bg-slate-50 text-slate-700 border border-slate-100 text-[10px] font-bold uppercase tracking-wide rounded-none">
-                                           <AlertCircle size={10} className="text-amber-500"/> <span className="text-amber-600">Pending</span>
-                                       </span>
-                                   ) : (
-                                       <span className="inline-flex items-center gap-1.5 px-2 py-1 bg-slate-50 text-slate-700 border border-slate-100 text-[10px] font-bold uppercase tracking-wide rounded-none">
-                                           <CheckCircle size={10} className="text-emerald-600"/> <span className="text-emerald-700">Active</span>
-                                       </span>
-                                   )}
-                               </td>
-                               <td className="p-4 text-right pr-6">
-                                   <div className="flex items-center justify-end gap-2">
-                                       <button onClick={() => handleEdit('USER', user)} className="text-slate-600 hover:text-slate-900 p-2 transition-colors" title="Edit"><Edit2 size={16}/></button>
-                                       <button onClick={() => handleDelete('USER', user.id)} className="text-slate-600 hover:text-slate-700 p-2 transition-colors" title="Delete"><Trash2 size={16}/></button>
-                                   </div>
-                               </td>
+               {view === 'DEPTS' ? (
+                   <OrgStructureView 
+                       depts={depts} 
+                       jobs={jobs} 
+                       users={users} 
+                       onEdit={(d) => handleEdit('DEPT', d)} 
+                       onDelete={(id) => handleDelete('DEPT', id)} 
+                       onAddChild={handleAddChild}
+                       onEditUser={(u) => handleEdit('USER', u)}
+                   />
+               ) : (
+                   <table className="w-full text-left">
+                       <thead className="bg-slate-50 text-slate-700 font-bold text-xs uppercase tracking-wider border-b border-slate-300">
+                           <tr>
+                               {view === 'USERS' && <><th className="p-4 pl-6">Employee</th><th className="p-4">Role & Dept</th><th className="p-4">Level</th><th className="p-4">Status</th></>}
+                               {view === 'JOBS' && <><th className="p-4 pl-6">Job Title</th><th className="p-4">Department</th><th className="p-4">Complexity</th></>}
+                               {view === 'SKILLS' && <><th className="p-4 pl-6">Skill Name</th><th className="p-4">Category</th><th className="p-4">Definition</th><th className="p-4">Status</th></>}
+                               {view === 'DEPTS' && <><th className="p-4 pl-6">Department Name</th><th className="p-4">Head of Dept</th><th className="p-4">Behavioral Competencies</th></>}
+                               <th className="p-4 text-right pr-6">Actions</th>
                            </tr>
-                       ))}{view === 'JOBS' && filteredJobs.map(job => (
-                           <tr key={job.id} className="hover:bg-slate-50 transition-colors group">
-                               <td className="p-4 pl-6 font-bold text-slate-900 group-hover:text-slate-900">{job.title}</td>
-                               <td className="p-4 text-slate-600">{depts.find(d => d.id === job.departmentId)?.name}</td>
-                               <td className="p-4">
-                                   <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded-none text-[10px] font-bold uppercase tracking-wide">{Object.keys(job.requirements).length} Levels Configured</span>
-                               </td>
-                               <td className="p-4 text-right pr-6">
-                                   <div className="flex items-center justify-end gap-2">
-                                       <button onClick={() => handleEdit('JOB', job)} className="text-slate-600 hover:text-slate-900 p-2" title="Edit"><Edit2 size={16}/></button>
-                                       <button onClick={() => handleDelete('JOB', job.id)} className="text-slate-600 hover:text-slate-700 p-2" title="Delete"><Trash2 size={16}/></button>
-                                   </div>
-                               </td>
-                           </tr>
-                       ))}{view === 'SKILLS' && filteredSkills.map(skill => (
-                           <tr key={skill.id} className="hover:bg-slate-50 transition-colors group">
-                               <td className="p-4 pl-6 font-bold text-slate-900 group-hover:text-slate-900">{skill.name}</td>
-                               <td className="p-4">
-                                   <span className="px-2 py-1 bg-slate-50 text-slate-900 border border-slate-300 rounded-none text-[10px] font-bold uppercase tracking-wide">{skill.category}</span>
-                               </td>
-                               <td className="p-4 text-slate-700 truncate max-w-xs text-xs">{skill.assessmentQuestion || '-'}</td>
-                               <td className="p-4">
-                                   {skill.status === 'PENDING' ? (
-                                       <span className="px-2 py-1 bg-slate-50 text-slate-700 border border-slate-100 rounded-none text-[10px] font-bold uppercase tracking-wide">Pending</span>
-                                   ) : (
-                                       <span className="px-2 py-1 bg-slate-50 text-slate-700 border border-slate-100 rounded-none text-[10px] font-bold uppercase tracking-wide">Approved</span>
-                                   )}
-                               </td>
-                               <td className="p-4 text-right pr-6">
-                                   <div className="flex items-center justify-end gap-2">
-                                       {skill.status === 'PENDING' && (
-                                           <button onClick={() => handleApproveSkill(skill)} className="text-slate-600 hover:text-slate-700 p-2 transition-colors flex items-center gap-1" title="Approve Skill">
-                                               <CheckCircle size={16}/> <span className="text-xs font-bold uppercase">Approve</span>
-                                           </button>
+                       </thead>
+                       <tbody className="divide-y divide-slate-100 text-sm">
+                           {view === 'USERS' && filteredUsers.map(user => (
+                               <tr key={user.id} className="hover:bg-slate-50 transition-colors group">
+                                   <td className="p-4 pl-6">
+                                       <div className="flex items-center gap-3">
+                                           <div className="w-9 h-9 rounded-none bg-slate-50 flex items-center justify-center text-slate-900 font-bold ">
+                                               {user.avatarUrl ? <img src={user.avatarUrl} alt="" className="w-full h-full object-cover rounded-none"/> : user.name[0]}
+                                           </div>
+                                           <div>
+                                               <div className="font-bold text-slate-900 group-hover:text-slate-900 transition-colors">{user.name}</div>
+                                               <div className="text-slate-600 text-xs">{user.email}</div>
+                                           </div>
+                                       </div>
+                                   </td>
+                                   <td className="p-4">
+                                       <span className="font-semibold text-slate-700 block">{user.role}</span>
+                                       <span className="text-slate-600 text-xs">{depts.find(d => d.id === user.departmentId)?.name || 'Unassigned'}</span>
+                                   </td>
+                                   <td className="p-4">
+                                       <span className="inline-block px-2 py-0.5 bg-slate-100 border border-slate-300 text-slate-600 text-[10px] font-bold uppercase tracking-wide rounded-none">{user.orgLevel || 'N/A'}</span>
+                                   </td>
+                                   <td className="p-4">
+                                       {user.status === 'PENDING' ? (
+                                           <span className="inline-flex items-center gap-1.5 px-2 py-1 bg-slate-50 text-slate-700 border border-slate-100 text-[10px] font-bold uppercase tracking-wide rounded-none">
+                                               <AlertCircle size={10} className="text-amber-500"/> <span className="text-amber-600">Pending</span>
+                                           </span>
+                                       ) : (
+                                           <span className="inline-flex items-center gap-1.5 px-2 py-1 bg-slate-50 text-slate-700 border border-slate-100 text-[10px] font-bold uppercase tracking-wide rounded-none">
+                                               <CheckCircle size={10} className="text-emerald-600"/> <span className="text-emerald-700">Active</span>
+                                           </span>
                                        )}
-                                       <button onClick={() => setViewSkill(skill)} className="text-slate-600 hover:text-slate-900 p-2 transition-colors flex items-center gap-1" title="View Details">
-                                           <Eye size={16}/> <span className="text-xs font-bold uppercase">View</span>
-                                       </button>
-                                       <button onClick={() => handleEdit('SKILL', skill)} className="text-slate-600 hover:text-slate-900 p-2" title="Edit"><Edit2 size={16}/></button>
-                                       <button onClick={() => handleDelete('SKILL', skill.id)} className="text-slate-600 hover:text-slate-700 p-2" title="Delete"><Trash2 size={16}/></button>
-                                   </div>
-                               </td>
-                           </tr>
-                       ))}{view === 'DEPTS' && filteredDepts.map(d => (
-                           <tr key={d.id} className="hover:bg-slate-50 transition-colors group">
-                               <td className="p-4 pl-6 font-bold text-slate-900 group-hover:text-slate-900">{d.name}</td>
-                               <td className="p-4 text-slate-600">
-                                   {users.find(u => u.id === d.managerId)?.name || <span className="text-slate-600 italic text-xs">Vacant Position</span>}
-                               </td>
-                               <td className="p-4">
-                                   <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded-none text-[10px] font-bold uppercase tracking-wide">
-                                       {d.behavioralSkillIds?.length || 0} Competencies
-                                   </span>
-                               </td>
-                               <td className="p-4 text-right pr-6">
-                                   <div className="flex items-center justify-end gap-2">
-                                       <button onClick={() => handleEdit('DEPT', d)} className="text-slate-600 hover:text-slate-900 p-2" title="Edit"><Edit2 size={16}/></button>
-                                       <button onClick={() => handleDelete('DEPT', d.id)} className="text-slate-600 hover:text-slate-700 p-2" title="Delete"><Trash2 size={16}/></button>
-                                   </div>
-                               </td>
-                           </tr>
-                       ))}
-                   </tbody>
-               </table>
+                                   </td>
+                                   <td className="p-4 text-right pr-6">
+                                       <div className="flex items-center justify-end gap-2">
+                                           <button onClick={() => handleEdit('USER', user)} className="text-slate-600 hover:text-slate-900 p-2 transition-colors" title="Edit"><Edit2 size={16}/></button>
+                                           <button onClick={() => handleDelete('USER', user.id)} className="text-slate-600 hover:text-slate-700 p-2 transition-colors" title="Delete"><Trash2 size={16}/></button>
+                                       </div>
+                                   </td>
+                               </tr>
+                           ))}{view === 'JOBS' && filteredJobs.map(job => (
+                               <tr key={job.id} className="hover:bg-slate-50 transition-colors group">
+                                   <td className="p-4 pl-6 font-bold text-slate-900 group-hover:text-slate-900">{job.title}</td>
+                                   <td className="p-4 text-slate-600">{depts.find(d => d.id === job.departmentId)?.name}</td>
+                                   <td className="p-4">
+                                       <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded-none text-[10px] font-bold uppercase tracking-wide">{Object.keys(job.requirements).length} Levels Configured</span>
+                                   </td>
+                                   <td className="p-4 text-right pr-6">
+                                       <div className="flex items-center justify-end gap-2">
+                                           <button onClick={() => handleEdit('JOB', job)} className="text-slate-600 hover:text-slate-900 p-2" title="Edit"><Edit2 size={16}/></button>
+                                           <button onClick={() => handleDelete('JOB', job.id)} className="text-slate-600 hover:text-slate-700 p-2" title="Delete"><Trash2 size={16}/></button>
+                                       </div>
+                                   </td>
+                               </tr>
+                           ))}{view === 'SKILLS' && filteredSkills.map(skill => (
+                               <tr key={skill.id} className="hover:bg-slate-50 transition-colors group">
+                                   <td className="p-4 pl-6 font-bold text-slate-900 group-hover:text-slate-900">{skill.name}</td>
+                                   <td className="p-4">
+                                       <span className="px-2 py-1 bg-slate-50 text-slate-900 border border-slate-300 rounded-none text-[10px] font-bold uppercase tracking-wide">{skill.category}</span>
+                                   </td>
+                                   <td className="p-4 text-slate-700 truncate max-w-xs text-xs">{skill.assessmentQuestion || '-'}</td>
+                                   <td className="p-4">
+                                       {skill.status === 'PENDING' ? (
+                                           <span className="px-2 py-1 bg-slate-50 text-slate-700 border border-slate-100 rounded-none text-[10px] font-bold uppercase tracking-wide">Pending</span>
+                                       ) : (
+                                           <span className="px-2 py-1 bg-slate-50 text-slate-700 border border-slate-100 rounded-none text-[10px] font-bold uppercase tracking-wide">Approved</span>
+                                       )}
+                                   </td>
+                                   <td className="p-4 text-right pr-6">
+                                       <div className="flex items-center justify-end gap-2">
+                                           {skill.status === 'PENDING' && (
+                                               <button onClick={() => handleApproveSkill(skill)} className="text-slate-600 hover:text-slate-700 p-2 transition-colors flex items-center gap-1" title="Approve Skill">
+                                                   <CheckCircle size={16}/> <span className="text-xs font-bold uppercase">Approve</span>
+                                               </button>
+                                           )}
+                                           <button onClick={() => setViewSkill(skill)} className="text-slate-600 hover:text-slate-900 p-2 transition-colors flex items-center gap-1" title="View Details">
+                                               <Eye size={16}/> <span className="text-xs font-bold uppercase">View</span>
+                                           </button>
+                                           <button onClick={() => handleEdit('SKILL', skill)} className="text-slate-600 hover:text-slate-900 p-2" title="Edit"><Edit2 size={16}/></button>
+                                           <button onClick={() => handleDelete('SKILL', skill.id)} className="text-slate-600 hover:text-slate-700 p-2" title="Delete"><Trash2 size={16}/></button>
+                                       </div>
+                                   </td>
+                               </tr>
+                           ))}{view === 'DEPTS' && filteredDepts.map(d => (
+                               <tr key={d.id} className="hover:bg-slate-50 transition-colors group">
+                                   <td className="p-4 pl-6 font-bold text-slate-900 group-hover:text-slate-900">{d.name}</td>
+                                   <td className="p-4 text-slate-600">
+                                       {users.find(u => u.id === d.managerId)?.name || <span className="text-slate-600 italic text-xs">Vacant Position</span>}
+                                   </td>
+                                   <td className="p-4">
+                                       <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded-none text-[10px] font-bold uppercase tracking-wide">
+                                           {d.behavioralSkillIds?.length || 0} Competencies
+                                       </span>
+                                   </td>
+                                   <td className="p-4 text-right pr-6">
+                                       <div className="flex items-center justify-end gap-2">
+                                           <button onClick={() => handleEdit('DEPT', d)} className="text-slate-600 hover:text-slate-900 p-2" title="Edit"><Edit2 size={16}/></button>
+                                           <button onClick={() => handleDelete('DEPT', d.id)} className="text-slate-600 hover:text-slate-700 p-2" title="Delete"><Trash2 size={16}/></button>
+                                       </div>
+                                   </td>
+                               </tr>
+                           ))}
+                       </tbody>
+                   </table>
+               )}
            </div>
        </div>
        {viewSkill && <SkillDetailsModal skill={viewSkill} onClose={() => setViewSkill(null)} />}

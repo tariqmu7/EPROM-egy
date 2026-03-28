@@ -99,7 +99,18 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, onComplete, onCanc
           try {
             switch (type) {
               case 'USER': {
-                const dept = depts.find(d => d.name.toLowerCase() === (row['Department Name'] || '').toString().toLowerCase());
+                const genDeptName = (row['General Department Name'] || '').toString().trim();
+                const directDeptName = (row['Direct Department Name'] || row['Department Name'] || '').toString().trim();
+                
+                let genDept = depts.find(d => d.name.toLowerCase() === genDeptName.toLowerCase());
+                let directDept = depts.find(d => d.name.toLowerCase() === directDeptName.toLowerCase());
+
+                // If general dept is missing, try to infer it from direct dept
+                if (!genDept && directDept) {
+                    const inferredGenId = dataService.getGeneralDeptId(directDept.id);
+                    genDept = depts.find(d => d.id === inferredGenId);
+                }
+
                 const job = jobs.find(j => j.title.toLowerCase() === (row['Job Profile Title'] || '').toString().toLowerCase());
                 const manager = users.find(u => u.email.toLowerCase() === (row['Manager Email'] || '').toString().toLowerCase());
 
@@ -110,13 +121,17 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, onComplete, onCanc
                   id: existingUser ? existingUser.id : Math.random().toString(36).substr(2, 9),
                   name: row['Name']?.toString() || '',
                   email: email,
+                  phone: row['Phone']?.toString(),
+                  whatsapp: row['WhatsApp']?.toString(),
+                  projectName: row['Project Name']?.toString(),
+                  location: row['Location']?.toString(),
                   role: (row['Role (EMPLOYEE/ADMIN)']?.toString().toUpperCase() as Role) || Role.EMPLOYEE,
                   status: (row['Status (ACTIVE/PENDING)']?.toString().toUpperCase() as any) || 'ACTIVE',
-                  departmentId: dept?.id || '',
+                  departmentId: directDept?.id || genDept?.id || '',
+                  generalDepartmentId: genDept?.id,
                   jobProfileId: job?.id,
                   managerId: manager?.id,
-                  orgLevel: (row['Hierarchy Level (GM/AGM/DM/SH/SP/JP/FR)']?.toString().toUpperCase() as OrgLevel),
-                  location: row['Location']?.toString()
+                  orgLevel: (row['Hierarchy Level (GM/AGM/DM/SH/SP/JP/FR)']?.toString().toUpperCase() as OrgLevel)
                 };
                 if (newUser.name && newUser.email) {
                   if (existingUser) {
