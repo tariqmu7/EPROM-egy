@@ -182,10 +182,15 @@ export interface PromotionRequirement {
   gap: number;
 }
 
+export interface CareerLevelProgress {
+  level: OrgLevel;
+  requirements: PromotionRequirement[];
+  isReady: boolean;
+  isDefined: boolean; // True if the job profile has requirements for this level
+}
+
 export interface CareerProgressionPlan {
   userId: string;
   currentLevel: OrgLevel;
-  nextLevel: OrgLevel | null;
-  requirements: PromotionRequirement[];
-  isReadyForPromotion: boolean;
+  roadmap: CareerLevelProgress[];
 }

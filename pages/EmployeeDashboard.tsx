@@ -567,71 +567,155 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
           </div>
 
           {/* Career Path & Development Plan Section */}
-          <div className="bg-white rounded-none  border border-slate-300 overflow-hidden">
+          <div className="bg-white rounded-none border border-slate-300 overflow-hidden">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
               <div className="flex items-center gap-2">
                 <GraduationCap size={20} className="text-blue-600" />
-                <h3 className="font-bold text-slate-900">Career Path & Development Plan</h3>
+                <h3 className="font-bold text-slate-900 uppercase tracking-tight">Career Path and Development Plan</h3>
+              </div>
+              <div className="flex flex-col items-end">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Succession Readiness</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xl font-black text-slate-900">
+                    {(() => {
+                      const totalSteps = ORG_HIERARCHY_ORDER.indexOf(user.orgLevel || 'FR');
+                      const completedSteps = careerPath?.roadmap.filter(r => r.isReady).length || 0;
+                      return totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 100;
+                    })()}%
+                  </span>
+                  <div className="w-24 h-2 bg-slate-100 rounded-none overflow-hidden border border-slate-200">
+                    <div 
+                      className="h-full bg-blue-600 transition-all duration-1000" 
+                      style={{ width: `${(() => {
+                        const totalSteps = ORG_HIERARCHY_ORDER.indexOf(user.orgLevel || 'FR');
+                        const completedSteps = careerPath?.roadmap.filter(r => r.isReady).length || 0;
+                        return totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 100;
+                      })()}%` }}
+                    ></div>
+                  </div>
+                </div>
               </div>
             </div>
             
-            <div className="p-6">
-              {careerPath && careerPath.nextLevel ? (
-                <div className="space-y-6">
-                  <div className="flex justify-between items-center mb-6 bg-slate-50 p-4 border border-slate-200">
-                    <div>
-                      <h4 className="font-bold text-slate-900 text-lg">Next Target Level: {ORG_LEVEL_LABELS[careerPath.nextLevel]}</h4>
-                      <p className="text-sm text-slate-600 mt-1">Bridge the competency gaps highlighted below to reach promotional readiness.</p>
-                    </div>
-                    {careerPath.isReadyForPromotion && (
-                      <span className="bg-emerald-100 border border-emerald-300 text-emerald-800 text-sm font-bold px-3 py-1.5 flex items-center gap-2">
-                        <CheckCircle size={16} /> Ready for Promotion!
-                      </span>
-                    )}
-                  </div>
-                  
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
-                      <thead className="text-xs font-bold text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
-                        <tr>
-                          <th className="px-4 py-3 border-r border-slate-100">Competency Requirement</th>
-                          <th className="px-4 py-3 text-center w-32 border-r border-slate-100">Required Target Level</th>
-                          <th className="px-4 py-3 text-center w-32 border-r border-slate-100">Your Current Score</th>
-                          <th className="px-4 py-3 text-center w-32">Development Gap</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {careerPath.requirements.map(req => (
-                          <tr key={req.skillId} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50">
-                            <td className="px-4 py-3 font-medium text-slate-900 border-r border-slate-100">{req.skillName}</td>
-                            <td className="px-4 py-3 text-center font-bold text-slate-700 border-r border-slate-100">{req.requiredScore}</td>
-                            <td className={`px-4 py-3 text-center font-bold border-r border-slate-100 ${req.currentScore >= req.requiredScore ? 'text-emerald-600' : 'text-blue-600'}`}>
-                              {req.currentScore > 0 ? req.currentScore : '-'}
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              {req.gap > 0 ? (
-                                <span className="bg-rose-50 text-rose-700 font-bold px-2 py-1 border border-rose-200 text-xs inline-block min-w-8">
-                                  {req.gap}
-                                </span>
-                              ) : (
-                                <span className="text-emerald-500"><CheckCircle size={16} className="mx-auto" /></span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+            <div className="p-8">
+              {careerPath && careerPath.roadmap.length > 0 ? (
+                <div className="relative space-y-12">
+                  {/* Vertical Line */}
+                  <div className="absolute left-[19px] top-2 bottom-2 w-0.5 bg-slate-100"></div>
+
+                  {careerPath.roadmap.map((milestone, mIdx) => {
+                    const isNextTarget = mIdx === 0;
+                    const isReady = milestone.isReady;
+                    const isDefined = milestone.isDefined;
+
+                    return (
+                      <div key={milestone.level} className="relative pl-12">
+                        {/* Milestone Marker */}
+                        <div className={`absolute left-0 top-0 w-10 h-10 rounded-none border-2 flex items-center justify-center z-10 transition-all duration-500 bg-white ${
+                          isReady ? 'border-emerald-500 text-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.2)]' : 
+                          isNextTarget ? 'border-blue-600 text-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.2)]' : 
+                          'border-slate-200 text-slate-300'
+                        }`}>
+                          {isReady ? <BadgeCheck size={20} /> : <Target size={18} />}
+                        </div>
+
+                        <div className={`p-6 border transition-all duration-500 ${
+                          isNextTarget ? 'bg-slate-50 border-blue-200 shadow-sm' : 
+                          'bg-white border-slate-100'
+                        }`}>
+                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                            <div>
+                              <div className="flex items-center gap-3 mb-1">
+                                <h4 className={`text-lg font-black tracking-tight uppercase ${isNextTarget ? 'text-slate-900' : 'text-slate-600'}`}>
+                                  {ORG_LEVEL_LABELS[milestone.level]}
+                                </h4>
+                                {isReady && (
+                                  <span className="bg-emerald-500 text-white text-[9px] font-black px-2 py-0.5 uppercase tracking-widest">Readiness Verified</span>
+                                )}
+                                {isNextTarget && !isReady && (
+                                  <span className="bg-blue-600 text-white text-[9px] font-black px-2 py-0.5 uppercase tracking-widest animate-pulse">Current Target</span>
+                                )}
+                              </div>
+                              <p className="text-xs text-slate-500 font-medium tracking-wide">
+                                {isDefined ? `Official competency standards for ${ORG_LEVEL_LABELS[milestone.level]} within your General Department track.` : `Future succession benchmark for the General Department management path.`}
+                              </p>
+                            </div>
+                            {!isReady && isDefined && (
+                              <div className="bg-white px-4 py-2 border border-slate-200 flex flex-col items-center shrink-0">
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Total Gaps</span>
+                                <span className="text-lg font-black text-rose-600">{milestone.requirements.filter(r => r.gap > 0).length}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {isDefined ? (
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-xs text-left">
+                                <thead className="text-[10px] font-black text-slate-400 uppercase bg-white border-b border-slate-100">
+                                  <tr>
+                                    <th className="px-4 py-2">Competency Requirement</th>
+                                    <th className="px-4 py-2 text-center w-24">Target</th>
+                                    <th className="px-4 py-2 text-center w-24">Current</th>
+                                    <th className="px-4 py-2 text-center w-24">Status</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-50">
+                                  {milestone.requirements.map(req => (
+                                    <tr key={req.skillId} className="group hover:bg-slate-100/50 transition-colors">
+                                      <td className="px-4 py-3 font-bold text-slate-700">{req.skillName}</td>
+                                      <td className="px-4 py-3 text-center font-black text-slate-900">{req.requiredScore}</td>
+                                      <td className={`px-4 py-3 text-center font-black ${req.currentScore >= req.requiredScore ? 'text-emerald-600' : 'text-blue-600'}`}>
+                                        {req.currentScore || '-'}
+                                      </td>
+                                      <td className="px-4 py-3 text-center">
+                                        {req.gap > 0 ? (
+                                          <div className="flex flex-col items-center">
+                                            <span className="text-rose-600 font-black">-{req.gap}</span>
+                                          </div>
+                                        ) : (
+                                          <CheckCircle size={14} className="mx-auto text-emerald-500" />
+                                        )}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          ) : (
+                            <div className="py-4 px-4 bg-slate-50 border border-dashed border-slate-200 text-center">
+                              <p className="text-xs text-slate-400 font-medium italic">General competency framework applies. Specific technical requirements not yet mapped for this level.</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               ) : (
-                <div className="py-12 text-center">
-                  <div className="w-16 h-16 bg-slate-50 text-slate-400 rounded-none flex items-center justify-center mx-auto mb-4">
-                    <Activity size={32} />
+                <div className="py-20 text-center">
+                  <div className="w-20 h-20 bg-slate-50 text-slate-400 rounded-none flex items-center justify-center mx-auto mb-6">
+                    <BadgeCheck size={40} />
                   </div>
-                  <h4 className="text-lg font-bold text-slate-900">Career Path Complete</h4>
-                  <p className="text-slate-500 text-sm mt-1">You are currently at or above the maximum hierarchy level defined for tracking.</p>
+                  <h4 className="text-xl font-black text-slate-900 uppercase tracking-tight">Executive Status Achieved</h4>
+                  <p className="text-slate-500 text-sm mt-2 max-w-md mx-auto">You have reached the General Manager level. Your journey now focuses on organizational strategic goals and leadership excellence.</p>
                 </div>
               )}
+            </div>
+            
+            <div className="p-6 bg-slate-50 border-t border-slate-200">
+               <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest italic">Official Succession Analysis & Development Path</p>
+                  <div className="flex gap-4">
+                    <div className="flex items-center gap-2">
+                       <div className="w-3 h-3 border-2 border-emerald-500 bg-white"></div>
+                       <span className="text-[10px] font-black text-slate-500 uppercase tracking-tighter">Ready</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                       <div className="w-3 h-3 border-2 border-blue-600 bg-white"></div>
+                       <span className="text-[10px] font-black text-slate-500 uppercase tracking-tighter">Current Target</span>
+                    </div>
+                  </div>
+               </div>
             </div>
           </div>
         </div>

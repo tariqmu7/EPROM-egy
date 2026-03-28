@@ -1,4 +1,4 @@
-import { User, Role, JobProfile, Skill, Department, Assessment, ActivityLog, ORG_HIERARCHY_ORDER, Notification, AssessmentCycle, Nomination, IndividualTrainingPlan, TrainingRecommendation, OrgLevel, Evidence, PromotionRequirement, CareerProgressionPlan } from '../types';
+import { User, Role, JobProfile, Skill, Department, Assessment, ActivityLog, ORG_HIERARCHY_ORDER, Notification, AssessmentCycle, Nomination, IndividualTrainingPlan, TrainingRecommendation, OrgLevel, Evidence, PromotionRequirement, CareerProgressionPlan, CareerLevelProgress } from '../types';
 import { db, auth } from '../firebase';
 import { 
   collection, 
@@ -691,40 +691,62 @@ class DataService {
     const user = this.getUserById(userId);
     if (!user || !user.jobProfileId || !user.orgLevel) return null;
 
-    const job = this.getJobProfile(user.jobProfileId);
-    if (!job) return null;
+    const currentJob = this.getJobProfile(user.jobProfileId);
+    if (!currentJob) return null;
+
+    // Succession Logic: Find all jobs in the same General Department to bridge gap requirements
+    const generalDeptId = this.getGeneralDeptId(user.departmentId);
+    const deptJobs = this.getAllJobs().filter(j => this.getGeneralDeptId(j.departmentId) === generalDeptId);
 
     const currentIndex = ORG_HIERARCHY_ORDER.indexOf(user.orgLevel);
-    // Promotion moves "up" the hierarchy, which is index - 1 (Top is GM at index 0)
-    if (currentIndex <= 0 || currentIndex === -1) return null;
+    if (currentIndex === -1) return null;
 
-    const nextLevel = ORG_HIERARCHY_ORDER[currentIndex - 1];
-    const requirements = job.requirements[nextLevel] || [];
-    const promReqs: PromotionRequirement[] = [];
-    let isReady = requirements.length > 0;
-    
-    requirements.forEach(req => {
-      const currentScore = this.getUserSkillScore(userId, req.skillId);
-      const gap = Math.max(0, req.requiredLevel - currentScore);
-      const skill = this.getSkill(req.skillId);
+    const roadmap: CareerLevelProgress[] = [];
+
+    // Loop from current position up to GM (index 0)
+    for (let i = currentIndex - 1; i >= 0; i--) {
+      const level = ORG_HIERARCHY_ORDER[i];
       
-      promReqs.push({
-        skillId: req.skillId,
-        skillName: skill?.name || 'Unknown Skill',
-        currentScore,
-        requiredScore: req.requiredLevel,
-        gap
+      // Smart Lookup: Try current job profile first, then search general department for that level's standards
+      let requirements = currentJob.requirements[level] || [];
+      if (requirements.length === 0) {
+        const fallbackJob = deptJobs.find(j => (j.requirements[level]?.length || 0) > 0);
+        if (fallbackJob) {
+          requirements = fallbackJob.requirements[level] || [];
+        }
+      }
+
+      const promReqs: PromotionRequirement[] = [];
+      let isReady = requirements.length > 0;
+      
+      requirements.forEach(req => {
+        const currentScore = this.getUserSkillScore(userId, req.skillId);
+        const gap = Math.max(0, req.requiredLevel - currentScore);
+        const skill = this.getSkill(req.skillId);
+        
+        promReqs.push({
+          skillId: req.skillId,
+          skillName: skill?.name || 'Unknown Skill',
+          currentScore,
+          requiredScore: req.requiredLevel,
+          gap
+        });
+
+        if (gap > 0) isReady = false;
       });
 
-      if (gap > 0) isReady = false;
-    });
+      roadmap.push({
+        level,
+        requirements: promReqs,
+        isReady: isReady && requirements.length > 0,
+        isDefined: requirements.length > 0
+      });
+    }
 
     return {
       userId,
       currentLevel: user.orgLevel,
-      nextLevel: requirements.length > 0 ? nextLevel : null,
-      requirements: promReqs,
-      isReadyForPromotion: isReady && requirements.length > 0
+      roadmap
     };
   }
 
