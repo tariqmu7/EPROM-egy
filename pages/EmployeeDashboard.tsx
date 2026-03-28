@@ -53,7 +53,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
       skill: skillDetails,
       required: req.requiredLevel,
       current: currentScore,
-      gap: req.requiredLevel - currentScore
+      gap: Math.max(0, req.requiredLevel - currentScore)
     };
   }), [levelRequirements, user.id]);
 

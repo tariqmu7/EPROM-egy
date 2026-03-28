@@ -37,7 +37,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
 
     const analysis = requirements.map(req => {
         const score = dataService.getUserSkillScore(member.id, req.skillId);
-        return { gap: req.requiredLevel - score };
+        return { gap: Math.max(0, req.requiredLevel - score) };
     });
 
     const gaps = analysis.filter(a => a.gap > 0).length;

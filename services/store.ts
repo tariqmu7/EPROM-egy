@@ -665,8 +665,26 @@ class DataService {
   getUserSkillScore(userId: string, skillId: string): number {
     const userAssessments = this.assessments.filter(a => a.subjectId === userId && a.skillId === skillId);
     if (userAssessments.length === 0) return 0;
-    const sum = userAssessments.reduce((acc, curr) => acc + curr.score, 0);
-    return Math.round(sum / userAssessments.length);
+    
+    const selfA = userAssessments.filter(a => a.type === 'SELF');
+    const peerA = userAssessments.filter(a => a.type === 'PEER');
+    const mgrA = userAssessments.filter(a => a.type === 'MANAGER');
+
+    const avgSelf = selfA.length > 0 ? selfA.reduce((s, a) => s + a.score, 0) / selfA.length : null;
+    const avgPeer = peerA.length > 0 ? peerA.reduce((s, a) => s + a.score, 0) / peerA.length : null;
+    const avgMgr = mgrA.length > 0 ? mgrA.reduce((s, a) => s + a.score, 0) / mgrA.length : null;
+
+    let totalWeight = 0;
+    let weightedScore = 0;
+
+    if (avgSelf !== null) { weightedScore += avgSelf * 0.10; totalWeight += 0.10; } // 10% weight
+    if (avgPeer !== null) { weightedScore += avgPeer * 0.30; totalWeight += 0.30; } // 30% weight
+    if (avgMgr  !== null) { weightedScore += avgMgr  * 0.60; totalWeight += 0.60; } // 60% weight
+
+    if (totalWeight === 0) return 0;
+    
+    // Normalize to 100% based on available weights
+    return Math.round(weightedScore / totalWeight);
   }
 
   getAssessments(filters: { raterId?: string, subjectId?: string, cycleId?: string }) {
