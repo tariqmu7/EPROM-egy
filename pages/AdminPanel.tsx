@@ -1171,7 +1171,340 @@ const OrgStructureView: React.FC<{
     );
 };
 
-// --- Main Admin Panel ---
+const GeneralDeptList: React.FC<{
+    depts: Department[];
+    users: User[];
+    onSelect: (id: string) => void;
+    onEdit: (d: Department) => void;
+    onDelete: (id: string) => void;
+}> = ({ depts, users, onSelect, onEdit, onDelete }) => {
+    const generalDepts = depts.filter(d => d.type === 'GENERAL' || !d.parentId);
+
+    return (
+        <div className="p-8 bg-slate-50 min-h-[500px]">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {generalDepts.map(dept => {
+                    const deptManager = users.find(u => u.id === dept.managerId);
+                    const subUnits = depts.filter(d => d.parentId === dept.id);
+                    const allDescendantIds = depts.filter(d => {
+                        let current = d;
+                        while(current.parentId) {
+                            if (current.parentId === dept.id) return true;
+                            current = depts.find(pd => pd.id === current.parentId) || { id: '', name: '', parentId: '' } as any;
+                        }
+                        return false;
+                    }).map(d => d.id);
+                    
+                    const totalStaff = users.filter(u => u.departmentId === dept.id || allDescendantIds.includes(u.departmentId)).length;
+
+                    return (
+                        <div 
+                            key={dept.id} 
+                            onClick={() => onSelect(dept.id)}
+                            className="bg-white rounded-none border border-slate-300 hover: transition-all group cursor-pointer overflow-hidden flex flex-col"
+                        >
+                            <div className="p-6 flex-1">
+                                <div className="flex justify-between items-start mb-6">
+                                    <div className="w-14 h-14 bg-blue-50 text-blue-700 rounded-sm flex items-center justify-center group-hover:bg-blue-700 group-hover:text-white transition-all shadow-sm">
+                                        <Layers size={28} />
+                                    </div>
+                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button onClick={(e) => { e.stopPropagation(); onEdit(dept); }} className="p-1.5 text-slate-400 hover:text-slate-900 transition-colors"><Edit2 size={16}/></button>
+                                        <button onClick={(e) => { e.stopPropagation(); onDelete(dept.id); }} className="p-1.5 text-slate-400 hover:text-red-700 transition-colors"><Trash2 size={16}/></button>
+                                    </div>
+                                </div>
+                                
+                                <h3 className="text-xl font-bold text-slate-900 mb-1">{dept.name}</h3>
+                                <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-4">General Department</p>
+                                
+                                <div className="space-y-3 mt-6">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-none bg-slate-50 flex items-center justify-center text-slate-400">
+                                            <UserCheck size={16} />
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Department Manager</p>
+                                            <p className="text-sm font-bold text-slate-800 truncate">{deptManager?.name || 'Unassigned'}</p>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 gap-4 mt-6">
+                                        <div className="bg-slate-50 p-3 rounded-none border border-slate-100">
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Sub-Units</p>
+                                            <p className="text-lg font-bold text-slate-900">{subUnits.length}</p>
+                                        </div>
+                                        <div className="bg-slate-50 p-3 rounded-none border border-slate-100">
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Workforce</p>
+                                            <p className="text-lg font-bold text-slate-900">{totalStaff}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between group-hover:bg-blue-700/5 transition-colors">
+                                <span className="text-xs font-bold text-blue-700 uppercase tracking-widest">Explore Structure</span>
+                                <ChevronRight size={16} className="text-blue-700 group-hover:translate-x-1 transition-transform" />
+                            </div>
+                            <div className="h-1 w-full bg-blue-700 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></div>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+};
+
+const DepartmentProfileView: React.FC<{
+    deptId: string;
+    depts: Department[];
+    jobProfiles: JobProfile[];
+    users: User[];
+    onBack: (parentId: string | null) => void;
+    onEdit: (d: Department) => void;
+    onDelete: (id: string) => void;
+    onAddChild: (parentId: string) => void;
+    onEditUser: (u: User) => void;
+    onSelectDept: (id: string) => void;
+}> = ({ deptId, depts, jobProfiles, users, onBack, onEdit, onDelete, onAddChild, onEditUser, onSelectDept }) => {
+    const dept = depts.find(d => d.id === deptId);
+    if (!dept) return null;
+
+    const deptManager = users.find(u => u.id === dept.managerId);
+    
+    // Direct personnel in THIS specific level
+    const directPersonnel = users.filter(u => u.departmentId === dept.id);
+    
+    // Direct sub-units (children of this unit)
+    const subUnits = depts.filter(d => d.parentId === deptId);
+    
+    // Total workforce in this branch (for stats)
+    const allDescendantIds = depts.filter(d => {
+        let current = d;
+        let visited = new Set();
+        while(current.parentId) {
+            if (visited.has(current.id)) break;
+            visited.add(current.id);
+            if (current.parentId === dept.id) return true;
+            const parent = depts.find(pd => pd.id === current.parentId);
+            if (!parent) break;
+            current = parent;
+        }
+        return false;
+    }).map(d => d.id);
+    const totalWorkforce = users.filter(u => u.departmentId === dept.id || allDescendantIds.includes(u.departmentId));
+
+    // Group direct personnel by hierarchy level
+    const personnelByLevel = useMemo(() => {
+        const groups: Record<string, User[]> = {};
+        directPersonnel.forEach(p => {
+            const level = p.orgLevel || 'FR';
+            if (!groups[level]) groups[level] = [];
+            groups[level].push(p);
+        });
+        return groups;
+    }, [directPersonnel]);
+
+    // Hierarchy sort order (Highest first)
+    const LEVEL_ORDER = ['GM', 'AGM', 'DM', 'SH', 'SP', 'JP', 'FR']; // Define based on company standards
+    const sortedLevelKeys = Object.keys(personnelByLevel).sort((a, b) => {
+        const idxA = LEVEL_ORDER.indexOf(a);
+        const idxB = LEVEL_ORDER.indexOf(b);
+        if (idxA === -1) return 1;
+        if (idxB === -1) return -1;
+        return idxA - idxB;
+    });
+
+    return (
+        <div className="bg-slate-50 min-h-[600px] animate-in fade-in slide-in-from-bottom-2 duration-300">
+            {/* Header / Banner */}
+            <div className="bg-white border-b border-slate-300 p-8 sticky top-0 z-20 shadow-sm">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                    <div className="flex items-center gap-6">
+                        <button 
+                            onClick={() => onBack(dept.parentId || null)} 
+                            className="p-3 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-sm border border-slate-200 transition-all group"
+                            title={dept.parentId ? "Back to Parent" : "Back to Main List"}
+                        >
+                            <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
+                        </button>
+                        <div>
+                            <div className="flex items-center gap-3 mb-1">
+                                <h2 className="text-3xl font-bold text-slate-900 tracking-tight">{dept.name}</h2>
+                                <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-[10px] font-bold uppercase tracking-widest border border-blue-100">
+                                    {dept.type?.replace('_', ' ') || 'DEPARTMENT'}
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-4 text-sm text-slate-600">
+                                <span className="flex items-center gap-1.5 font-medium"><UserCheck size={16} className="text-slate-400" /> {deptManager?.name || 'No Manager Assigned'}</span>
+                                <span className="w-1.5 h-1.5 rounded-none bg-slate-300"></span>
+                                <span className="flex items-center gap-1.5 font-medium"><Users size={16} className="text-slate-400" /> {totalWorkforce.length} Total Workforce</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div className="flex gap-2">
+                        <button onClick={() => onAddChild(dept.id)} className="flex items-center gap-2 px-4 py-2 bg-blue-700 text-white text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-blue-800 transition-all shadow-sm">
+                            <Plus size={16} /> New Sub-Unit
+                        </button>
+                        <button onClick={() => onEdit(dept)} className="p-2 bg-white border border-slate-300 text-slate-600 hover:bg-slate-50 rounded-sm transition-all shadow-sm">
+                            <Edit2 size={18} />
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div className="p-8 space-y-12">
+                {/* 1. DIRECT PERSONNEL GRID (Priority #1) */}
+                <div className="space-y-8">
+                    <div className="flex items-center gap-3 border-b border-slate-200 pb-4">
+                        <div className="w-8 h-8 bg-blue-700 text-white rounded-sm flex items-center justify-center">
+                            <Users size={18} />
+                        </div>
+                        <h3 className="text-xl font-bold text-slate-900 tracking-tight uppercase tracking-tight">Direct Personnel</h3>
+                        <span className="text-xs font-bold bg-slate-200 text-slate-700 px-2 py-0.5 rounded-none uppercase">{directPersonnel.length} Employees</span>
+                    </div>
+
+                    {sortedLevelKeys.length > 0 ? (
+                        <div className="space-y-12">
+                            {sortedLevelKeys.map(level => (
+                                <div key={level} className="space-y-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="h-0.5 flex-1 bg-slate-200"></div>
+                                        <div className="px-4 py-1.5 bg-white border border-slate-300 rounded-none shadow-sm flex items-center gap-2">
+                                            <span className="text-[10px] font-black text-blue-700 uppercase tracking-[0.2em]">Hierarchy Level</span>
+                                            <span className="text-sm font-black text-slate-900">{level}</span>
+                                        </div>
+                                        <div className="h-0.5 flex-1 bg-slate-200"></div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                        {personnelByLevel[level].map(person => (
+                                            <div 
+                                                key={person.id} 
+                                                onClick={() => onEditUser(person)} 
+                                                className="bg-white p-5 border border-slate-200 rounded-none hover:border-blue-700 hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden"
+                                            >
+                                                <div className="absolute top-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <div className="p-1 bg-blue-50 text-blue-700 rounded-sm"><Edit2 size={12}/></div>
+                                                </div>
+                                                <div className="flex items-center gap-4 mb-4">
+                                                    <div className="w-12 h-12 rounded-none bg-slate-100 flex items-center justify-center text-slate-900 font-bold text-lg border border-slate-200 group-hover:bg-blue-700 group-hover:text-white transition-colors flex-shrink-0">
+                                                        {person.avatarUrl ? <img src={person.avatarUrl} alt="" className="w-full h-full object-cover rounded-none"/> : person.name[0]}
+                                                    </div>
+                                                    <div className="min-w-0 flex-1">
+                                                        <h4 className="font-bold text-slate-900 group-hover:text-blue-700 transition-colors uppercase tracking-tight leading-tight break-words">{person.name}</h4>
+                                                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">{person.role}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-4">
+                                                    <div className="flex flex-col min-w-0 flex-1">
+                                                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Unit Role</span>
+                                                        <span className="font-bold text-slate-700 uppercase tracking-widest text-[10px] leading-relaxed break-words">
+                                                            {jobProfiles.find(j => j.id === person.jobProfileId)?.title || person.role}
+                                                        </span>
+                                                    </div>
+                                                    <ChevronRight size={16} className="text-slate-300 group-hover:text-blue-700 group-hover:translate-x-1 transition-all flex-shrink-0" />
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="p-12 bg-white border border-dashed border-slate-300 text-center rounded-none group hover:border-blue-300 transition-colors">
+                            <Users size={32} className="mx-auto text-slate-200 mb-3 group-hover:text-blue-200 transition-colors" />
+                            <p className="text-sm text-slate-500 font-medium">No personnel assigned directly to this level.</p>
+                            <button onClick={() => onEditUser({} as any)} className="text-blue-700 hover:underline text-xs font-bold uppercase tracking-widest mt-2">Assign First Employee</button>
+                        </div>
+                    )}
+                </div>
+
+                {/* 2. SUB-UNITS GRID (Priority #2) */}
+                <div className="space-y-6">
+                    <div className="flex items-center gap-3 border-b border-slate-200 pb-4">
+                        <div className="w-8 h-8 bg-indigo-700 text-white rounded-sm flex items-center justify-center">
+                            <Building2 size={18} />
+                        </div>
+                        <h3 className="text-xl font-bold text-slate-900 tracking-tight">Organizational Units</h3>
+                        <span className="text-xs font-bold bg-slate-200 text-slate-700 px-2 py-0.5 rounded-none uppercase">{subUnits.length} Units</span>
+                    </div>
+
+                    {subUnits.length > 0 ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {subUnits.map(unit => {
+                                const unitManager = users.find(u => u.id === unit.managerId);
+                                const unitSubUnits = depts.filter(d => d.parentId === unit.id);
+                                
+                                // Direct personnel in this unit
+                                const unitPersonnel = users.filter(u => u.departmentId === unit.id);
+                                
+                                return (
+                                    <div 
+                                        key={unit.id} 
+                                        onClick={() => onSelectDept(unit.id)}
+                                        className="bg-white border border-slate-300 rounded-none group hover: active:scale-[0.99] transition-all cursor-pointer overflow-hidden flex flex-col"
+                                    >
+                                        <div className="p-6 flex-1">
+                                            <div className="flex justify-between items-start mb-6">
+                                                <div className="w-12 h-12 bg-indigo-50 text-indigo-700 rounded-sm flex items-center justify-center group-hover:bg-indigo-700 group-hover:text-white transition-all border border-indigo-100">
+                                                    <Building2 size={24} />
+                                                </div>
+                                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button onClick={(e) => { e.stopPropagation(); onEdit(unit); }} className="p-1.5 text-slate-400 hover:text-slate-900 transition-colors"><Edit2 size={16}/></button>
+                                                    <button onClick={(e) => { e.stopPropagation(); onDelete(unit.id); }} className="p-1.5 text-slate-400 hover:text-red-700 transition-colors"><Trash2 size={16}/></button>
+                                                </div>
+                                            </div>
+
+                                            <h4 className="text-lg font-bold text-slate-900 mb-1 tracking-tight group-hover:text-indigo-700 transition-colors uppercase">{unit.name}</h4>
+                                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-6">{unit.type?.replace('_', ' ') || 'UNIT'}</p>
+
+                                            <div className="space-y-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-7 h-7 bg-slate-50 rounded-none flex items-center justify-center text-slate-400">
+                                                        <UserCheck size={14} />
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Unit Manager</p>
+                                                        <p className="text-xs font-bold text-slate-800 truncate">{unitManager?.name || 'Unassigned'}</p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid grid-cols-2 gap-3 mt-4">
+                                                    <div className="bg-slate-50 p-2.5 rounded-none border border-slate-100">
+                                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter mb-1">Personnel</p>
+                                                        <p className="text-sm font-black text-slate-900">{unitPersonnel.length}</p>
+                                                    </div>
+                                                    <div className="bg-slate-50 p-2.5 rounded-none border border-slate-100">
+                                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter mb-1">Sub-Units</p>
+                                                        <p className="text-sm font-black text-slate-900">{unitSubUnits.length}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between group-hover:bg-indigo-700/5 transition-colors">
+                                            <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-widest">Explore Unit</span>
+                                            <ChevronRight size={14} className="text-indigo-700 group-hover:translate-x-1 transition-transform" />
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        <div className="text-center py-16 bg-white border border-dashed border-slate-300 rounded-none">
+                            <Building2 size={48} className="mx-auto text-slate-200 mb-4" />
+                            <h4 className="text-lg font-bold text-slate-400">Terminal Node</h4>
+                            <p className="text-slate-500 max-w-xs mx-auto text-sm mt-1">This organizational unit has no sub-divisions defined.</p>
+                            <button onClick={() => onAddChild(dept.id)} className="mt-6 inline-flex items-center gap-2 px-6 py-2.5 bg-blue-700 text-white font-bold uppercase text-xs tracking-widest rounded-sm hover:bg-blue-800 transition-all shadow-md">
+                                <Plus size={16} /> Create Sub-Unit
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => void }> = React.memo(({ view, onNavigate }) => {
   const [refreshKey, setRefreshKey] = useState(0); 
   const [formMode, setFormMode] = useState(false);
@@ -1179,6 +1512,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
   const [editItem, setEditItem] = useState<any>(null);
   const [viewSkill, setViewSkill] = useState<Skill | null>(null);
   const [activeTab, setActiveTab] = useState<string>('ALL');
+  const [selectedDeptProfileId, setSelectedDeptProfileId] = useState<string | null>(null);
   
   // Search State
   const [searchTerm, setSearchTerm] = useState('');
@@ -1189,6 +1523,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
   // Reset search when view changes
   useEffect(() => {
     setSearchTerm('');
+    setSelectedDeptProfileId(null);
   }, [view]);
 
   const users = useMemo(() => dataService.getAllUsers(), [refreshKey]);
@@ -1630,59 +1965,74 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
 
        {/* Content Area */}
        <div className="bg-white rounded-sm  border border-slate-300 overflow-hidden min-h-[600px]">
-            {/* Toolbar */}
-            <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row justify-between items-center gap-4">
-                <div className="flex items-center gap-4 w-full md:w-auto">
-                    <div className="relative max-w-sm w-full">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" size={16}/>
-                        <input 
-                            type="text" 
-                            placeholder="Search records..." 
-                            className="w-full pl-9 pr-4 py-2 text-sm bg-white text-slate-900 border border-slate-300 rounded-sm focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all" 
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                    </div>
-                    {view === 'USERS' && (
-                        <div className="flex bg-white border border-slate-300 rounded-sm p-1">
-                            {(['ALL', 'PENDING', 'ACTIVE'] as const).map(tab => (
-                                <button
-                                    key={tab}
-                                    onClick={() => setActiveTab(tab)}
-                                    className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-none transition-all ${activeTab === tab ? 'bg-blue-700 text-white ' : 'text-slate-600 hover:bg-slate-50'}`}
-                                >
-                                    {tab}
-                                </button>
-                            ))}
+            {/* Toolbar - Header only shown when not in a specific profile view */}
+            {!selectedDeptProfileId && (
+                <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div className="flex items-center gap-4 w-full md:w-auto">
+                        <div className="relative max-w-sm w-full">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" size={16}/>
+                            <input 
+                                type="text" 
+                                placeholder="Search records..." 
+                                className="w-full pl-9 pr-4 py-2 text-sm bg-white text-slate-900 border border-slate-300 rounded-sm focus:outline-none focus:ring-2 focus:ring-slate-900 transition-all" 
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                            />
                         </div>
-                    )}
+                        {view === 'USERS' && (
+                            <div className="flex bg-white border border-slate-300 rounded-sm p-1">
+                                {(['ALL', 'PENDING', 'ACTIVE'] as const).map(tab => (
+                                    <button
+                                        key={tab}
+                                        onClick={() => setActiveTab(tab)}
+                                        className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-none transition-all ${activeTab === tab ? 'bg-blue-700 text-white ' : 'text-slate-600 hover:bg-slate-50'}`}
+                                    >
+                                        {tab}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-2 w-full md:w-auto">
+                        <button 
+                            onClick={() => handleBulkUpload(view === 'USERS' ? 'USER' : view === 'JOBS' ? 'JOB' : view === 'SKILLS' ? 'SKILL' : 'DEPT')}
+                            className="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-sm text-xs font-bold uppercase tracking-wide flex items-center gap-2 transition-all flex-1 md:flex-none justify-center"
+                        >
+                            <FileSpreadsheet size={16} className="text-blue-700" /> Bulk Upload
+                        </button>
+                        <button onClick={() => handleAdd(view === 'USERS' ? 'USER' : view === 'JOBS' ? 'JOB' : view === 'SKILLS' ? 'SKILL' : 'DEPT')}
+                            className="bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-sm text-xs font-bold uppercase tracking-wide  flex items-center gap-2 transition-all flex-1 md:flex-none justify-center">
+                            <Plus size={16} /> Add {view === 'USERS' ? 'Employee' : view === 'JOBS' ? 'Profile' : view === 'SKILLS' ? 'Skill' : 'Department'}
+                        </button>
+                    </div>
                 </div>
-                <div className="flex items-center gap-2 w-full md:w-auto">
-                    <button 
-                        onClick={() => handleBulkUpload(view === 'USERS' ? 'USER' : view === 'JOBS' ? 'JOB' : view === 'SKILLS' ? 'SKILL' : 'DEPT')}
-                        className="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-sm text-xs font-bold uppercase tracking-wide flex items-center gap-2 transition-all flex-1 md:flex-none justify-center"
-                    >
-                        <FileSpreadsheet size={16} className="text-blue-700" /> Bulk Upload
-                    </button>
-                    <button onClick={() => handleAdd(view === 'USERS' ? 'USER' : view === 'JOBS' ? 'JOB' : view === 'SKILLS' ? 'SKILL' : 'DEPT')}
-                        className="bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-sm text-xs font-bold uppercase tracking-wide  flex items-center gap-2 transition-all flex-1 md:flex-none justify-center">
-                        <Plus size={16} /> Add {view === 'USERS' ? 'Employee' : view === 'JOBS' ? 'Profile' : view === 'SKILLS' ? 'Skill' : 'Department'}
-                    </button>
-                </div>
-            </div>
+            )}
 
            {/* Table or Tree View */}
            <div className="overflow-x-auto">
                {view === 'DEPTS' ? (
-                   <OrgStructureView 
-                       depts={depts} 
-                       jobs={jobs} 
-                       users={users} 
-                       onEdit={(d) => handleEdit('DEPT', d)} 
-                       onDelete={(id) => handleDelete('DEPT', id)} 
-                       onAddChild={handleAddChild}
-                       onEditUser={(u) => handleEdit('USER', u)}
-                   />
+                   selectedDeptProfileId ? (
+                       <DepartmentProfileView 
+                           deptId={selectedDeptProfileId}
+                           depts={depts}
+                           jobProfiles={jobs}
+                           users={users}
+                           onBack={setSelectedDeptProfileId}
+                           onEdit={(d) => handleEdit('DEPT', d)}
+                           onDelete={(id) => handleDelete('DEPT', id)}
+                           onAddChild={handleAddChild}
+                           onEditUser={(u) => handleEdit('USER', u)}
+                           onSelectDept={setSelectedDeptProfileId}
+                       />
+                   ) : (
+                       <GeneralDeptList 
+                           depts={depts}
+                           users={users}
+                           onSelect={setSelectedDeptProfileId}
+                           onEdit={(d) => handleEdit('DEPT', d)}
+                           onDelete={(id) => handleDelete('DEPT', id)}
+                       />
+                   )
                ) : (
                    <table className="w-full text-left">
                        <thead className="bg-slate-50 text-slate-700 font-bold text-xs uppercase tracking-wider border-b border-slate-300">
@@ -1690,7 +2040,6 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                                {view === 'USERS' && <><th className="p-4 pl-6">Employee</th><th className="p-4">Role & Dept</th><th className="p-4">Level</th><th className="p-4">Status</th></>}
                                {view === 'JOBS' && <><th className="p-4 pl-6">Job Title</th><th className="p-4">Department</th><th className="p-4">Complexity</th></>}
                                {view === 'SKILLS' && <><th className="p-4 pl-6">Skill Name</th><th className="p-4">Category</th><th className="p-4">Definition</th><th className="p-4">Status</th></>}
-                               {view === 'DEPTS' && <><th className="p-4 pl-6">Department Name</th><th className="p-4">Head of Dept</th><th className="p-4">Behavioral Competencies</th></>}
                                <th className="p-4 text-right pr-6">Actions</th>
                            </tr>
                        </thead>
@@ -1773,24 +2122,6 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                                            </button>
                                            <button onClick={() => handleEdit('SKILL', skill)} className="text-slate-600 hover:text-slate-900 p-2" title="Edit"><Edit2 size={16}/></button>
                                            <button onClick={() => handleDelete('SKILL', skill.id)} className="text-slate-600 hover:text-slate-700 p-2" title="Delete"><Trash2 size={16}/></button>
-                                       </div>
-                                   </td>
-                               </tr>
-                           ))}{view === 'DEPTS' && filteredDepts.map(d => (
-                               <tr key={d.id} className="hover:bg-slate-50 transition-colors group">
-                                   <td className="p-4 pl-6 font-bold text-slate-900 group-hover:text-slate-900">{d.name}</td>
-                                   <td className="p-4 text-slate-600">
-                                       {users.find(u => u.id === d.managerId)?.name || <span className="text-slate-600 italic text-xs">Vacant Position</span>}
-                                   </td>
-                                   <td className="p-4">
-                                       <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded-none text-[10px] font-bold uppercase tracking-wide">
-                                           {d.behavioralSkillIds?.length || 0} Competencies
-                                       </span>
-                                   </td>
-                                   <td className="p-4 text-right pr-6">
-                                       <div className="flex items-center justify-end gap-2">
-                                           <button onClick={() => handleEdit('DEPT', d)} className="text-slate-600 hover:text-slate-900 p-2" title="Edit"><Edit2 size={16}/></button>
-                                           <button onClick={() => handleDelete('DEPT', d.id)} className="text-slate-600 hover:text-slate-700 p-2" title="Delete"><Trash2 size={16}/></button>
                                        </div>
                                    </td>
                                </tr>
