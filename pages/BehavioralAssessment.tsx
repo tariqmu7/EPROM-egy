@@ -59,11 +59,27 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
     if (!selectedEmployee) return [];
     
     const department = dataService.getAllDepartments().find(d => d.id === selectedEmployee.departmentId);
-    if (!department || !department.behavioralSkillIds || department.behavioralSkillIds.length === 0) {
-      return [];
-    }
+    const jobProfile = selectedEmployee.jobProfileId ? dataService.getJobProfile(selectedEmployee.jobProfileId) : null;
+    const orgLevel = selectedEmployee.orgLevel;
+
+    // 1. Get behavioral skills from Department defaults
+    const deptSkillIds = department?.behavioralSkillIds || [];
     
-    return dataService.getAllSkills().filter(s => s.category === 'Behavioral' && department.behavioralSkillIds?.includes(s.id));
+    // 2. Get skills from Job Profile requirements for this specific Hierarchy Level (orgLevel)
+    const jobSkillIds = (jobProfile && orgLevel) 
+      ? (jobProfile.requirements[orgLevel] || []).map(req => req.skillId)
+      : [];
+
+    // 3. Combine and deduplicate skill IDs
+    const allRelevantSkillIds = Array.from(new Set([...deptSkillIds, ...jobSkillIds]));
+    
+    // 4. Filter for relevant categories
+    const targetCategories = ['Behavioral', 'Management', 'Soft Skills'];
+    
+    return dataService.getAllSkills().filter(s => 
+      targetCategories.includes(s.category) && 
+      allRelevantSkillIds.includes(s.id)
+    );
   }, [selectedEmployee]);
 
   const existingAssessment = useMemo(() => {
@@ -94,22 +110,16 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
     // Simulate network request
     setTimeout(async () => {
       const isSelf = selectedSubjectId === currentUser.id;
-      if (existingAssessment) {
-        await dataService.updateAssessment({
-          ...existingAssessment,
-          score: rating,
-          comment: feedback,
-        });
-      } else {
+        const isManager = selectedEmployee?.managerId === currentUser.id;
+        
         await dataService.addAssessment({
           raterId: currentUser.id, // We store it, but UI can hide it
           subjectId: selectedSubjectId,
           skillId: selectedSkillId,
           score: rating,
           comment: feedback,
-          type: isSelf ? 'SELF' : 'PEER'
+          type: isSelf ? 'SELF' : (isManager ? 'MANAGER' : 'PEER')
         });
-      }
 
       setSuccessMessage(isSelf ? 'Self-evaluation submitted successfully.' : 'Feedback submitted successfully.');
       setSelectedSubjectId('');
