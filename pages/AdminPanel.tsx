@@ -1069,8 +1069,8 @@ const DepartmentNode: React.FC<{
     // Find users directly in this department
     // SPECIAL CASE: CEO-role users appear at the ROOT of the company tree
     const deptUsers = (dept as any).isRoot 
-        ? allUsers.filter(u => u.role === Role.CEO)
-        : allUsers.filter(u => u.departmentId === dept.id && (currentUser?.role === Role.CEO ? true : u.role !== Role.CEO));
+        ? allUsers.filter(u => u.role === Role.CEO || u.orgLevel === 'CEO')
+        : allUsers.filter(u => u.departmentId === dept.id && (currentUser?.role === Role.CEO ? true : (u.role !== Role.CEO && u.orgLevel !== 'CEO')));
         
     const deptJobs = allJobs.filter(j => j.departmentId === dept.id);
 
@@ -1314,7 +1314,7 @@ const DepartmentProfileView: React.FC<DepartmentProfileViewProps> = ({
                                 </span>
                             </div>
                             <div className="flex items-center gap-4 text-sm text-slate-600">
-                                <span className="flex items-center gap-1.5 font-medium"><UserCheck size={16} className="text-slate-400" /> {(deptManager && (deptManager.role !== Role.CEO || currentUser?.role === Role.CEO)) ? deptManager.name : 'No Manager Assigned'}</span>
+                                <span className="flex items-center gap-1.5 font-medium"><UserCheck size={16} className="text-slate-400" /> {(deptManager && (deptManager.role !== Role.CEO && deptManager.orgLevel !== 'CEO' || currentUser?.role === Role.CEO)) ? deptManager.name : 'No Manager Assigned'}</span>
                                 <span className="w-1.5 h-1.5 rounded-none bg-slate-300"></span>
                                 <span className="flex items-center gap-1.5 font-medium"><Users size={16} className="text-slate-400" /> {totalWorkforce.length} Total Workforce</span>
                             </div>
@@ -1445,7 +1445,7 @@ const DepartmentProfileView: React.FC<DepartmentProfileViewProps> = ({
                                                     </div>
                                                     <div className="min-w-0">
                                                         <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Unit Manager</p>
-                                                        <p className="text-xs font-bold text-slate-800 truncate">{(unitManager && (unitManager.role !== Role.CEO || currentUser?.role === Role.CEO)) ? unitManager.name : 'Unassigned'}</p>
+                                                        <p className="text-xs font-bold text-slate-800 truncate">{(unitManager && (unitManager.role !== Role.CEO && unitManager.orgLevel !== 'CEO' || currentUser?.role === Role.CEO)) ? unitManager.name : 'Unassigned'}</p>
                                                     </div>
                                                 </div>
 
@@ -1539,7 +1539,7 @@ const GeneralDeptList: React.FC<{
                                         </div>
                                         <div className="min-w-0">
                                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Department Manager</p>
-                                            <p className="text-sm font-bold text-slate-800 truncate">{(deptManager && (deptManager.role !== Role.CEO || currentUser?.role === Role.CEO)) ? deptManager.name : 'Unassigned'}</p>
+                                            <p className="text-sm font-bold text-slate-800 truncate">{(deptManager && (deptManager.role !== Role.CEO && deptManager.orgLevel !== 'CEO' || currentUser?.role === Role.CEO)) ? deptManager.name : 'Unassigned'}</p>
                                         </div>
                                     </div>
                                     
@@ -1593,6 +1593,62 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
     setSearchTerm('');
     setSelectedDeptProfileId(null);
   }, [view]);
+
+  const [migrating, setMigrating] = useState(false);
+  const handleMigrateCertificates = async () => {
+    if (!confirm('Are you sure you want to populate ALL employees with 3 relevant certificates based on their department?')) return;
+    setMigrating(true);
+    try {
+      const allUsers = dataService.getAllUsers();
+      const allDepts = dataService.getAllDepartments();
+      const depts = allDepts.reduce((acc: any, d) => {
+        acc[d.id] = d.name;
+        return acc;
+      }, {});
+
+      const CERT_MAPPING: Record<string, string[]> = {
+        'Safety': ['NEBOSH IGC', 'IOSH Managing Safely', 'OSHA 30-Hour Construction'],
+        'HSE': ['NEBOSH IGC', 'IOSH Managing Safely', 'OSHA 30-Hour Construction'],
+        'Operations': ['API 510 Pressure Vessel Inspector', 'CMRP (Maintenance & Reliability)', 'Six Sigma Green Belt'],
+        'Maintenance': ['ASNT Level II NDT', 'CMRP (Maintenance & Reliability)', 'Vibration Analysis Cat II'],
+        'Engineering': ['PMP (Project Management)', 'LEED Green Associate', 'Autodesk Certified Professional'],
+        'Electrical': ['NFPA 70E Arc Flash Safety', 'Certified Energy Manager', 'PLC Programming Specialist'],
+        'Mechanical': ['API 570 Piping Inspector', 'Certified Reliability Engineer', 'ASME Section IX Welding'],
+        'HR': ['PHR (Professional in HR)', 'CIPD Level 5', 'Microsoft Office Specialist'],
+        'Finance': ['ACCA Financial Accounting', 'CPA (Certified Public Accountant)', 'CFA Level 1'],
+        'General': ['Time Management Mastery', 'Effective Communication', 'Leadership Fundamentals']
+      };
+
+      let count = 0;
+      for (const u of allUsers) {
+        const deptName = depts[u.departmentId] || 'General';
+        let matchedKey = 'General';
+        for (const key in CERT_MAPPING) {
+          if (deptName.toLowerCase().includes(key.toLowerCase())) {
+            matchedKey = key;
+            break;
+          }
+        }
+      const certs = CERT_MAPPING[matchedKey].map(name => ({
+        id: Math.random().toString(36).substr(2, 9),
+        name: name,
+        issuer: 'EPROM Training Center',
+        dateAchieved: new Date(Date.now() - Math.floor(Math.random() * 10000000000)).toISOString().split('T')[0]
+      }));
+      await dataService.updateUser({
+        ...u,
+        certificates: certs
+      });
+      count++;
+    }
+    alert(`Success! Updated ${count} users.`);
+    setRefreshKey(prev => prev + 1);
+  } catch (err: any) {
+    alert(`Failed: ${err.message}`);
+  } finally {
+    setMigrating(false);
+  }
+};
 
   const users = useMemo(() => {
     if (!currentUser) return [];
@@ -1782,6 +1838,14 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                         </p>
                     </div>
                     <div className="flex gap-3">
+                         <button 
+                             onClick={handleMigrateCertificates}
+                             disabled={migrating}
+                             className="px-4 py-2 bg-orange-600 text-white text-[10px] font-black uppercase tracking-widest rounded-none hover:bg-orange-700 transition-all flex items-center gap-2 shadow-sm disabled:opacity-50"
+                         >
+                             <FileSpreadsheet size={16} /> 
+                             {migrating ? 'Migrating...' : 'Populate Certificates'}
+                         </button>
                          <div className="px-4 py-2 bg-white/5 backdrop-blur rounded-sm border border-white/10">
                             <p className="text-[10px] uppercase tracking-widest text-slate-600 font-bold">System Status</p>
                             <div className="flex items-center gap-2 mt-1">
