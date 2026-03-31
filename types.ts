@@ -47,6 +47,7 @@ export interface Skill {
   status?: 'APPROVED' | 'PENDING';
   assessmentMethod: '360_EVALUATION' | 'DOCUMENT_UPLOAD' | 'ONLINE_ASSESSMENT' | 'INTERVIEW';
   assessmentLink?: string; // Used specifically for ONLINE_ASSESSMENT to link to external forms
+  description?: string; // Optional detailed description of the skill or assessment
   code?: string; // Automatically generated professional identifier
 }
 
@@ -118,7 +119,7 @@ export interface Assessment {
   score: number; // 1-5
   comment: string;
   date: string;
-  type: 'SELF' | 'PEER' | 'MANAGER';
+  type: 'SELF' | 'PEER' | 'MANAGER' | 'ONLINE' | 'INTERVIEW';
   cycleId?: string; // Optional for backward compatibility, but used for generated cycles
   isArchived?: boolean;
 }

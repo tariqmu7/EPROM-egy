@@ -2,7 +2,7 @@ import React, { memo } from 'react';
 import { User, Role, ORG_LEVEL_LABELS } from '../types';
 import { Logo } from './Logo';
 import { dataService } from '../services/store';
-import { LogOut, LayoutDashboard, ClipboardList, ShieldCheck, UserCircle, Users, Building2, Briefcase, Activity, Calendar, Grid, UploadCloud, CheckSquare, Star } from 'lucide-react';
+import { LogOut, LayoutDashboard, ClipboardList, ShieldCheck, UserCircle, Users, Building2, Briefcase, Activity, Calendar, Grid, UploadCloud, CheckSquare, Star, Monitor, MessageSquare } from 'lucide-react';
 import { NotificationBell } from './NotificationBell';
 
 interface LayoutProps {
@@ -70,6 +70,8 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
                   {dataService.isManager(user) && (
                     <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="manager-dashboard" label="My Team" icon={Users} />
                   )}
+                  <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="online-assessments" label="Online" icon={Monitor} />
+                  <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="interviews" label="Interviews" icon={MessageSquare} />
                   <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="emp-assessment" label="Evaluations" icon={Star} />
                   <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="evidence-portal" label="Evidence" icon={UploadCloud} />
                 </>

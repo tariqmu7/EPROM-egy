@@ -836,7 +836,18 @@ class DataService {
     } 
     // Evidence, Online Assessment, or Interview Logic
     else {
-      // Find the highest assignedScore from approved evidence submissions for this skill.
+      // Check for direct Assessment results first (Online/Interview)
+      let directAssessments = this.assessments.filter(a => a.subjectId === userId && a.skillId === skillId && (a.type === 'ONLINE' || a.type === 'INTERVIEW'));
+      if (!includeArchived) {
+        directAssessments = directAssessments.filter(a => !a.isArchived);
+      }
+      
+      if (directAssessments.length > 0) {
+        // Return the latest assessment score
+        return directAssessments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0].score;
+      }
+
+      // Fallback: Find the highest assignedScore from approved evidence submissions for this skill.
       const relevantEvidence = this.evidences.filter(e => e.userId === userId && e.skillId === skillId && e.status === 'APPROVED' && e.assignedScore);
       if (relevantEvidence.length === 0) return 0;
 

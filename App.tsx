@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Layout } from './components/Layout';
 import { EmployeeDashboard } from './pages/EmployeeDashboard';
+import { OnlineAssessments } from './pages/OnlineAssessments';
+import { ManagerialInterviews } from './pages/ManagerialInterviews';
 import { ManagerDashboard } from './pages/ManagerDashboard';
 import { AdminPanel } from './pages/AdminPanel';
 import { CEOPanel } from './pages/CEOPanel';
@@ -421,6 +423,8 @@ const App: React.FC = () => {
                 </div>
             );
         case 'manager-dashboard': return <ManagerDashboard user={user} />;
+        case 'online-assessments': return <OnlineAssessments currentUser={user} />;
+        case 'interviews': return <ManagerialInterviews currentUser={user} />;
         case 'emp-assessment': return <BehavioralAssessment currentUser={user} />;
         case 'evidence-portal': return <EvidencePortal currentUser={user} />;
         // Admin Views - Mapped to sidebar IDs

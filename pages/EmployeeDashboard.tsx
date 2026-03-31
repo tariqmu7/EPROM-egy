@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { User, Role, JobProfile, Skill, IndividualTrainingPlan, ORG_HIERARCHY_ORDER, ORG_LEVEL_LABELS } from '../types';
 import { dataService } from '../services/store';
 import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Tooltip, BarChart, CartesianGrid, XAxis, YAxis, Bar, Legend, Cell } from 'recharts';
-import { AlertCircle, CheckCircle, Award, BookOpen, Activity, TrendingUp, Users, PlayCircle, Calendar, ArrowRight, Download, FileText, Mail, Briefcase, MapPin, User as UserIcon, ShieldCheck, GraduationCap, Target, Zap, Camera, Phone, MessageSquare, Building, BadgeCheck, Clock, XCircle, Layers, Shield, LayoutGrid, UserCheck, Building2 } from 'lucide-react';
+import { AlertCircle, CheckCircle, Award, BookOpen, Activity, TrendingUp, Users, PlayCircle, Calendar, ArrowRight, Download, FileText, Mail, Briefcase, MapPin, User as UserIcon, ShieldCheck, GraduationCap, Target, Zap, Camera, Phone, MessageSquare, Building, BadgeCheck, Clock, XCircle, Layers, Shield, LayoutGrid, UserCheck, Building2, History as HistoryIcon, Monitor } from 'lucide-react';
 import { auth } from '../firebase';
 
 interface EmployeeDashboardProps {
@@ -724,6 +724,91 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
               </div>
             </div>
           )}
+          {/* Professional Assessment History Section */}
+          <div className="bg-white rounded-none border border-slate-300 overflow-hidden mt-8">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div className="flex items-center gap-2">
+                <HistoryIcon size={20} className="text-slate-800" />
+                <h3 className="font-bold text-slate-900 uppercase tracking-tight">Professional Assessment History</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Archived Records</span>
+                <span className="bg-slate-900 text-white text-[10px] font-black px-2 py-0.5 rounded-none uppercase tracking-wider">Historical</span>
+              </div>
+            </div>
+
+            <div className="p-6">
+              {(() => {
+                const allAssessments = dataService.getAssessments({ subjectId: user.id });
+                const cycles = dataService.getAllCycles();
+                
+                // Group assessments by cycle or year
+                const groups: { [key: string]: any[] } = {};
+                allAssessments.forEach(a => {
+                  const cycle = cycles.find(c => c.id === a.cycleId);
+                  const groupName = cycle ? cycle.name : new Date(a.date).getFullYear().toString();
+                  if (!groups[groupName]) groups[groupName] = [];
+                  groups[groupName].push(a);
+                });
+
+                const groupNames = Object.keys(groups).sort((a, b) => b.localeCompare(a));
+
+                if (groupNames.length === 0) {
+                  return (
+                    <div className="py-12 text-center">
+                      <div className="w-16 h-16 bg-slate-50 text-slate-400 rounded-none flex items-center justify-center mx-auto mb-4">
+                        <HistoryIcon size={32} />
+                      </div>
+                      <h4 className="text-lg font-bold text-slate-900 uppercase tracking-tight">No History Found</h4>
+                      <p className="text-slate-500 text-sm mt-1">There are no historical assessment records for this employee profile.</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="space-y-8">
+                    {groupNames.map(groupName => (
+                      <div key={groupName} className="relative pl-8 border-l-2 border-slate-100 pb-8 last:pb-0">
+                         <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-none border-2 border-white bg-slate-900"></div>
+                         
+                         <div className="mb-4">
+                           <h4 className="text-sm font-black text-slate-900 uppercase tracking-[0.2em]">{groupName}</h4>
+                           <div className="h-0.5 w-12 bg-slate-900 mt-1"></div>
+                         </div>
+
+                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {groups[groupName].map((a, idx) => {
+                              const skill = dataService.getSkill(a.skillId);
+                              return (
+                                <div key={idx} className="bg-slate-50 border border-slate-200 p-4 rounded-none hover:bg-white transition-all hover:shadow-sm">
+                                  <div className="flex justify-between items-start mb-2">
+                                    <div className="flex items-center gap-2">
+                                      {a.type === 'ONLINE' && <Monitor size={14} className="text-blue-600" />}
+                                      {a.type === 'INTERVIEW' && <MessageSquare size={14} className="text-amber-600" />}
+                                      {(a.type === 'MANAGER' || a.type === 'PEER' || a.type === 'SELF') && <Users size={14} className="text-slate-900" />}
+                                      <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">
+                                        {a.type}
+                                      </span>
+                                    </div>
+                                    <span className="text-xs font-black text-slate-900">{a.score}/5</span>
+                                  </div>
+                                  <h5 className="font-bold text-slate-900 text-sm leading-tight truncate">{skill?.name || 'Unknown Skill'}</h5>
+                                  <p className="text-[10px] text-slate-500 mt-2 font-medium">Recorded on {new Date(a.date).toLocaleDateString()}</p>
+                                </div>
+                              );
+                            })}
+                         </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+            
+            <div className="p-4 bg-slate-100 border-t border-slate-200 flex justify-center">
+               <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest leading-none">End of Assessment History Log</p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
