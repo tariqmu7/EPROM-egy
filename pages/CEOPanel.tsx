@@ -222,10 +222,28 @@ export const CEOPanel: React.FC<CEOPanelProps> = ({ currentUser, onViewProfile }
                     </td>
                     <td className="px-6 py-6">
                       <div className="flex flex-col gap-1">
-                        <span className="text-sm font-black text-slate-700 uppercase tracking-tight">{genDept?.name || 'Unassigned'}</span>
-                        <div className="flex items-center gap-2">
-                           <Building2 size={12} className="text-slate-400" />
-                           <span className="text-xs text-slate-500 font-bold">{dept?.name || 'N/A'}</span>
+                        <span className="text-sm font-black text-slate-900 uppercase tracking-tight leading-tight">{genDept?.name || 'Unassigned'}</span>
+                        <div className="flex flex-col gap-1 mt-1">
+                           {(() => {
+                              if (!dept) return <span className="text-[10px] font-bold text-slate-400 uppercase italic">Unassigned</span>;
+                              const parentDept = dept.parentId ? depts.find(d => d.id === dept.parentId) : null;
+                              const isGenDirect = dept.id === genDept?.id;
+                              
+                              return (
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                   <Building2 size={12} className="text-blue-600 shrink-0" />
+                                   {parentDept && parentDept.id !== genDept?.id && (
+                                      <>
+                                         <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{parentDept.name}</span>
+                                         <ChevronRight size={10} className="text-slate-300" />
+                                      </>
+                                   )}
+                                   <span className={`text-[11px] uppercase tracking-tight font-black ${isGenDirect ? 'text-slate-400 italic' : 'text-slate-700'}`}>
+                                      {isGenDirect ? 'Direct Group' : dept.name}
+                                   </span>
+                                </div>
+                              );
+                           })()}
                         </div>
                       </div>
                     </td>

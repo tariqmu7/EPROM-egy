@@ -20,25 +20,27 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, onComplete, onCanc
     switch (type) {
       case 'USER':
         return [
-          ['Name', 'Email', 'Role (EMPLOYEE/ADMIN)', 'Status (ACTIVE/PENDING)', 'Department Name', 'Job Profile Title', 'Manager Email', 'Hierarchy Level (GM/AGM/DM/SH/SP/JP/FR)', 'Location'],
-          ['John Doe', 'john@example.com', 'EMPLOYEE', 'ACTIVE', 'Engineering', 'Software Engineer', 'manager@example.com', 'JP', 'Cairo Office']
+          ['Name', 'Email', 'Phone', 'WhatsApp', 'Role (EMPLOYEE/ADMIN/CEO)', 'Status (ACTIVE/PENDING/REJECTED)', 'General Department Name', 'Parent Department Name', 'Direct Department Name', 'Job Profile Title', 'Manager Email', 'Hierarchy Level (CEO/GM/AGM/DM/SH/SP/JP/FR)', 'Location', 'Project Name'],
+          ['John Doe', 'john@example.com', '01234567890', '01234567890', 'EMPLOYEE', 'ACTIVE', 'General Health & Safety', 'Safety Department', 'Safety Section 1', 'Safety Engineer', 'manager@example.com', 'JP', 'Cairo Office', 'Project Alpha']
         ];
       case 'JOB':
         return [
-          ['Title', 'Description', 'Department Name', 'Skill Name', 'Required Level (1-5)', 'Org Level (GM/AGM/DM/SH/SP/JP/FR)'],
-          ['Software Engineer', 'Develops and maintains software applications.', 'Engineering', 'React.js', '3', 'JP'],
-          ['Software Engineer', '', '', 'Node.js', '2', 'JP'],
-          ['Software Engineer', '', '', 'React.js', '4', 'SH']
+          ['Title', 'Description', 'Code', 'Department Name', 'Skill Name', 'Required Level (1-5)', 'Org Level (GM/AGM/DM/SH/SP/JP/FR)'],
+          ['Software Engineer', 'Develops and maintains software applications.', 'ENG-SWE', 'Engineering', 'React.js', '3', 'JP'],
+          ['Software Engineer', '', '', '', 'Node.js', '2', 'JP'],
+          ['Software Engineer', '', '', '', 'React.js', '4', 'SH']
         ];
       case 'SKILL':
         return [
-          ['Name', 'Category (Technical/Safety/Management/Soft Skills/Behavioral)', 'Assessment Question', 'Level 1 Desc', 'Level 2 Desc', 'Level 3 Desc', 'Level 4 Desc', 'Level 5 Desc', 'Level 1 Certs', 'Level 2 Certs', 'Level 3 Certs', 'Level 4 Certs', 'Level 5 Certs'],
-          ['React.js', 'Technical', 'How proficient is the employee in React?', 'Basic knowledge', 'Can build simple components', 'Can build complex apps', 'Expert level', 'Master level', 'React Basic Cert', '', '', '', '']
+          ['Name', 'Category (Technical/Safety/Management/Soft Skills/Behavioral)', 'Assessment Question', 'Assessment Method (360_EVALUATION/DOCUMENT_UPLOAD/ONLINE_ASSESSMENT/INTERVIEW)', 'Assessment Link', 'Code', 'Description', 'Level 1 Desc', 'Level 2 Desc', 'Level 3 Desc', 'Level 4 Desc', 'Level 5 Desc', 'Level 1 Certs', 'Level 2 Certs', 'Level 3 Certs', 'Level 4 Certs', 'Level 5 Certs'],
+          ['React.js', 'Technical', 'How proficient is the employee in React?', '360_EVALUATION', '', 'TECH-REA-01', 'Proficiency in React.js library', 'Basic knowledge', 'Can build simple components', 'Can build complex apps', 'Expert level', 'Master level', 'React Basic Cert', '', '', '', '']
         ];
       case 'DEPT':
         return [
-          ['Name', 'Manager Email'],
-          ['Engineering', 'manager@example.com']
+          ['Name', 'Type (GENERAL/DEPARTMENT/SECTION)', 'Parent Department Name', 'Manager Email'],
+          ['Operation', 'GENERAL', '', 'ceo@example.com'],
+          ['Safety Dept', 'DEPARTMENT', 'Operation', 'manager@example.com'],
+          ['Environmental Section', 'SECTION', 'Safety Dept', 'sectionhead@example.com']
         ];
       default:
         return [];
@@ -99,11 +101,25 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, onComplete, onCanc
           try {
             switch (type) {
               case 'USER': {
+                const email = (row['Email']?.toString() || '').toLowerCase();
+                if (!email) break;
+
                 const genDeptName = (row['General Department Name'] || '').toString().trim();
+                const parentDeptName = (row['Parent Department Name'] || '').toString().trim();
                 const directDeptName = (row['Direct Department Name'] || row['Department Name'] || '').toString().trim();
                 
                 let genDept = depts.find(d => d.name.toLowerCase() === genDeptName.toLowerCase());
-                let directDept = depts.find(d => d.name.toLowerCase() === directDeptName.toLowerCase());
+                let parentDept = depts.find(d => d.name.toLowerCase() === parentDeptName.toLowerCase());
+                let directDept = depts.find(d => {
+                  const matchesName = d.name.toLowerCase() === directDeptName.toLowerCase();
+                  if (!matchesName) return false;
+                  
+                  // If we have parent context, use it to ensure we pick the correct one
+                  if (parentDept) return d.parentId === parentDept.id;
+                  if (genDept) return dataService.getGeneralDeptId(d.id) === genDept.id;
+                  
+                  return true;
+                });
 
                 // If general dept is missing, try to infer it from direct dept
                 if (!genDept && directDept) {
@@ -114,7 +130,6 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, onComplete, onCanc
                 const job = jobs.find(j => j.title.toLowerCase() === (row['Job Profile Title'] || '').toString().toLowerCase());
                 const manager = users.find(u => u.email.toLowerCase() === (row['Manager Email'] || '').toString().toLowerCase());
 
-                const email = (row['Email']?.toString() || '').toLowerCase();
                 const existingUser = users.find(u => u.email.toLowerCase() === email);
 
                 const newUser: User = {
@@ -125,13 +140,13 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, onComplete, onCanc
                   whatsapp: row['WhatsApp']?.toString(),
                   projectName: row['Project Name']?.toString(),
                   location: row['Location']?.toString(),
-                  role: (row['Role (EMPLOYEE/ADMIN)']?.toString().toUpperCase() as Role) || Role.EMPLOYEE,
-                  status: (row['Status (ACTIVE/PENDING)']?.toString().toUpperCase() as any) || 'ACTIVE',
-                  departmentId: directDept?.id || genDept?.id || '',
-                  generalDepartmentId: genDept?.id,
+                  role: (row['Role (EMPLOYEE/ADMIN/CEO)']?.toString().toUpperCase() || row['Role (EMPLOYEE/ADMIN)']?.toString().toUpperCase() as Role) || Role.EMPLOYEE,
+                  status: (row['Status (ACTIVE/PENDING/REJECTED)']?.toString().toUpperCase() || row['Status (ACTIVE/PENDING)']?.toString().toUpperCase() as any) || 'ACTIVE',
+                  departmentId: directDept?.id || parentDept?.id || genDept?.id || '',
+                  generalDepartmentId: genDept?.id || (directDept ? dataService.getGeneralDeptId(directDept.id) : (parentDept ? dataService.getGeneralDeptId(parentDept.id) : undefined)),
                   jobProfileId: job?.id,
                   managerId: manager?.id,
-                  orgLevel: (row['Hierarchy Level (GM/AGM/DM/SH/SP/JP/FR)']?.toString().toUpperCase() as OrgLevel)
+                  orgLevel: (row['Hierarchy Level (CEO/GM/AGM/DM/SH/SP/JP/FR)']?.toString().toUpperCase() || row['Hierarchy Level (GM/AGM/DM/SH/SP/JP/FR)']?.toString().toUpperCase() as OrgLevel)
                 };
                 if (newUser.name && newUser.email) {
                   if (existingUser) {
@@ -178,15 +193,19 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, onComplete, onCanc
                     title: title,
                     description: row['Description']?.toString() || '',
                     departmentId: dept.id,
-                    requirements: {}
+                    requirements: {},
+                    code: row['Code']?.toString() || ''
                   };
+                  if (row['Code']) {
+                    job.code = row['Code'].toString();
+                  }
                   jobBatch.set(key, job);
                 }
 
                 // Handle skill requirement
                 const skillName = row['Skill Name']?.toString().trim();
                 const reqLevel = parseInt(row['Required Level (1-5)']?.toString());
-                const orgLevelRaw = row['Org Level (GM/AGM/DM/SH/SP/JP/FR)']?.toString() || row['Org Level']?.toString() || row['Hierarchy Level (GM/AGM/DM/SH/SP/JP/FR)']?.toString();
+                const orgLevelRaw = row['Org Level (CEO/GM/AGM/DM/SH/SP/JP/FR)']?.toString() || row['Org Level (GM/AGM/DM/SH/SP/JP/FR)']?.toString() || row['Org Level']?.toString() || row['Hierarchy Level (CEO/GM/AGM/DM/SH/SP/JP/FR)']?.toString() || row['Hierarchy Level (GM/AGM/DM/SH/SP/JP/FR)']?.toString();
                 const orgLevel = orgLevelRaw?.toString().toUpperCase().trim() as OrgLevel;
 
                 if (skillName && !isNaN(reqLevel) && orgLevel) {
@@ -242,9 +261,12 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, onComplete, onCanc
                   name: name,
                   category: row['Category (Technical/Safety/Management/Soft Skills/Behavioral)']?.toString() || 'Technical',
                   assessmentQuestion: row['Assessment Question']?.toString() || '',
+                  assessmentMethod: (row['Assessment Method (360_EVALUATION/DOCUMENT_UPLOAD/ONLINE_ASSESSMENT/INTERVIEW)']?.toString().toUpperCase() as any) || (existingSkill?.assessmentMethod) || '360_EVALUATION',
+                  assessmentLink: row['Assessment Link']?.toString() || '',
+                  code: row['Code']?.toString() || '',
+                  description: row['Description']?.toString() || '',
                   levels,
                   status: existingSkill ? existingSkill.status : 'APPROVED',
-                  assessmentMethod: existingSkill ? existingSkill.assessmentMethod : '360_EVALUATION'
                 };
                 
                 if (existingSkill) {
@@ -262,9 +284,14 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, onComplete, onCanc
                 const manager = users.find(u => u.email.toLowerCase() === (row['Manager Email'] || '').toString().toLowerCase());
                 const existingDept = depts.find(d => d.name.toLowerCase() === name.toLowerCase());
                 
+                const parentDeptName = (row['Parent Department Name'] || '').toString().trim();
+                const parentDept = depts.find(d => d.name.toLowerCase() === parentDeptName.toLowerCase());
+
                 const newDept: Department = {
                   id: existingDept ? existingDept.id : Math.random().toString(36).substr(2, 9),
                   name: name,
+                  type: (row['Type (GENERAL/DEPARTMENT/SECTION)']?.toString().toUpperCase() as any) || existingDept?.type || 'DEPARTMENT',
+                  parentId: parentDept?.id || existingDept?.parentId,
                   managerId: manager?.id || existingDept?.managerId,
                   behavioralSkillIds: existingDept ? existingDept.behavioralSkillIds : []
                 };

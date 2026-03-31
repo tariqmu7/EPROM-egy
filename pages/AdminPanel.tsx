@@ -2099,9 +2099,36 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                                        </div>
                                    </td>
                                    <td className="p-4">
-                                       <span className="font-semibold text-slate-700 block">{user.role}</span>
-                                       <span className="text-slate-600 text-xs">{depts.find(d => d.id === user.departmentId)?.name || 'Unassigned'}</span>
-                                   </td>
+                                        <span className="font-semibold text-slate-700 block text-[10px] uppercase tracking-wider font-bold mb-0.5">{user.role}</span>
+                                        <div className="flex flex-col gap-0.5">
+                                            {(() => {
+                                                const dept = depts.find(d => d.id === user.departmentId);
+                                                const genDept = depts.find(d => d.id === (user.generalDepartmentId || dataService.getGeneralDeptId(user.departmentId)));
+                                                
+                                                if (!dept) return <span className="text-slate-400 text-[10px] font-bold italic lowercase">unassigned</span>;
+                                                
+                                                const parentDept = dept.parentId ? depts.find(d => d.id === dept.parentId) : null;
+                                                
+                                                return (
+                                                    <div className="flex items-center gap-1 overflow-hidden">
+                                                        <span className="text-slate-900 font-bold text-[11px] leading-tight flex items-center gap-1 uppercase tracking-tight whitespace-nowrap">
+                                                            {genDept?.name || 'Unknown'}
+                                                            {genDept?.id !== dept.id && <ChevronRight size={8} className="text-slate-400 shrink-0" />}
+                                                            {genDept?.id !== dept.id && parentDept && parentDept.id !== genDept?.id && (
+                                                                <>
+                                                                    <span className="text-slate-600">{parentDept.name}</span>
+                                                                    {dept.id !== parentDept.id && <ChevronRight size={8} className="text-slate-400 shrink-0" />}
+                                                                </>
+                                                            )}
+                                                            {dept.id !== genDept?.id && dept.id !== parentDept?.id && (
+                                                                <span className="text-blue-700 font-black">{dept.name}</span>
+                                                            )}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })()}
+                                        </div>
+                                    </td>
                                    <td className="p-4">
                                        <span className="inline-block px-2 py-0.5 bg-slate-100 border border-slate-300 text-slate-600 text-[10px] font-bold uppercase tracking-wide rounded-none">{user.orgLevel || 'N/A'}</span>
                                    </td>
