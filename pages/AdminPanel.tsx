@@ -944,13 +944,14 @@ const EmployeeNode: React.FC<{
     allUsers: User[];
     allDepts: Department[];
     allJobs: JobProfile[];
+    currentUser: User | null;
     onEdit: (d: Department) => void;
     onDelete: (id: string) => void;
     onAddChild: (parentId: string) => void;
     onEditUser: (u: User) => void;
     level: number;
     path: string[];
-}> = ({ user, allUsers, allDepts, allJobs, onEdit, onDelete, onAddChild, onEditUser, level, path }) => {
+}> = ({ user, allUsers, allDepts, allJobs, currentUser, onEdit, onDelete, onAddChild, onEditUser, level, path }) => {
     // Reports logic: ONLY same-department employees should be nested here
     const reports = allUsers.filter(u => u.managerId === user.id && u.departmentId === user.departmentId);
     
@@ -1014,6 +1015,7 @@ const EmployeeNode: React.FC<{
                                 allUsers={allUsers}
                                 allDepts={allDepts} 
                                 allJobs={allJobs} 
+                                currentUser={currentUser}
                                 onEdit={onEdit}
                                 onDelete={onDelete}
                                 onAddChild={onAddChild}
@@ -1030,6 +1032,7 @@ const EmployeeNode: React.FC<{
                                 allDepts={allDepts}
                                 allJobs={allJobs}
                                 allUsers={allUsers}
+                                currentUser={currentUser}
                                 onEdit={onEdit}
                                 onDelete={onDelete}
                                 onAddChild={onAddChild}
@@ -1050,13 +1053,14 @@ const DepartmentNode: React.FC<{
     allDepts: Department[]; 
     allJobs: JobProfile[]; 
     allUsers: User[];
+    currentUser: User | null;
     onEdit: (d: Department) => void;
     onDelete: (id: string) => void;
     onAddChild: (parentId: string) => void;
     onEditUser: (u: User) => void;
     level: number;
     path: string[];
-}> = ({ dept, allDepts, allJobs, allUsers, onEdit, onDelete, onAddChild, onEditUser, level, path }) => {
+}> = ({ dept, allDepts, allJobs, allUsers, currentUser, onEdit, onDelete, onAddChild, onEditUser, level, path }) => {
     const [isExpanded, setIsExpanded] = useState(true);
     
     // Find departments that are children via parentId
@@ -1066,15 +1070,13 @@ const DepartmentNode: React.FC<{
     // SPECIAL CASE: CEO-role users appear at the ROOT of the company tree
     const deptUsers = (dept as any).isRoot 
         ? allUsers.filter(u => u.role === Role.CEO)
-        : allUsers.filter(u => u.departmentId === dept.id);
+        : allUsers.filter(u => u.departmentId === dept.id && (currentUser?.role === Role.CEO ? true : u.role !== Role.CEO));
         
     const deptJobs = allJobs.filter(j => j.departmentId === dept.id);
 
     // To prevent duplicate rendering, only show departments here if:
     // 1. They have no manager assigned.
     // 2. OR their manager is NOT in this department's personnel structure
-    // Special case for Root: show all top-level depts that aren't managed by a CEO here 
-    // (most top-level depts like 'GENERAL' depts are managed by GMs, who are NOT in the ROOT personnel)
     const unmanagedUnits = childrenByParent.filter(d => 
         !d.managerId || !deptUsers.some(u => u.id === d.managerId)
     );
@@ -1141,6 +1143,7 @@ const DepartmentNode: React.FC<{
                                         allUsers={allUsers}
                                         allDepts={allDepts}
                                         allJobs={allJobs}
+                                        currentUser={currentUser}
                                         onEdit={onEdit}
                                         onDelete={onDelete}
                                         onAddChild={onAddChild}
@@ -1162,6 +1165,7 @@ const DepartmentNode: React.FC<{
                                         allDepts={allDepts} 
                                         allJobs={allJobs} 
                                         allUsers={allUsers} 
+                                        currentUser={currentUser}
                                         onEdit={onEdit} 
                                         onDelete={onDelete}
                                         onAddChild={onAddChild}
@@ -1183,11 +1187,12 @@ const OrgStructureView: React.FC<{
     depts: Department[];
     jobs: JobProfile[];
     users: User[];
+    currentUser: User | null;
     onEdit: (d: Department) => void;
     onDelete: (id: string) => void;
     onAddChild: (parentId: string) => void;
     onEditUser: (u: User) => void;
-}> = ({ depts, jobs, users, onEdit, onDelete, onAddChild, onEditUser }) => {
+}> = ({ depts, jobs, users, currentUser, onEdit, onDelete, onAddChild, onEditUser }) => {
     const rootDept = { id: 'ROOT', name: 'EPROM', isRoot: true };
 
     return (
@@ -1198,6 +1203,7 @@ const OrgStructureView: React.FC<{
                     allDepts={depts} 
                     allJobs={jobs} 
                     allUsers={users} 
+                    currentUser={currentUser}
                     onEdit={onEdit} 
                     onDelete={onDelete}
                     onAddChild={onAddChild}
@@ -1210,100 +1216,35 @@ const OrgStructureView: React.FC<{
     );
 };
 
-const GeneralDeptList: React.FC<{
-    depts: Department[];
-    users: User[];
-    onSelect: (id: string) => void;
-    onEdit: (d: Department) => void;
-    onDelete: (id: string) => void;
-}> = ({ depts, users, onSelect, onEdit, onDelete }) => {
-    const generalDepts = depts.filter(d => d.type === 'GENERAL' || !d.parentId);
 
-    return (
-        <div className="p-8 bg-slate-50 min-h-[500px]">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {generalDepts.map(dept => {
-                    const deptManager = users.find(u => u.id === dept.managerId);
-                    const subUnits = depts.filter(d => d.parentId === dept.id);
-                    const allDescendantIds = depts.filter(d => {
-                        let current = d;
-                        while(current.parentId) {
-                            if (current.parentId === dept.id) return true;
-                            current = depts.find(pd => pd.id === current.parentId) || { id: '', name: '', parentId: '' } as any;
-                        }
-                        return false;
-                    }).map(d => d.id);
-                    
-                    const totalStaff = users.filter(u => u.departmentId === dept.id || allDescendantIds.includes(u.departmentId)).length;
 
-                    return (
-                        <div 
-                            key={dept.id} 
-                            onClick={() => onSelect(dept.id)}
-                            className="bg-white rounded-none border border-slate-300 hover: transition-all group cursor-pointer overflow-hidden flex flex-col"
-                        >
-                            <div className="p-6 flex-1">
-                                <div className="flex justify-between items-start mb-6">
-                                    <div className="w-14 h-14 bg-blue-50 text-blue-700 rounded-sm flex items-center justify-center group-hover:bg-blue-700 group-hover:text-white transition-all shadow-sm">
-                                        <Layers size={28} />
-                                    </div>
-                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={(e) => { e.stopPropagation(); onEdit(dept); }} className="p-1.5 text-slate-400 hover:text-slate-900 transition-colors"><Edit2 size={16}/></button>
-                                        <button onClick={(e) => { e.stopPropagation(); onDelete(dept.id); }} className="p-1.5 text-slate-400 hover:text-red-700 transition-colors"><Trash2 size={16}/></button>
-                                    </div>
-                                </div>
-                                
-                                <h3 className="text-xl font-bold text-slate-900 mb-1">{dept.name}</h3>
-                                <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-4">General Department</p>
-                                
-                                <div className="space-y-3 mt-6">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 rounded-none bg-slate-50 flex items-center justify-center text-slate-400">
-                                            <UserCheck size={16} />
-                                        </div>
-                                        <div className="min-w-0">
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Department Manager</p>
-                                            <p className="text-sm font-bold text-slate-800 truncate">{deptManager?.name || 'Unassigned'}</p>
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="grid grid-cols-2 gap-4 mt-6">
-                                        <div className="bg-slate-50 p-3 rounded-none border border-slate-100">
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Sub-Units</p>
-                                            <p className="text-lg font-bold text-slate-900">{subUnits.length}</p>
-                                        </div>
-                                        <div className="bg-slate-50 p-3 rounded-none border border-slate-100">
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Workforce</p>
-                                            <p className="text-lg font-bold text-slate-900">{totalStaff}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between group-hover:bg-blue-700/5 transition-colors">
-                                <span className="text-xs font-bold text-blue-700 uppercase tracking-widest">Explore Structure</span>
-                                <ChevronRight size={16} className="text-blue-700 group-hover:translate-x-1 transition-transform" />
-                            </div>
-                            <div className="h-1 w-full bg-blue-700 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></div>
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
-    );
-};
+interface DepartmentProfileViewProps {
+  deptId: string;
+  depts: Department[];
+  jobProfiles: JobProfile[];
+  users: User[];
+  currentUser: User | null;
+  onBack: (id: string | null) => void;
+  onEdit: (d: Department) => void;
+  onDelete: (id: string) => void;
+  onAddChild: (id: string) => void;
+  onEditUser: (u: User) => void;
+  onSelectDept: (id: string) => void;
+}
 
-const DepartmentProfileView: React.FC<{
-    deptId: string;
-    depts: Department[];
-    jobProfiles: JobProfile[];
-    users: User[];
-    onBack: (parentId: string | null) => void;
-    onEdit: (d: Department) => void;
-    onDelete: (id: string) => void;
-    onAddChild: (parentId: string) => void;
-    onEditUser: (u: User) => void;
-    onSelectDept: (id: string) => void;
-}> = ({ deptId, depts, jobProfiles, users, onBack, onEdit, onDelete, onAddChild, onEditUser, onSelectDept }) => {
+const DepartmentProfileView: React.FC<DepartmentProfileViewProps> = ({ 
+  deptId, 
+  depts, 
+  jobProfiles, 
+  users, 
+  currentUser,
+  onBack, 
+  onEdit, 
+  onDelete, 
+  onAddChild, 
+  onEditUser,
+  onSelectDept
+}) => {
     const dept = depts.find(d => d.id === deptId);
     if (!dept) return null;
 
@@ -1373,7 +1314,7 @@ const DepartmentProfileView: React.FC<{
                                 </span>
                             </div>
                             <div className="flex items-center gap-4 text-sm text-slate-600">
-                                <span className="flex items-center gap-1.5 font-medium"><UserCheck size={16} className="text-slate-400" /> {deptManager?.name || 'No Manager Assigned'}</span>
+                                <span className="flex items-center gap-1.5 font-medium"><UserCheck size={16} className="text-slate-400" /> {(deptManager && (deptManager.role !== Role.CEO || currentUser?.role === Role.CEO)) ? deptManager.name : 'No Manager Assigned'}</span>
                                 <span className="w-1.5 h-1.5 rounded-none bg-slate-300"></span>
                                 <span className="flex items-center gap-1.5 font-medium"><Users size={16} className="text-slate-400" /> {totalWorkforce.length} Total Workforce</span>
                             </div>
@@ -1504,7 +1445,7 @@ const DepartmentProfileView: React.FC<{
                                                     </div>
                                                     <div className="min-w-0">
                                                         <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Unit Manager</p>
-                                                        <p className="text-xs font-bold text-slate-800 truncate">{unitManager?.name || 'Unassigned'}</p>
+                                                        <p className="text-xs font-bold text-slate-800 truncate">{(unitManager && (unitManager.role !== Role.CEO || currentUser?.role === Role.CEO)) ? unitManager.name : 'Unassigned'}</p>
                                                     </div>
                                                 </div>
 
@@ -1544,6 +1485,89 @@ const DepartmentProfileView: React.FC<{
     );
 };
 
+const GeneralDeptList: React.FC<{
+    depts: Department[];
+    users: User[];
+    currentUser: User | null;
+    onSelect: (id: string) => void;
+    onEdit: (d: Department) => void;
+    onDelete: (id: string) => void;
+}> = ({ depts, users, currentUser, onSelect, onEdit, onDelete }) => {
+    const generalDepts = depts.filter(d => d.type === 'GENERAL' || !d.parentId);
+
+    return (
+        <div className="p-8 bg-slate-50 min-h-[500px]">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {generalDepts.map(dept => {
+                    const deptManager = users.find(u => u.id === dept.managerId);
+                    const subUnits = depts.filter(d => d.parentId === dept.id);
+                    const allDescendantIds = depts.filter(d => {
+                        let current = d;
+                        while(current.parentId) {
+                            if (current.parentId === dept.id) return true;
+                            current = depts.find(pd => pd.id === current.parentId) || { id: '', name: '', parentId: '' } as any;
+                        }
+                        return false;
+                    }).map(d => d.id);
+                    
+                    const totalStaff = users.filter(u => u.departmentId === dept.id || allDescendantIds.includes(u.departmentId)).length;
+
+                    return (
+                        <div 
+                            key={dept.id} 
+                            onClick={() => onSelect(dept.id)}
+                            className="bg-white rounded-none border border-slate-300 hover: transition-all group cursor-pointer overflow-hidden flex flex-col"
+                        >
+                            <div className="p-6 flex-1">
+                                <div className="flex justify-between items-start mb-6">
+                                    <div className="w-14 h-14 bg-blue-50 text-blue-700 rounded-sm flex items-center justify-center group-hover:bg-blue-700 group-hover:text-white transition-all shadow-sm">
+                                        <Layers size={28} />
+                                    </div>
+                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button onClick={(e) => { e.stopPropagation(); onEdit(dept); }} className="p-1.5 text-slate-400 hover:text-slate-900 transition-colors"><Edit2 size={16}/></button>
+                                        <button onClick={(e) => { e.stopPropagation(); onDelete(dept.id); }} className="p-1.5 text-slate-400 hover:text-red-700 transition-colors"><Trash2 size={16}/></button>
+                                    </div>
+                                </div>
+                                
+                                <h3 className="text-xl font-bold text-slate-900 mb-1">{dept.name}</h3>
+                                <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-4">General Department</p>
+                                
+                                <div className="space-y-3 mt-6">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-none bg-slate-50 flex items-center justify-center text-slate-400">
+                                            <UserCheck size={16} />
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Department Manager</p>
+                                            <p className="text-sm font-bold text-slate-800 truncate">{(deptManager && (deptManager.role !== Role.CEO || currentUser?.role === Role.CEO)) ? deptManager.name : 'Unassigned'}</p>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 gap-4 mt-6">
+                                        <div className="bg-slate-50 p-3 rounded-none border border-slate-100">
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Sub-Units</p>
+                                            <p className="text-lg font-bold text-slate-900">{subUnits.length}</p>
+                                        </div>
+                                        <div className="bg-slate-50 p-3 rounded-none border border-slate-100">
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Workforce</p>
+                                            <p className="text-lg font-bold text-slate-900">{totalStaff}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between group-hover:bg-blue-700/5 transition-colors">
+                                <span className="text-xs font-bold text-blue-700 uppercase tracking-widest">Explore Structure</span>
+                                <ChevronRight size={16} className="text-blue-700 group-hover:translate-x-1 transition-transform" />
+                            </div>
+                            <div className="h-1 w-full bg-blue-700 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></div>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+};
+
 export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => void }> = React.memo(({ view, onNavigate }) => {
   const [refreshKey, setRefreshKey] = useState(0); 
   const [formMode, setFormMode] = useState(false);
@@ -1552,6 +1576,11 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
   const [viewSkill, setViewSkill] = useState<Skill | null>(null);
   const [activeTab, setActiveTab] = useState<string>('ALL');
   const [selectedDeptProfileId, setSelectedDeptProfileId] = useState<string | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    dataService.getCurrentUser().then(setCurrentUser);
+  }, []);
   
   // Search State
   const [searchTerm, setSearchTerm] = useState('');
@@ -1565,7 +1594,10 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
     setSelectedDeptProfileId(null);
   }, [view]);
 
-  const users = useMemo(() => dataService.getAllUsers(), [refreshKey]);
+  const users = useMemo(() => {
+    if (!currentUser) return [];
+    return currentUser.role === Role.CEO ? dataService.getAllUsers() : dataService.getPublicUsers();
+  }, [refreshKey, currentUser]);
   const jobs = useMemo(() => dataService.getAllJobs(), [refreshKey]);
   const skills = useMemo(() => dataService.getAllSkills(), [refreshKey]);
   const depts = useMemo(() => dataService.getAllDepartments(), [refreshKey]);
@@ -2058,6 +2090,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                            depts={depts}
                            jobProfiles={jobs}
                            users={users}
+                           currentUser={currentUser}
                            onBack={setSelectedDeptProfileId}
                            onEdit={(d) => handleEdit('DEPT', d)}
                            onDelete={(id) => handleDelete('DEPT', id)}
@@ -2069,6 +2102,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                        <GeneralDeptList 
                            depts={depts}
                            users={users}
+                           currentUser={currentUser}
                            onSelect={setSelectedDeptProfileId}
                            onEdit={(d) => handleEdit('DEPT', d)}
                            onDelete={(id) => handleDelete('DEPT', id)}

@@ -1,13 +1,13 @@
 import React, { useState, useMemo } from 'react';
 import { dataService } from '../services/store';
-import { User, Skill, JobProfile } from '../types';
+import { User, Skill, JobProfile, Role } from '../types';
 import { CheckCircle, AlertTriangle, Clock } from 'lucide-react';
 
 export const CompetencyMatrix: React.FC<{ currentUser: User }> = ({ currentUser }) => {
   const [selectedDeptId, setSelectedDeptId] = useState<string>('ALL');
 
   const depts = useMemo(() => dataService.getAllDepartments(), []);
-  const users = useMemo(() => dataService.getAllUsers(), []);
+  const users = useMemo(() => currentUser.role === Role.CEO ? dataService.getAllUsers() : dataService.getPublicUsers(), [currentUser]);
   const jobs = useMemo(() => dataService.getAllJobs(), []);
   const skills = useMemo(() => dataService.getAllSkills(), []);
   const assessments = useMemo(() => dataService.getAssessments({}), []);

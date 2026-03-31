@@ -771,6 +771,7 @@ class DataService {
   getAllSkills() { return this.skills; }
   getAllJobs() { return this.jobs; }
   getAllUsers() { return this.users; }
+  getPublicUsers() { return this.users.filter(u => u.role !== Role.CEO); }
   getAllDepartments() { return this.departments; }
   getSkill(id: string) { return this.skills.find(s => s.id === id); }
   getSystemLogs() { return this.logs; }

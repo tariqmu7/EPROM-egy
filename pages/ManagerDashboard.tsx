@@ -199,7 +199,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
   };
 
   const renderTalentSearch = () => {
-    const allUsers = dataService.getAllUsers();
+    const allUsers = user.role === Role.CEO ? dataService.getAllUsers() : dataService.getPublicUsers();
     
     const filteredUsers = allUsers.filter(u => {
       if (!searchQuery) return true;

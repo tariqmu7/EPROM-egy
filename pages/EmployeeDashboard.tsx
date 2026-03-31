@@ -314,7 +314,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                       </div>
                       <div className="min-w-0">
                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Direct Manager</p>
-                        <p className="text-sm font-bold text-slate-800 truncate uppercase">{manager?.name || 'No Direct Manager'}</p>
+                        <p className="text-sm font-bold text-slate-800 truncate uppercase">{(manager && (manager.role !== Role.CEO || user.role === Role.CEO)) ? manager.name : 'No Direct Manager'}</p>
                       </div>
                     </div>
                   </div>

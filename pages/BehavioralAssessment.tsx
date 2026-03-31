@@ -31,7 +31,7 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
 
-  const users = useMemo(() => dataService.getAllUsers(), []);
+  const users = useMemo(() => dataService.getPublicUsers(), []);
   
   // The selection of the employee must be related to the same department of the user who will do the evaluation
   const departmentUsers = useMemo(() => {
