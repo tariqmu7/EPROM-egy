@@ -141,6 +141,7 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
           skillId: selectedSkillId,
           score: rating,
           comment: feedback,
+          method: 'OJT_OBSERVATION',
           type: isSelf ? 'SELF' : (isManagerOfSubject ? 'MANAGER' : (isPeerOfSubject ? 'PEER' : 'PEER')) 
         });
 

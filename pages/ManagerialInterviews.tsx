@@ -72,6 +72,7 @@ export const ManagerialInterviews: React.FC<ManagerialInterviewsProps> = ({ curr
         skillId: selectedSkillId,
         score,
         comment,
+        method: 'INTERVIEW',
         type: 'INTERVIEW'
       });
       

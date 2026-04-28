@@ -209,6 +209,7 @@ export interface Evidence {
   reviewedAt?: string;
   reviewedBy?: string;
   assignedScore?: number; // 1-5 grading assigned by Manager upon approval
+  reviewerComment?: string;
 }
 
 export interface Notification {
