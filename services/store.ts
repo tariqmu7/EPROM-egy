@@ -1,4 +1,4 @@
-import { User, Role, JobProfile, Skill, Department, Assessment, ActivityLog, ORG_HIERARCHY_ORDER, Notification, AssessmentCycle, Nomination, IndividualTrainingPlan, TrainingRecommendation, OrgLevel, Evidence, PromotionRequirement, CareerProgressionPlan, CareerLevelProgress } from '../types';
+import { User, Role, JobProfile, Skill, Department, Assessment, ActivityLog, ORG_HIERARCHY_ORDER, ORG_LEVEL_NUMBERS, Notification, AssessmentCycle, Nomination, IndividualTrainingPlan, TrainingRecommendation, OrgLevel, Evidence, PromotionRequirement, CareerProgressionPlan, CareerLevelProgress, TrainingCourse, ScheduledAssessment, AssessmentMethod } from '../types';
 import { db, auth } from '../firebase';
 import { 
   collection, 
@@ -75,6 +75,8 @@ class DataService {
   private cycles: AssessmentCycle[] = [];
   private nominations: Nomination[] = [];
   private evidences: Evidence[] = [];
+  private trainingCourses: TrainingCourse[] = [];
+  private scheduledAssessments: ScheduledAssessment[] = [];
   
   public isInitialized = false;
   private unsubscribers: Unsubscribe[] = [];
@@ -138,6 +140,8 @@ class DataService {
     this.cycles = [];
     this.nominations = [];
     this.evidences = [];
+    this.trainingCourses = [];
+    this.scheduledAssessments = [];
   }
 
   private clearListeners() {
@@ -159,9 +163,10 @@ class DataService {
           return {
             id: doc.id,
             ...data,
-            certificates: data.certificates ? JSON.parse(data.certificates) : []
+            certificates: data.certificates ? (typeof data.certificates === 'string' ? JSON.parse(data.certificates) : data.certificates) : []
           } as User;
         });
+        this.checkCertificationExpiries();
       }, this.handleError('users'))
     );
 
@@ -244,6 +249,20 @@ class DataService {
       onSnapshot(collection(db, 'evidences'), (snapshot) => {
         this.evidences = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Evidence));
       }, this.handleError('evidences'))
+    );
+
+    // Training Courses
+    this.unsubscribers.push(
+      onSnapshot(collection(db, 'trainingCourses'), (snapshot) => {
+        this.trainingCourses = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TrainingCourse));
+      }, this.handleError('trainingCourses'))
+    );
+
+    // Scheduled Assessments
+    this.unsubscribers.push(
+      onSnapshot(collection(db, 'scheduledAssessments'), (snapshot) => {
+        this.scheduledAssessments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ScheduledAssessment));
+      }, this.handleError('scheduledAssessments'))
     );
 
     // Notifications
@@ -655,6 +674,88 @@ class DataService {
     return user.orgLevel ? managerialLevels.includes(user.orgLevel) : false;
   }
 
+  // Objective 1: Certification Expiry & Compliance Workflows
+  async checkCertificationExpiries() {
+    const today = new Date();
+    
+    for (const user of this.users) {
+      if (!user.certificates || user.certificates.length === 0) continue;
+      
+      let userUpdated = false;
+      const updatedCerts = [...user.certificates];
+
+      for (let i = 0; i < updatedCerts.length; i++) {
+        const cert = updatedCerts[i];
+        if (!cert.expiryDate) continue;
+        
+        const expiry = new Date(cert.expiryDate);
+        const diffDays = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        
+        let newStatus: 'VALID' | 'EXPIRING_SOON' | 'EXPIRED' = 'VALID';
+        if (diffDays <= 0) newStatus = 'EXPIRED';
+        else if (diffDays <= 90) newStatus = 'EXPIRING_SOON';
+
+        if (cert.renewalStatus !== newStatus) {
+          updatedCerts[i] = { ...cert, renewalStatus: newStatus };
+          userUpdated = true;
+
+          if ([90, 60, 30].includes(diffDays) || diffDays <= 0) {
+            const message = diffDays <= 0 
+              ? `CRITICAL: Your certification "${cert.name}" has EXPIRED.` 
+              : `Warning: Your certification "${cert.name}" expires in ${diffDays} days.`;
+
+            await this.addNotification({
+              userId: user.id,
+              title: 'Certification Renewal Alert',
+              message,
+              type: diffDays <= 0 ? 'ERROR' : 'WARNING'
+            });
+
+            if (user.managerId) {
+              await this.addNotification({
+                userId: user.managerId,
+                title: `Compliance Alert: ${user.name}`,
+                message: `Subordinate ${user.name} has a certification requirement: ${message}`,
+                type: 'INFO'
+              });
+            }
+          }
+        }
+      }
+
+      if (userUpdated) {
+        const userRef = doc(db, 'users', user.id);
+        await updateDoc(userRef, { certificates: JSON.stringify(updatedCerts) });
+      }
+    }
+  }
+
+  generateDepartmentalTNA(departmentId: string) {
+    const deptUsers = this.users.filter(u => u.departmentId === departmentId);
+    const skillGaps: Record<string, { skillId: string, skillName: string, gapCount: number, totalGap: number }> = {};
+    
+    deptUsers.forEach(user => {
+      const itp = this.generateIndividualTrainingPlan(user.id);
+      if (itp) {
+        itp.recommendations.forEach(rec => {
+          if (!skillGaps[rec.skillId]) {
+            skillGaps[rec.skillId] = { skillId: rec.skillId, skillName: rec.skillName, gapCount: 0, totalGap: 0 };
+          }
+          skillGaps[rec.skillId].gapCount++;
+          skillGaps[rec.skillId].totalGap += rec.gap;
+        });
+      }
+    });
+    
+    return Object.values(skillGaps)
+      .map(gap => ({
+        ...gap,
+        averageGap: gap.totalGap / gap.gapCount,
+        priority: gap.gapCount > (deptUsers.length * 0.5) ? 'HIGH' : (gap.gapCount > (deptUsers.length * 0.2) ? 'MEDIUM' : 'LOW')
+      }))
+      .sort((a, b) => b.gapCount - a.gapCount);
+  }
+
   generateIndividualTrainingPlan(userId: string): IndividualTrainingPlan | null {
     const user = this.getUserById(userId);
     if (!user || !user.jobProfileId || !user.orgLevel) return null;
@@ -673,28 +774,98 @@ class DataService {
         const skill = this.getSkill(req.skillId);
         const skillName = skill?.name || 'Unknown Skill';
         
-        let recommendation = '';
-        if (gap >= 2) {
-          recommendation = `Intensive training and external certification required for ${skillName}.`;
+        const matchingCourse = this.trainingCourses.find(c => c.linkedSkillIds.includes(req.skillId));
+        
+        let recommendationText = '';
+        if (matchingCourse) {
+          recommendationText = `Enroll in "${matchingCourse.title}" (${matchingCourse.provider}) to bridge the gap.`;
+        } else if (gap >= 2) {
+          recommendationText = `Intensive training and external certification required for ${skillName}.`;
         } else {
-          recommendation = `On-the-job training and mentorship recommended to reach proficiency level ${req.requiredLevel}.`;
+          recommendationText = `On-the-job training and mentorship recommended to reach proficiency level ${req.requiredLevel}.`;
         }
+
+        const targetDate = new Date();
+        targetDate.setMonth(targetDate.getMonth() + (gap >= 2 ? 6 : 3));
 
         recommendations.push({
           skillId: req.skillId,
           skillName,
           gap,
-          recommendation,
-          priority: gap >= 2 ? 'HIGH' : 'MEDIUM'
+          recommendation: recommendationText,
+          priority: gap >= 2 ? 'HIGH' : 'MEDIUM',
+          status: 'NOT_STARTED',
+          targetDate: targetDate.toISOString(),
+          supervisorSignOff: false,
+          courseId: matchingCourse?.id
         });
       }
     });
 
     return {
+      id: `itp_${userId}_${Date.now()}`,
       userId,
       recommendations: recommendations.sort((a, b) => b.gap - a.gap),
-      generatedAt: new Date().toISOString()
+      generatedAt: new Date().toISOString(),
+      status: 'ACTIVE'
     };
+  }
+
+  getEmployeeAssessmentQueue(userId: string) {
+    const user = this.getUserById(userId);
+    if (!user || !user.jobProfileId || !user.orgLevel) return null;
+
+    const job = this.getJobProfile(user.jobProfileId);
+    if (!job) return null;
+
+    const requirements = job.requirements[user.orgLevel] || [];
+    const scheduled = this.scheduledAssessments.filter(a => a.userId === userId && a.status !== 'COMPLETED');
+
+    const writtenExams: any[] = [];
+    const managerialInterviews: any[] = [];
+    const evaluations360: any[] = [];
+    const workRecords: any[] = [];
+
+    requirements.forEach(req => {
+      const currentScore = this.getUserSkillScore(userId, req.skillId);
+      if (currentScore < req.requiredLevel) {
+        const skill = this.getSkill(req.skillId);
+        if (!skill) return;
+
+        const assessment = scheduled.find(s => s.skillId === req.skillId);
+        const item = {
+          skill,
+          requiredLevel: req.requiredLevel,
+          currentLevel: currentScore,
+          scheduledDate: assessment?.scheduledDate,
+          status: assessment?.status || 'PENDING_SCHEDULE',
+          assessorId: assessment?.assessorId,
+          assessmentId: assessment?.id
+        };
+
+        if (skill.requiresCertificate) {
+          workRecords.push(item);
+        } else {
+          switch (skill.assessmentMethod) {
+            case 'WRITTEN_EXAM':
+              writtenExams.push(item);
+              break;
+            case 'INTERVIEW':
+            case 'PRACTICAL_DEMO':
+              managerialInterviews.push(item);
+              break;
+            case 'OJT_OBSERVATION':
+              evaluations360.push(item);
+              break;
+            case 'WORK_RECORD_REVIEW':
+              workRecords.push(item);
+              break;
+          }
+        }
+      }
+    });
+
+    return { writtenExams, managerialInterviews, evaluations360, workRecords };
   }
 
   generateCareerPath(userId: string): CareerProgressionPlan | null {
@@ -727,7 +898,7 @@ class DataService {
       }
 
       const promReqs: PromotionRequirement[] = [];
-      let isReady = requirements.length > 0;
+      let totalGapPoints = 0;
       
       requirements.forEach(req => {
         const currentScore = this.getUserSkillScore(userId, req.skillId);
@@ -742,13 +913,18 @@ class DataService {
           gap
         });
 
-        if (gap > 0) isReady = false;
+        totalGapPoints += gap;
       });
+
+      let readinessStatus: 'READY_NOW' | 'READY_1_2_YEARS' | 'READY_3_5_YEARS' | 'DEVELOPMENT_NEEDED' = 'DEVELOPMENT_NEEDED';
+      if (totalGapPoints === 0 && requirements.length > 0) readinessStatus = 'READY_NOW';
+      else if (totalGapPoints <= 2) readinessStatus = 'READY_1_2_YEARS';
+      else if (totalGapPoints <= 5) readinessStatus = 'READY_3_5_YEARS';
 
       roadmap.push({
         level,
         requirements: promReqs,
-        isReady: isReady && requirements.length > 0,
+        readinessStatus,
         isDefined: requirements.length > 0
       });
     }

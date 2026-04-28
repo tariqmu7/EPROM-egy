@@ -15,7 +15,9 @@ const UserCard = ({ user, isSelected, onClick, role, isSelf }: { user: User, isS
       <div className={`w-10 h-10 rounded-none flex items-center justify-center text-lg font-bold mb-2 ${isSelf ? 'bg-blue-700 text-white' : 'bg-slate-200 text-slate-700'}`}>
         {user.name.charAt(0)}
       </div>
-      <div className="text-xs font-bold text-slate-800 text-center w-full leading-tight mb-1" title={user.name}>{user.name}</div>
+      <div className="text-xs font-bold text-slate-800 text-center w-full leading-tight mb-1" title={user.name}>
+        {user.name} {user.employeeId && <span className="text-slate-400">#{user.employeeId}</span>}
+      </div>
       {jobProfile && <div className="text-[9px] text-slate-500 text-center leading-tight mb-1 line-clamp-2" title={jobProfile.title}>{jobProfile.title}</div>}
       {role && <div className="text-[9px] font-bold text-slate-800 uppercase mt-auto pt-1">{role}</div>}
     </button>
@@ -39,16 +41,16 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
   }, [users, currentUser.departmentId]);
 
   const manager = useMemo(() => {
-    return departmentUsers.find(u => u.id === currentUser.managerId);
-  }, [departmentUsers, currentUser.managerId]);
+    return currentUser.managerId ? dataService.getUserById(currentUser.managerId) : undefined;
+  }, [currentUser.managerId]);
 
   const peers = useMemo(() => {
-    return departmentUsers.filter(u => u.managerId === currentUser.managerId && u.id !== currentUser.id);
-  }, [departmentUsers, currentUser.managerId, currentUser.id]);
+    return dataService.getPeers(currentUser.id);
+  }, [currentUser.id]);
 
   const subordinates = useMemo(() => {
-    return departmentUsers.filter(u => u.managerId === currentUser.id);
-  }, [departmentUsers, currentUser.id]);
+    return dataService.getSubordinates(currentUser.id);
+  }, [currentUser.id]);
 
   const selectedEmployee = useMemo(() => {
     return departmentUsers.find(u => u.id === selectedSubjectId);
@@ -109,16 +111,20 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
 
     // Simulate network request
     setTimeout(async () => {
-      const isSelf = selectedSubjectId === currentUser.id;
-        const isManager = selectedEmployee?.managerId === currentUser.id;
+        const isSelf = selectedSubjectId === currentUser.id;
+        const isManagerOfSubject = subordinates.some(sub => sub.id === selectedSubjectId);
+        const isPeerOfSubject = peers.some(p => p.id === selectedSubjectId);
         
+        // Relationship-based type assignment
+        // If not self, not subordinate (manager role), and not peer, it is an 'OTHER' or 'MANAGER' 
+        // evaluation from a subordinate perspective. We'll label as PEER only if they are true peers.
         await dataService.addAssessment({
-          raterId: currentUser.id, // We store it, but UI can hide it
+          raterId: currentUser.id,
           subjectId: selectedSubjectId,
           skillId: selectedSkillId,
           score: rating,
           comment: feedback,
-          type: isSelf ? 'SELF' : (isManager ? 'MANAGER' : 'PEER')
+          type: isSelf ? 'SELF' : (isManagerOfSubject ? 'MANAGER' : (isPeerOfSubject ? 'PEER' : 'PEER')) 
         });
 
       setSuccessMessage(isSelf ? 'Self-evaluation submitted successfully.' : 'Feedback submitted successfully.');

@@ -1,8 +1,43 @@
-import React, { useMemo } from 'react';
-import { User, Role, JobProfile, Skill, IndividualTrainingPlan, ORG_HIERARCHY_ORDER, ORG_LEVEL_LABELS } from '../types';
+import React, { useMemo, useState, useEffect } from 'react';
+import { User, Role, JobProfile, Skill, IndividualTrainingPlan, ORG_HIERARCHY_ORDER, ORG_LEVEL_LABELS, ScheduledAssessment } from '../types';
 import { dataService } from '../services/store';
-import { ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Tooltip, BarChart, CartesianGrid, XAxis, YAxis, Bar, Legend, Cell } from 'recharts';
-import { AlertCircle, CheckCircle, Award, BookOpen, Activity, TrendingUp, Users, PlayCircle, Calendar, ArrowRight, Download, FileText, Mail, Briefcase, MapPin, User as UserIcon, ShieldCheck, GraduationCap, Target, Zap, Camera, Phone, MessageSquare, Building, BadgeCheck, Clock, XCircle, Layers, Shield, LayoutGrid, UserCheck, Building2, History as HistoryIcon, Monitor } from 'lucide-react';
+import { 
+  AlertCircle, 
+  CheckCircle, 
+  Award, 
+  BookOpen, 
+  Activity, 
+  TrendingUp, 
+  Users, 
+  PlayCircle, 
+  Calendar, 
+  ArrowRight, 
+  Download, 
+  FileText, 
+  Briefcase, 
+  MapPin, 
+  ShieldCheck, 
+  GraduationCap, 
+  Target, 
+  Zap, 
+  MessageSquare, 
+  Building, 
+  BadgeCheck, 
+  Clock, 
+  XCircle, 
+  Layers, 
+  Shield, 
+  LayoutGrid, 
+  UserCheck, 
+  Building2, 
+  History as HistoryIcon, 
+  Monitor,
+  Video,
+  FileUp,
+  ClipboardCheck,
+  ChevronRight,
+  AlertTriangle
+} from 'lucide-react';
 import { auth } from '../firebase';
 
 interface EmployeeDashboardProps {
@@ -10,805 +45,408 @@ interface EmployeeDashboardProps {
 }
 
 export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({ user }) => {
+  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'ASSESSMENTS' | 'IDP' | 'CAREER'>('OVERVIEW');
+  const [assessmentQueue, setAssessmentQueue] = useState<any>(null);
+
   const jobProfile = useMemo(() => user.jobProfileId ? dataService.getJobProfile(user.jobProfileId) : null, [user.jobProfileId]);
-  const userLevel = user.orgLevel;
-  
-  // Department Hierarchy
   const depts = useMemo(() => dataService.getAllDepartments(), []);
-  const directDepartment = useMemo(() => depts.find(d => d.id === user.departmentId), [depts, user.departmentId]);
-  const mainDepartment = useMemo(() => {
-    if (!user.departmentId) return null;
-    const findRoot = (id: string): any => {
-      const d = depts.find(dept => dept.id === id);
-      if (!d) return null;
-      if (!d.parentId) return d;
-      return findRoot(d.parentId);
-    };
-    return findRoot(user.departmentId);
-  }, [depts, user.departmentId]);
-
   const manager = useMemo(() => user.managerId ? dataService.getUserById(user.managerId) : null, [user.managerId]);
-
-  const itp = useMemo(() => dataService.generateIndividualTrainingPlan(user.id), [user.id]);
-
-  const [isUploading, setIsUploading] = React.useState(false);
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
-  const canEditAvatar = auth.currentUser?.uid === user.id || dataService.isManager(user); // Also let managers edit? Actually user means the employee. We'll stick to uid match. Let's just use auth.currentUser?.uid === user.id
-  const isOwner = auth.currentUser?.uid === user.id;
-
-  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsUploading(true);
-    try {
-      await dataService.uploadAvatar(user.id, file);
-    } catch (err) {
-      console.error(err);
-      alert('Failed to upload avatar.');
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  // Components that require a job profile will be conditionally rendered
-
-  // Org levels are optional for CEOs as well
-
-  const levelRequirements = jobProfile && userLevel ? (jobProfile.requirements[userLevel] || []) : [];
   
-  if ((!Array.isArray(levelRequirements) || levelRequirements.length === 0) && jobProfile && userLevel) {
-      return (
-        <div className="flex flex-col items-center justify-center h-[60vh] text-slate-700">
-             <CheckCircle size={48} className="mb-4 text-emerald-500" />
-            <p className="font-medium">No specific competency requirements defined for level: <span className="font-bold text-slate-700">{userLevel}</span>.</p>
-        </div>
-      );
-  }
+  useEffect(() => {
+    const queue = dataService.getEmployeeAssessmentQueue(user.id);
+    setAssessmentQueue(queue);
+  }, [user.id]);
 
-  // Calculate Gaps
-  const skillAnalysis = useMemo(() => levelRequirements.map(req => {
-    const skillDetails = dataService.getSkill(req.skillId);
-    const currentScore = dataService.getUserSkillScore(user.id, req.skillId);
-    return {
-      skill: skillDetails,
-      required: req.requiredLevel,
-      current: currentScore,
-      gap: Math.max(0, req.requiredLevel - currentScore)
-    };
-  }), [levelRequirements, user.id]);
+  const skillAnalysis = useMemo(() => {
+    const requirements = jobProfile && user.orgLevel ? (jobProfile.requirements[user.orgLevel] || []) : [];
+    return requirements.map(req => {
+      const skillDetails = dataService.getSkill(req.skillId);
+      const currentScore = dataService.getUserSkillScore(user.id, req.skillId);
+      return {
+        skill: skillDetails,
+        required: req.requiredLevel,
+        current: currentScore,
+        gap: Math.max(0, req.requiredLevel - currentScore)
+      };
+    });
+  }, [jobProfile, user.id, user.orgLevel]);
 
   const gaps = useMemo(() => skillAnalysis.filter(s => s.gap > 0), [skillAnalysis]);
   const compliant = useMemo(() => skillAnalysis.filter(s => s.gap <= 0), [skillAnalysis]);
 
-  const recommendations = useMemo(() => gaps.map(g => {
-    const nextLevel = g.current + 1;
-    const levelDetails = g.skill?.levels[nextLevel <= 5 ? nextLevel : 5];
-    const isCritical = g.gap > 1;
-
-    // Mock specific actions based on skill category
-    const actions = [];
-    if (g.skill?.category === 'Safety') {
-        actions.push({ type: 'TRAINING', label: 'HSE Advanced Module', duration: '2 Days', icon: BookOpen });
-        actions.push({ type: 'OJT', label: 'Site Safety Walkthrough', duration: '4 Hours', icon: Activity });
-    } else if (g.skill?.category === 'Technical') {
-        actions.push({ type: 'TRAINING', label: 'Technical Certification Course', duration: '5 Days', icon: PlayCircle });
-        actions.push({ type: 'MENTORING', label: 'Shadow Senior Engineer', duration: '1 Week', icon: Users });
-    } else {
-        actions.push({ type: 'READING', label: 'Management SOPs', duration: '2 Hours', icon: BookOpen });
-    }
-
-    return {
-      skillName: g.skill?.name,
-      category: g.skill?.category,
-      currentLevel: g.current,
-      targetLevel: nextLevel,
-      gapSize: g.gap,
-      isCritical,
-      certs: levelDetails?.requiredCertificates || [],
-      description: levelDetails?.description,
-      suggestedActions: actions
-    };
-  }), [gaps]);
-
-  const careerPath = useMemo(() => dataService.generateCareerPath(user.id), [user.id]);
-
-  // Export Handlers
-  const handleExportReport = () => {
-    const headers = ['Skill Name', 'Category', 'Required Level', 'Current Level', 'Gap', 'Status'];
-    const rows = skillAnalysis.map(s => [
-      s.skill?.name || 'Unknown',
-      s.skill?.category || 'Unknown',
-      s.required.toString(),
-      s.current.toString(),
-      s.gap.toString(),
-      s.gap > 0 ? 'Gap' : 'Compliant'
-    ]);
-
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `Competency_Report_${user.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
-    link.click();
-  };
-
-  const handleExportPlan = () => {
-    const headers = ['Skill', 'Target Level', 'Gap Size', 'Action Type', 'Action Item', 'Duration'];
-    const rows: string[][] = [];
-
-    recommendations.forEach(rec => {
-        rec.suggestedActions.forEach(action => {
-            rows.push([
-                rec.skillName || 'Unknown',
-                rec.targetLevel.toString(),
-                rec.gapSize.toString(),
-                action.type,
-                action.label,
-                action.duration
-            ]);
-        });
-    });
-
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
-    ].join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `Development_Plan_${user.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
-    link.click();
-  };
+  const renderAssessmentSection = (title: string, items: any[], icon: any, actionLabel: string, colorClass: string) => (
+    <div className="bg-white border border-slate-200 overflow-hidden">
+      <div className={`p-4 border-b border-slate-100 flex items-center justify-between ${colorClass}`}>
+        <div className="flex items-center gap-2">
+          {React.createElement(icon, { size: 18, className: "text-slate-800" })}
+          <h3 className="font-bold text-slate-900 uppercase tracking-tight text-sm">{title}</h3>
+        </div>
+        <span className="bg-white/50 px-2 py-0.5 rounded-none text-[10px] font-black border border-black/10">{items.length} Pending</span>
+      </div>
+      <div className="divide-y divide-slate-100">
+        {items.length > 0 ? items.map((item, idx) => (
+          <div key={idx} className="p-4 hover:bg-slate-50 transition-colors">
+            <div className="flex justify-between items-start mb-2">
+              <div>
+                <h4 className="font-bold text-slate-900 text-sm">{item.skill.name}</h4>
+                <div className="flex items-center gap-3 mt-1">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1">
+                        <Target size={10} /> Target: Level {item.requiredLevel}
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1">
+                        <Clock size={10} /> {item.scheduledDate ? new Date(item.scheduledDate).toLocaleDateString() : 'Scheduling...'}
+                    </span>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className={`text-[9px] font-black px-1.5 py-0.5 border ${item.status === 'OVERDUE' ? 'bg-red-50 text-red-700 border-red-100' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                  {item.status}
+                </span>
+              </div>
+            </div>
+            {item.assessorId && (
+                <p className="text-[10px] text-slate-500 mb-3 flex items-center gap-1">
+                    <UserCheck size={10} /> Assessor: {dataService.getUserById(item.assessorId)?.name || 'TBD'}
+                </p>
+            )}
+            <button className="w-full mt-2 py-2 bg-slate-900 text-white text-[10px] font-bold uppercase tracking-widest hover:bg-slate-800 transition-all flex items-center justify-center gap-2">
+              {actionLabel} <ChevronRight size={12} />
+            </button>
+          </div>
+        )) : (
+          <div className="p-8 text-center text-slate-400">
+            <CheckCircle size={24} className="mx-auto mb-2 opacity-20" />
+            <p className="text-xs font-medium italic">No pending tasks in this category.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 
   return (
-    <div className="pb-12">
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        
-        {/* Left Column: Profile Info */}
-        <div className="lg:col-span-4 space-y-6">
-          <div className="bg-white rounded-none border border-slate-300 overflow-hidden shadow-sm">
-            {/* Header / Avatar */}
-            <div className="h-32 bg-slate-900 flex items-end justify-end p-4">
-              <div className="flex gap-2 mb-2">
-                {user.status === 'ACTIVE' ? (
-                  <span className="bg-emerald-500/10 text-emerald-400 text-[10px] font-bold px-3 py-1 border border-emerald-500/20 backdrop-blur-md uppercase tracking-widest flex items-center gap-1.5">
-                    <BadgeCheck size={12} /> Active
-                  </span>
-                ) : user.status === 'REJECTED' ? (
-                  <span className="bg-red-500/10 text-red-400 text-[10px] font-bold px-3 py-1 border border-red-500/20 backdrop-blur-md uppercase tracking-widest flex items-center gap-1.5">
-                    <XCircle size={12} /> Deactivated
-                  </span>
-                ) : (
-                  <span className="bg-amber-500/10 text-amber-400 text-[10px] font-bold px-3 py-1 border border-amber-500/20 backdrop-blur-md uppercase tracking-widest flex items-center gap-1.5">
-                    <Clock size={12} /> Pending Approval
-                  </span>
-                )}
-              </div>
-            </div>
-            
-            <div className="px-8 pb-8">
-              <div className="relative -mt-16 mb-6">
-                <div 
-                  className={`relative w-32 h-32 rounded-none border-4 border-white bg-slate-100 overflow-hidden group shadow-lg ${isOwner ? 'cursor-pointer' : ''}`}
-                  onClick={() => isOwner && fileInputRef.current?.click()}
-                >
-                  <img src={user.avatarUrl} alt={user.name} className={`w-full h-full object-cover transition-opacity ${isUploading ? 'opacity-50' : 'opacity-100'}`} />
-                  
-                  {isOwner && (
-                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Camera size={24} className="text-white" />
-                    </div>
-                  )}
-                  {isUploading && (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-6 h-6 border-2 border-slate-900 border-t-transparent rounded-full animate-spin"></div>
-                    </div>
-                  )}
-                </div>
-                {isOwner && (
-                  <input 
-                    type="file" 
-                    accept="image/*" 
-                    className="hidden" 
-                    ref={fileInputRef} 
-                    onChange={handleAvatarUpload} 
-                  />
-                )}
-              </div>
-              
-              <div className="space-y-1 mb-8">
-                <h2 className="text-2xl font-black text-slate-900 tracking-tight uppercase">{user.name}</h2>
-                <div className="flex items-center gap-2 text-slate-600 font-bold uppercase text-[11px] tracking-widest">
-                  <Briefcase size={14} className="text-slate-400" /> {jobProfile?.title || 'No Job Profile Asset'}
-                </div>
-              </div>
-
-              {/* Information Sections */}
-              <div className="space-y-8">
-                {/* 1. Professional Assignment */}
-                <div>
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-100 pb-2">Professional Assignment</h4>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between bg-slate-50 p-3 border border-slate-100">
-                      <div className="flex items-center gap-3">
-                        <Layers size={16} className="text-blue-600" />
-                        <span className="text-xs font-bold text-slate-600 uppercase tracking-widest">Hierarchy</span>
-                      </div>
-                      <span className="bg-blue-600 text-white px-2 py-0.5 text-[10px] font-black tracking-widest">{userLevel}</span>
-                    </div>
-                    <div className="flex items-center justify-between bg-slate-50 p-3 border border-slate-100">
-                      <div className="flex items-center gap-3">
-                        <Shield size={16} className="text-slate-500" />
-                        <span className="text-xs font-bold text-slate-600 uppercase tracking-widest">System Role</span>
-                      </div>
-                      <span className="text-[10px] font-black text-slate-900 uppercase tracking-widest">{user.role}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 2. Contact Information */}
-                <div>
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-100 pb-2">Contact Information</h4>
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-4 group cursor-pointer hover:bg-slate-50 p-1 transition-colors">
-                      <div className="w-8 h-8 bg-slate-100 text-slate-600 flex items-center justify-center shrink-0 border border-slate-200">
-                        <Mail size={16} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Email</p>
-                        <p className="text-sm font-bold text-slate-800 truncate">{user.email}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4 group cursor-pointer hover:bg-slate-50 p-1 transition-colors">
-                      <div className="w-8 h-8 bg-slate-100 text-slate-600 flex items-center justify-center shrink-0 border border-slate-200">
-                        <Phone size={16} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Phone</p>
-                        <p className="text-sm font-bold text-slate-800 truncate">{user.phone || 'Not Provided'}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4 group cursor-pointer hover:bg-slate-50 p-1 transition-colors">
-                      <div className="w-8 h-8 bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100">
-                        <MessageSquare size={16} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">WhatsApp</p>
-                        <p className="text-sm font-bold text-emerald-700 truncate">{user.whatsapp || 'Not Provided'}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 3. Organizational Chart */}
-                <div>
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-100 pb-2">Organizational Chart</h4>
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-4">
-                      <div className="w-8 h-8 bg-slate-100 text-slate-600 flex items-center justify-center shrink-0 border border-slate-200">
-                        <Building size={16} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Main Department</p>
-                        <p className="text-sm font-bold text-slate-800 truncate uppercase">{mainDepartment?.name || 'Unassigned'}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="w-8 h-8 bg-slate-100 text-slate-600 flex items-center justify-center shrink-0 border border-slate-200">
-                        <LayoutGrid size={16} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Direct Section</p>
-                        <p className="text-sm font-bold text-slate-800 truncate uppercase">{directDepartment?.name || 'No Direct Section'}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="w-8 h-8 bg-slate-100 text-slate-600 flex items-center justify-center shrink-0 border border-slate-200">
-                        <UserCheck size={16} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Direct Manager</p>
-                        <p className="text-sm font-bold text-slate-800 truncate uppercase">{(manager && (manager.role !== Role.CEO || user.role === Role.CEO)) ? manager.name : 'No Direct Manager'}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 4. Project Assignment */}
-                <div>
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-100 pb-2">Project Assignment</h4>
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-4">
-                      <div className="w-8 h-8 bg-slate-100 text-slate-600 flex items-center justify-center shrink-0 border border-slate-200">
-                        <Building2 size={16} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Project Name</p>
-                        <p className="text-sm font-bold text-slate-800 truncate uppercase">{user.projectName || 'Unassigned'}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="w-8 h-8 bg-slate-100 text-slate-600 flex items-center justify-center shrink-0 border border-slate-200">
-                        <MapPin size={16} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Project Location</p>
-                        <p className="text-sm font-bold text-slate-800 truncate uppercase">{user.location || 'Site Location General'}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              {jobProfile && (
-                <div className="mt-10 pt-8 border-t border-slate-100 grid grid-cols-2 gap-4">
-                  <button 
-                    onClick={handleExportReport}
-                    className="flex items-center justify-center gap-3 p-3 bg-white border border-slate-200 text-slate-600 hover:border-slate-400 hover:text-slate-900 transition-all font-bold uppercase text-[9px] tracking-widest"
-                  >
-                    <Download size={14} /> Full Report
-                  </button>
-                  <button 
-                    onClick={handleExportPlan}
-                    className="flex items-center justify-center gap-3 p-3 bg-slate-900 text-white hover:bg-slate-800 transition-all font-bold uppercase text-[9px] tracking-widest"
-                  >
-                    <FileText size={14} /> Dev Plan
-                  </button>
-                </div>
+    <div className="max-w-[1600px] mx-auto space-y-8 animate-in fade-in duration-500">
+      
+      {/* ── Page Header ────────────────────────────────────────────────── */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-200 pb-8">
+        <div className="flex items-center gap-6">
+          <div className="relative group">
+            <div className="w-24 h-24 bg-slate-100 border border-slate-300 rounded-none overflow-hidden flex items-center justify-center relative">
+              {user.avatarUrl ? (
+                <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
+              ) : (
+                <UserIcon size={40} className="text-slate-300" />
               )}
             </div>
+            <div className="absolute -bottom-2 -right-2 bg-slate-900 text-white p-1.5 border-2 border-white">
+              <BadgeCheck size={14} />
+            </div>
           </div>
-
-          {/* Quick Stats Mini Cards */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-white p-4 rounded-none  border border-slate-300">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Compliance</p>
-              <div className="flex items-end gap-1">
-                <span className="text-2xl font-bold text-slate-900">
-                  {skillAnalysis.length > 0 ? Math.round((compliant.length / skillAnalysis.length) * 100) : 0}%
+          <div>
+            <div className="flex items-center gap-3 mb-1">
+                <h1 className="text-3xl font-black text-slate-900 tracking-tight uppercase">
+                    {user.name} {user.employeeId && <span className="text-slate-400 font-medium ml-2">#{user.employeeId}</span>}
+                </h1>
+                <span className="bg-blue-50 text-blue-700 text-[10px] font-black px-2 py-0.5 border border-blue-100 uppercase tracking-widest">
+                    {user.orgLevel || 'N/A'}
                 </span>
-                <TrendingUp size={16} className="text-emerald-500 mb-1" />
-              </div>
             </div>
-            <div className="bg-white p-4 rounded-none  border border-slate-300">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Gaps</p>
-              <div className="flex items-end gap-1">
-                <span className="text-2xl font-bold text-slate-900">{gaps.length}</span>
-                <AlertCircle size={16} className="text-slate-500 mb-1" />
-              </div>
-            </div>
+            <p className="text-slate-500 font-bold uppercase text-xs tracking-widest flex items-center gap-2">
+              <Briefcase size={14} className="text-slate-400" /> {jobProfile?.title || 'No Job Profile Asset'}
+            </p>
           </div>
         </div>
 
-        {/* Right Column: Content Area */}
-        <div className="lg:col-span-8 space-y-8">
-          
-          {/* Welcome/CEO Intro if no job profile */}
-          {!jobProfile && user.role === Role.CEO && (
-            <div className="bg-white p-12 rounded-none border border-slate-300 text-center animate-in fade-in slide-in-from-top-4 duration-700">
-               <div className="w-20 h-20 bg-blue-50 text-blue-700 rounded-none flex items-center justify-center mx-auto mb-6 border border-blue-100">
-                  <ShieldCheck size={40} />
-               </div>
-               <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tight mb-2">Executive Management Profile</h3>
-               <p className="text-slate-600 max-w-lg mx-auto leading-relaxed">
-                  As the Chief Executive Officer, your profile oversight and organizational management tools are available in the specialized <strong>Organization</strong> and <strong>Org Structure</strong> dashboards. 
-                  You can manage your personal appearance and avatar here.
-               </p>
+        <div className="flex items-center gap-3">
+            <div className="text-right mr-4 hidden md:block">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Direct Manager</p>
+                <p className="text-sm font-bold text-slate-900">{(manager && (manager.role !== Role.CEO || user.role === Role.CEO)) ? `${manager.name} (#${manager.employeeId})` : 'N/A'}</p>
             </div>
-          )}
+            <button className="flex items-center gap-2 px-5 py-2.5 bg-white border-2 border-slate-900 text-slate-900 font-black uppercase text-xs tracking-widest hover:bg-slate-900 hover:text-white transition-all">
+                <Download size={16} /> Export CV
+            </button>
+        </div>
+      </div>
 
-          {/* Certificates Section */}
-          <div className="bg-white p-6 rounded-none  border border-slate-300">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-2">
-                <Award size={20} className="text-slate-800" />
-                <h3 className="font-bold text-slate-900">Certificates Achieved</h3>
-              </div>
-              <span className="text-xs font-medium text-slate-500">{user.certificates?.length || 0} Total</span>
-            </div>
-            
-            {user.certificates && user.certificates.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {user.certificates.map(cert => (
-                  <div key={cert.id} className="p-4 border border-slate-100 rounded-none bg-slate-50/50 flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-sm bg-slate-200 flex items-center justify-center text-slate-800 shrink-0">
-                      <ShieldCheck size={20} />
-                    </div>
-                    <div className="min-w-0">
-                      <h4 className="font-bold text-slate-900 text-sm truncate">{cert.name}</h4>
-                      <p className="text-xs text-slate-500 font-medium">{cert.issuer}</p>
-                      <p className="text-[10px] text-slate-400 mt-1 uppercase font-bold">{new Date(cert.dateAchieved).getFullYear()}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="p-8 text-center bg-slate-50 rounded-none border border-dashed border-slate-300">
-                <Award size={32} className="mx-auto text-slate-300 mb-3" />
-                <p className="text-sm text-slate-500 font-medium">No professional certificates recorded yet.</p>
-              </div>
-            )}
-          </div>
+      {/* ── Navigation Tabs ────────────────────────────────────────────── */}
+      <div className="flex items-center gap-8 border-b border-slate-200 overflow-x-auto no-scrollbar">
+        {[
+          { id: 'OVERVIEW', label: 'Dashboard Overview', icon: LayoutGrid },
+          { id: 'ASSESSMENTS', label: 'Assessment Queue', icon: Zap },
+          { id: 'IDP', label: 'Individual Development Plan', icon: Target },
+          { id: 'CAREER', label: 'Career Progression', icon: GraduationCap },
+        ].map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as any)}
+            className={`flex items-center gap-2 pb-4 text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap border-b-2 ${
+              activeTab === tab.id ? 'border-slate-900 text-slate-900' : 'border-transparent text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            <tab.icon size={16} />
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
-          {/* Job Fit Analysis Section */}
-          <div className="bg-white p-6 rounded-none  border border-slate-300">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-2">
-                <Target size={20} className="text-blue-600" />
-                <h3 className="font-bold text-slate-900">Job Fit Analysis</h3>
-              </div>
-              <div className="px-3 py-1 rounded-none bg-slate-50 text-slate-700 text-xs font-bold border border-slate-100">
-                {skillAnalysis.length > 0 ? Math.round((compliant.length / skillAnalysis.length) * 100) : 0}% Match
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="p-4 rounded-none bg-slate-50 border border-slate-100">
-                <div className="flex items-center gap-2 mb-2 text-slate-500">
-                  <ShieldCheck size={16} />
-                  <span className="text-[10px] font-bold uppercase tracking-wider">Certificates</span>
-                </div>
-                <p className="text-xl font-bold text-slate-900">{user.certificates?.length || 0}</p>
-                <p className="text-[10px] text-slate-500 mt-1">Professional Validations</p>
-              </div>
-              <div className="p-4 rounded-none bg-slate-50 border border-slate-100">
-                <div className="flex items-center gap-2 mb-2 text-slate-500">
-                  <Zap size={16} />
-                  <span className="text-[10px] font-bold uppercase tracking-wider">Assessments</span>
-                </div>
-                <p className="text-xl font-bold text-slate-900">{dataService.getAssessments({ subjectId: user.id }).length}</p>
-                <p className="text-[10px] text-slate-500 mt-1">Measurable Evaluations</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Skill Profile Section */}
-          <div className="bg-white p-6 rounded-none  border border-slate-300">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-2">
-                <Activity size={20} className="text-slate-800" />
-                <h3 className="font-bold text-slate-900">Competency Profile</h3>
-              </div>
-              <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-wider">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-none bg-slate-800"></div>
-                  <span className="text-slate-500">Current</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-none bg-slate-200"></div>
-                  <span className="text-slate-500">Target</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {skillAnalysis.map((s, idx) => (
-                <div key={idx} className="space-y-3">
-                  <div className="flex justify-between items-start">
+      {/* ── Main Content Area ─────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        
+        {/* Left Column: Stats & Profile Summary */}
+        <div className="lg:col-span-4 space-y-6">
+            <div className="bg-slate-900 p-6 text-white space-y-6">
+                <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 border-b border-white/10 pb-2">Readiness Metrics</h3>
+                <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <h4 className="font-bold text-slate-800 text-sm">{s.skill?.name}</h4>
-                      <p className="text-[10px] font-bold text-slate-800 uppercase tracking-wider">{s.skill?.category}</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Skill Compliance</p>
+                        <p className="text-3xl font-black">{skillAnalysis.length > 0 ? Math.round((compliant.length / skillAnalysis.length) * 100) : 0}%</p>
                     </div>
-                    <div className="text-right">
-                      <span className="text-xs font-bold text-slate-900">{s.current} / {s.required}</span>
+                    <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Gap Density</p>
+                        <p className="text-3xl font-black text-amber-500">{gaps.length}</p>
                     </div>
-                  </div>
-                  <div className="relative h-2 bg-slate-100 rounded-none overflow-hidden">
-                    <div 
-                      className="absolute top-0 left-0 h-full bg-slate-200 rounded-none" 
-                      style={{ width: `${(s.required / 5) * 100}%` }}
-                    ></div>
-                    <div 
-                      className={`absolute top-0 left-0 h-full rounded-none transition-all duration-500 ${s.current >= s.required ? 'bg-emerald-500' : 'bg-blue-600'}`} 
-                      style={{ width: `${(s.current / 5) * 100}%` }}
-                    ></div>
-                  </div>
                 </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Individual Training Plan (ITP) Section */}
-          {jobProfile && (
-            <div className="bg-white rounded-none  border border-slate-300 overflow-hidden">
-              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                <div className="flex items-center gap-2">
-                  <TrendingUp size={20} className="text-slate-800" />
-                  <h3 className="font-bold text-slate-900">Individual Training Plan (ITP)</h3>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Plan ID: {itp?.userId.split('_')[1] || 'NEW'}</span>
-                  <span className="bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-none uppercase tracking-wider">Active</span>
-                </div>
-              </div>
-              
-              <div className="p-6">
-                {itp && itp.recommendations.length > 0 ? (
-                  <div className="space-y-6">
-                    {itp.recommendations.map((rec, idx) => (
-                      <div key={idx} className="relative pl-6 border-l-2 border-slate-100 pb-6 last:pb-0">
-                        <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-none border-2 border-white  ${rec.priority === 'HIGH' ? 'bg-emerald-500' : 'bg-blue-600'}`}></div>
-                        
-                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-3">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h4 className="font-bold text-slate-900">{rec.skillName}</h4>
-                              {rec.priority === 'HIGH' && (
-                                <span className="bg-slate-50 text-slate-600 text-[9px] font-bold px-1.5 py-0.5 rounded-none border border-slate-100 uppercase tracking-tighter">Critical Gap</span>
-                              )}
-                            </div>
-                            <p className="text-xs text-slate-500 mt-0.5">Recommendation: {rec.recommendation}</p>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Gap: {rec.gap}</span>
-                          </div>
+                <div className="pt-4 border-t border-white/10">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Succession Pipeline</p>
+                    <div className="flex items-center gap-2">
+                        <div className="flex-1 h-1.5 bg-white/10">
+                            <div className="h-full bg-blue-500" style={{ width: '40%' }}></div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="py-12 text-center">
-                    <div className="w-16 h-16 bg-slate-50 text-slate-600 rounded-none flex items-center justify-center mx-auto mb-4">
-                      <CheckCircle size={32} />
+                        <span className="text-[10px] font-black uppercase">Developing</span>
                     </div>
-                    <h4 className="text-lg font-bold text-slate-900">No Training Required</h4>
-                    <p className="text-slate-500 text-sm mt-1">You currently meet all competency requirements for your role.</p>
-                  </div>
-                )}
-              </div>
-              
-              <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-center">
-                 <p className="text-[10px] text-slate-400 font-medium italic">Generated based on latest job profile and assessment data on {itp ? new Date(itp.generatedAt).toLocaleDateString() : 'N/A'}</p>
-              </div>
+                </div>
             </div>
-          )}
 
-          {/* Career Path & Development Plan Section */}
-          {jobProfile && (
-            <div className="bg-white rounded-none border border-slate-300 overflow-hidden">
-              <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                <div className="flex items-center gap-2">
-                  <GraduationCap size={20} className="text-blue-600" />
-                  <h3 className="font-bold text-slate-900 uppercase tracking-tight">Career Path and Development Plan</h3>
-                </div>
-                <div className="flex flex-col items-end">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Succession Readiness</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl font-black text-slate-900">
-                      {(() => {
-                        const totalSteps = ORG_HIERARCHY_ORDER.indexOf(user.orgLevel || 'FR');
-                        const completedSteps = careerPath?.roadmap.filter(r => r.isReady).length || 0;
-                        return totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 100;
-                      })()}%
-                    </span>
-                    <div className="w-24 h-2 bg-slate-100 rounded-none overflow-hidden border border-slate-200">
-                      <div 
-                        className="h-full bg-blue-600 transition-all duration-1000" 
-                        style={{ width: `${(() => {
-                          const totalSteps = ORG_HIERARCHY_ORDER.indexOf(user.orgLevel || 'FR');
-                          const completedSteps = careerPath?.roadmap.filter(r => r.isReady).length || 0;
-                          return totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 100;
-                        })()}%` }}
-                      ></div>
+            <div className="bg-white border border-slate-200 p-6">
+                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-100 pb-2">Professional Identity</h3>
+                <div className="space-y-4">
+                    <div className="flex items-center justify-between bg-slate-50 p-3 border border-slate-100">
+                      <div className="flex items-center gap-3">
+                        <Users size={16} className="text-blue-600" />
+                        <span className="text-xs font-bold text-slate-600 uppercase tracking-widest">EPROM-ID</span>
+                      </div>
+                      <span className="text-sm font-black text-slate-900 tracking-widest">#{user.employeeId || 'PENDING'}</span>
                     </div>
-                  </div>
+                    <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-slate-100 flex items-center justify-center shrink-0 border border-slate-200">
+                            <MapPin size={18} className="text-slate-400" />
+                        </div>
+                        <div>
+                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Site Location</p>
+                            <p className="text-xs font-bold text-slate-800 uppercase">{user.location || 'General Site'}</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-slate-100 flex items-center justify-center shrink-0 border border-slate-200">
+                            <Building size={18} className="text-slate-400" />
+                        </div>
+                        <div>
+                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Current Project</p>
+                            <p className="text-xs font-bold text-slate-800 uppercase">{user.projectName || 'Unassigned'}</p>
+                        </div>
+                    </div>
                 </div>
-              </div>
-              
-              <div className="p-8">
-                {careerPath && careerPath.roadmap.length > 0 ? (
-                  <div className="relative space-y-12">
-                    {/* Vertical Line */}
-                    <div className="absolute left-[19px] top-2 bottom-2 w-0.5 bg-slate-100"></div>
+            </div>
+        </div>
 
-                    {careerPath.roadmap.map((milestone, mIdx) => {
-                      const isNextTarget = mIdx === 0;
-                      const isReady = milestone.isReady;
-                      const isDefined = milestone.isDefined;
+        {/* Right Column: Dynamic View */}
+        <div className="lg:col-span-8">
+            
+            {activeTab === 'ASSESSMENTS' && assessmentQueue && (
+                <div className="space-y-8 animate-in slide-in-from-right-4 duration-500">
+                    <div className="bg-blue-900 p-8 text-white relative overflow-hidden">
+                        <Zap className="absolute -right-8 -bottom-8 w-48 h-48 opacity-10" />
+                        <h2 className="text-2xl font-black uppercase tracking-tight mb-2">Assessment Routing Center</h2>
+                        <p className="text-blue-200 text-sm max-w-xl">
+                            All pending competencies are routed here based on their evaluation method. Complete your scheduled tasks to update your matrix profile.
+                        </p>
+                    </div>
 
-                      return (
-                        <div key={milestone.level} className="relative pl-12">
-                          {/* Milestone Marker */}
-                          <div className={`absolute left-0 top-0 w-10 h-10 rounded-none border-2 flex items-center justify-center z-10 transition-all duration-500 bg-white ${
-                            isReady ? 'border-emerald-500 text-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.2)]' : 
-                            isNextTarget ? 'border-blue-600 text-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.2)]' : 
-                            'border-slate-200 text-slate-300'
-                          }`}>
-                            {isReady ? <BadgeCheck size={20} /> : <Target size={18} />}
-                          </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {renderAssessmentSection(
+                            "Written Examinations Center", 
+                            assessmentQueue.writtenExams, 
+                            Monitor, 
+                            "Take Exam", 
+                            "bg-amber-50"
+                        )}
+                        {renderAssessmentSection(
+                            "Managerial Interviews", 
+                            assessmentQueue.managerialInterviews, 
+                            Users, 
+                            "Join Interview", 
+                            "bg-indigo-50"
+                        )}
+                        {renderAssessmentSection(
+                            "360-Degree Evaluation", 
+                            assessmentQueue.evaluations360, 
+                            Activity, 
+                            "Review Request", 
+                            "bg-emerald-50"
+                        )}
+                        {renderAssessmentSection(
+                            "Work Record & Evidence Portal", 
+                            assessmentQueue.workRecords, 
+                            FileUp, 
+                            "Upload Evidence", 
+                            "bg-blue-50"
+                        )}
+                    </div>
+                </div>
+            )}
 
-                          <div className={`p-6 border transition-all duration-500 ${
-                            isNextTarget ? 'bg-slate-50 border-blue-200 shadow-sm' : 
-                            'bg-white border-slate-100'
-                          }`}>
-                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                              <div>
-                                <div className="flex items-center gap-3 mb-1">
-                                  <h4 className={`text-lg font-black tracking-tight uppercase ${isNextTarget ? 'text-slate-900' : 'text-slate-600'}`}>
-                                    {ORG_LEVEL_LABELS[milestone.level]}
-                                  </h4>
-                                  {isReady && (
-                                    <span className="bg-emerald-500 text-white text-[9px] font-black px-2 py-0.5 uppercase tracking-widest">Readiness Verified</span>
-                                  )}
-                                  {isNextTarget && !isReady && (
-                                    <span className="bg-blue-600 text-white text-[9px] font-black px-2 py-0.5 uppercase tracking-widest animate-pulse">Current Target</span>
-                                  )}
-                                </div>
-                                <p className="text-xs text-slate-500 font-medium tracking-wide">
-                                  {isDefined ? `Official competency standards for ${ORG_LEVEL_LABELS[milestone.level]} within your General Department track.` : `Future succession benchmark for the General Department management path.`}
-                                </p>
-                              </div>
-                              {!isReady && isDefined && (
-                                <div className="bg-white px-4 py-2 border border-slate-200 flex flex-col items-center shrink-0">
-                                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Total Gaps</span>
-                                  <span className="text-lg font-black text-rose-600">{milestone.requirements.filter(r => r.gap > 0).length}</span>
-                                </div>
-                              )}
+            {activeTab === 'OVERVIEW' && (
+                <div className="space-y-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                         <div className="bg-white border border-slate-200 p-6">
+                            <div className="flex items-center justify-between mb-6">
+                                <h3 className="font-black text-slate-900 uppercase text-xs tracking-widest flex items-center gap-2">
+                                    <ShieldCheck size={18} className="text-emerald-500" /> Professional Certificates
+                                </h3>
+                                <button className="text-[10px] font-bold text-blue-600 hover:underline uppercase">Manage</button>
                             </div>
-
-                            {isDefined ? (
-                              <div className="overflow-x-auto">
-                                <table className="w-full text-xs text-left">
-                                  <thead className="text-[10px] font-black text-slate-400 uppercase bg-white border-b border-slate-100">
-                                    <tr>
-                                      <th className="px-4 py-2">Competency Requirement</th>
-                                      <th className="px-4 py-2 text-center w-24">Target</th>
-                                      <th className="px-4 py-2 text-center w-24">Current</th>
-                                      <th className="px-4 py-2 text-center w-24">Status</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody className="divide-y divide-slate-50">
-                                    {milestone.requirements.map(req => (
-                                      <tr key={req.skillId} className="group hover:bg-slate-100/50 transition-colors">
-                                        <td className="px-4 py-3 font-bold text-slate-700">{req.skillName}</td>
-                                        <td className="px-4 py-3 text-center font-black text-slate-900">{req.requiredScore}</td>
-                                        <td className={`px-4 py-3 text-center font-black ${req.currentScore >= req.requiredScore ? 'text-emerald-600' : 'text-blue-600'}`}>
-                                          {req.currentScore || '-'}
-                                        </td>
-                                        <td className="px-4 py-3 text-center">
-                                          {req.gap > 0 ? (
-                                            <div className="flex flex-col items-center">
-                                              <span className="text-rose-600 font-black">-{req.gap}</span>
+                            <div className="space-y-4">
+                                {user.certificates && user.certificates.length > 0 ? user.certificates.slice(0, 3).map(cert => (
+                                    <div key={cert.id} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100">
+                                        <div className="flex items-center gap-3">
+                                            <Award size={16} className="text-slate-400" />
+                                            <div>
+                                                <p className="text-xs font-bold text-slate-800 uppercase">{cert.name}</p>
+                                                <p className="text-[9px] text-slate-500 font-bold tracking-tighter uppercase">{cert.issuer}</p>
                                             </div>
-                                          ) : (
-                                            <CheckCircle size={14} className="mx-auto text-emerald-500" />
-                                          )}
-                                        </td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
-                            ) : (
-                              <div className="py-4 px-4 bg-slate-50 border border-dashed border-slate-200 text-center">
-                                <p className="text-xs text-slate-400 font-medium italic">General competency framework applies. Specific technical requirements not yet mapped for this level.</p>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="py-20 text-center">
-                    <div className="w-20 h-20 bg-slate-50 text-slate-400 rounded-none flex items-center justify-center mx-auto mb-6">
-                      <BadgeCheck size={40} />
+                                        </div>
+                                        <BadgeCheck size={16} className="text-emerald-500" />
+                                    </div>
+                                )) : (
+                                    <p className="text-xs text-slate-400 italic py-4">No certificates currently on record.</p>
+                                )}
+                            </div>
+                         </div>
+
+                         <div className="bg-white border border-slate-200 p-6">
+                            <div className="flex items-center justify-between mb-6">
+                                <h3 className="font-black text-slate-900 uppercase text-xs tracking-widest flex items-center gap-2">
+                                    <TrendingUp size={18} className="text-blue-600" /> Active Skill Gaps
+                                </h3>
+                                <button className="text-[10px] font-bold text-blue-600 hover:underline uppercase">View Plan</button>
+                            </div>
+                            <div className="space-y-4">
+                                {gaps.slice(0, 4).map((gap, idx) => (
+                                    <div key={idx} className="space-y-2">
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-[11px] font-bold text-slate-800 uppercase">{gap.skill?.name}</span>
+                                            <span className="text-[10px] font-black text-amber-600">-{gap.gap} Level</span>
+                                        </div>
+                                        <div className="h-1 bg-slate-100">
+                                            <div className="h-full bg-amber-400" style={{ width: `${(gap.current / gap.required) * 100}%` }}></div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                         </div>
                     </div>
-                    <h4 className="text-xl font-black text-slate-900 uppercase tracking-tight">Executive Status Achieved</h4>
-                    <p className="text-slate-500 text-sm mt-2 max-w-md mx-auto">You have reached the General Manager level. Your journey now focuses on organizational strategic goals and leadership excellence.</p>
-                  </div>
-                )}
-              </div>
-              
-              <div className="p-6 bg-slate-50 border-t border-slate-200">
-                 <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest italic">Official Succession Analysis & Development Path</p>
-                    <div className="flex gap-4">
-                      <div className="flex items-center gap-2">
-                         <div className="w-3 h-3 border-2 border-emerald-500 bg-white"></div>
-                         <span className="text-[10px] font-black text-slate-500 uppercase tracking-tighter">Ready</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                         <div className="w-3 h-3 border-2 border-blue-600 bg-white"></div>
-                         <span className="text-[10px] font-black text-slate-500 uppercase tracking-tighter">Current Target</span>
-                      </div>
+                </div>
+            )}
+
+            {activeTab === 'IDP' && (
+                 <div className="bg-white border border-slate-200 overflow-hidden animate-in slide-in-from-right-4 duration-500">
+                    <div className="p-8 border-b border-slate-100 bg-slate-50/50">
+                        <div className="flex items-center gap-3 mb-2">
+                            <Target size={24} className="text-slate-900" />
+                            <h2 className="text-xl font-black uppercase tracking-tight">Individual Development Plan</h2>
+                        </div>
+                        <p className="text-slate-500 text-xs font-medium">Auto-generated roadmap to bridge competency gaps based on current job requirements.</p>
+                    </div>
+                    <div className="p-8">
+                        {gaps.length > 0 ? (
+                            <div className="space-y-8">
+                                {gaps.map((gap, idx) => (
+                                    <div key={idx} className="flex gap-6 relative">
+                                        {idx !== gaps.length - 1 && <div className="absolute left-[11px] top-6 bottom-0 w-0.5 bg-slate-100"></div>}
+                                        <div className="w-6 h-6 rounded-none bg-slate-900 text-white flex items-center justify-center text-[10px] font-black z-10 shrink-0">
+                                            {idx + 1}
+                                        </div>
+                                        <div className="space-y-3 pb-8">
+                                            <div>
+                                                <h4 className="font-black text-slate-900 uppercase text-sm tracking-tight">{gap.skill?.name}</h4>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{gap.skill?.category}</p>
+                                            </div>
+                                            <div className="p-4 bg-slate-50 border border-slate-100 rounded-none space-y-3">
+                                                <div className="flex items-center gap-2">
+                                                    <BookOpen size={14} className="text-blue-600" />
+                                                    <p className="text-xs font-bold text-slate-700">Recommended Action:</p>
+                                                </div>
+                                                <p className="text-xs text-slate-600 leading-relaxed italic">
+                                                    {gap.gap >= 2 
+                                                        ? "Requires specialized external training module and technical certification." 
+                                                        : "On-the-job mentorship with department lead and internal knowledge transfer."}
+                                                </p>
+                                                <div className="pt-3 border-t border-slate-200 flex items-center justify-between">
+                                                    <span className="text-[10px] font-black uppercase text-slate-400">Status: Pending Verification</span>
+                                                    <button className="text-[10px] font-black uppercase text-blue-600 hover:underline">Request Support</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center py-12">
+                                <CheckCircle size={48} className="text-emerald-500 mx-auto mb-4" />
+                                <h4 className="text-lg font-black uppercase tracking-tight">Full Compliance Achieved</h4>
+                                <p className="text-slate-500 text-sm mt-2">You currently meet all required proficiency levels for your Job Profile.</p>
+                            </div>
+                        )}
                     </div>
                  </div>
-              </div>
-            </div>
-          )}
-          {/* Professional Assessment History Section */}
-          <div className="bg-white rounded-none border border-slate-300 overflow-hidden mt-8">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-              <div className="flex items-center gap-2">
-                <HistoryIcon size={20} className="text-slate-800" />
-                <h3 className="font-bold text-slate-900 uppercase tracking-tight">Professional Assessment History</h3>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Archived Records</span>
-                <span className="bg-slate-900 text-white text-[10px] font-black px-2 py-0.5 rounded-none uppercase tracking-wider">Historical</span>
-              </div>
-            </div>
+            )}
 
-            <div className="p-6">
-              {(() => {
-                const allAssessments = dataService.getAssessments({ subjectId: user.id });
-                const cycles = dataService.getAllCycles();
-                
-                // Group assessments by cycle or year
-                const groups: { [key: string]: any[] } = {};
-                allAssessments.forEach(a => {
-                  const cycle = cycles.find(c => c.id === a.cycleId);
-                  const groupName = cycle ? cycle.name : new Date(a.date).getFullYear().toString();
-                  if (!groups[groupName]) groups[groupName] = [];
-                  groups[groupName].push(a);
-                });
-
-                const groupNames = Object.keys(groups).sort((a, b) => b.localeCompare(a));
-
-                if (groupNames.length === 0) {
-                  return (
-                    <div className="py-12 text-center">
-                      <div className="w-16 h-16 bg-slate-50 text-slate-400 rounded-none flex items-center justify-center mx-auto mb-4">
-                        <HistoryIcon size={32} />
-                      </div>
-                      <h4 className="text-lg font-bold text-slate-900 uppercase tracking-tight">No History Found</h4>
-                      <p className="text-slate-500 text-sm mt-1">There are no historical assessment records for this employee profile.</p>
+            {activeTab === 'CAREER' && (
+                <div className="space-y-8 animate-in slide-in-from-right-4 duration-500">
+                    <div className="bg-slate-900 p-8 text-white">
+                        <GraduationCap size={32} className="mb-4 text-blue-400" />
+                        <h2 className="text-2xl font-black uppercase tracking-tight mb-2">Succession Roadmap</h2>
+                        <p className="text-slate-400 text-sm max-w-xl">
+                            Visualizing your professional trajectory within the EPROM organizational hierarchy.
+                        </p>
                     </div>
-                  );
-                }
-
-                return (
-                  <div className="space-y-8">
-                    {groupNames.map(groupName => (
-                      <div key={groupName} className="relative pl-8 border-l-2 border-slate-100 pb-8 last:pb-0">
-                         <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-none border-2 border-white bg-slate-900"></div>
-                         
-                         <div className="mb-4">
-                           <h4 className="text-sm font-black text-slate-900 uppercase tracking-[0.2em]">{groupName}</h4>
-                           <div className="h-0.5 w-12 bg-slate-900 mt-1"></div>
-                         </div>
-
-                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {groups[groupName].map((a, idx) => {
-                              const skill = dataService.getSkill(a.skillId);
-                              return (
-                                <div key={idx} className="bg-slate-50 border border-slate-200 p-4 rounded-none hover:bg-white transition-all hover:shadow-sm">
-                                  <div className="flex justify-between items-start mb-2">
-                                    <div className="flex items-center gap-2">
-                                      {a.type === 'ONLINE' && <Monitor size={14} className="text-blue-600" />}
-                                      {a.type === 'INTERVIEW' && <MessageSquare size={14} className="text-amber-600" />}
-                                      {(a.type === 'MANAGER' || a.type === 'PEER' || a.type === 'SELF') && <Users size={14} className="text-slate-900" />}
-                                      <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">
-                                        {a.type}
-                                      </span>
+                    
+                    <div className="space-y-6">
+                        {ORG_HIERARCHY_ORDER.slice(0, ORG_HIERARCHY_ORDER.indexOf(user.orgLevel || 'FR') + 1).reverse().map((level, idx) => {
+                            const isCurrent = level === user.orgLevel;
+                            const isPast = ORG_HIERARCHY_ORDER.indexOf(level) > ORG_HIERARCHY_ORDER.indexOf(user.orgLevel || 'FR');
+                            
+                            return (
+                                <div key={level} className={`p-6 border-l-4 transition-all ${isCurrent ? 'bg-blue-50 border-blue-600' : 'bg-white border-slate-200 opacity-60'}`}>
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-4">
+                                            <div className={`w-10 h-10 flex items-center justify-center font-black text-xs border ${isCurrent ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-400 border-slate-200'}`}>
+                                                L{ORG_HIERARCHY_ORDER.indexOf(level)}
+                                            </div>
+                                            <div>
+                                                <h4 className={`font-black uppercase text-sm tracking-tight ${isCurrent ? 'text-blue-900' : 'text-slate-900'}`}>
+                                                    {ORG_LEVEL_LABELS[level]}
+                                                </h4>
+                                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{isCurrent ? 'Current Assignment' : 'Historical Milestone'}</p>
+                                            </div>
+                                        </div>
+                                        {isCurrent && <BadgeCheck className="text-blue-600" />}
                                     </div>
-                                    <span className="text-xs font-black text-slate-900">{a.score}/5</span>
-                                  </div>
-                                  <h5 className="font-bold text-slate-900 text-sm leading-tight truncate">{skill?.name || 'Unknown Skill'}</h5>
-                                  <p className="text-[10px] text-slate-500 mt-2 font-medium">Recorded on {new Date(a.date).toLocaleDateString()}</p>
                                 </div>
-                              );
-                            })}
-                         </div>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
-            </div>
-            
-            <div className="p-4 bg-slate-100 border-t border-slate-200 flex justify-center">
-               <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest leading-none">End of Assessment History Log</p>
-            </div>
-          </div>
+                            );
+                        })}
+                        
+                        <div className="p-8 border-2 border-dashed border-slate-300 text-center space-y-4">
+                             <TrendingUp className="text-slate-300 mx-auto" size={32} />
+                             <div>
+                                <h4 className="font-black uppercase text-slate-400 text-sm tracking-widest">Next Career Target</h4>
+                                <p className="text-slate-400 text-xs italic">Complete the assessment queue to unlock the next level requirements.</p>
+                             </div>
+                             <button className="px-6 py-2 bg-slate-100 text-slate-400 text-[10px] font-black uppercase tracking-widest cursor-not-allowed">Locked</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
         </div>
       </div>
     </div>

@@ -99,7 +99,7 @@ const SkillDetailsModal: React.FC<{ skill: Skill; onClose: () => void }> = ({ sk
 
 
 // --- User Form (Unchanged Logic, styling preserved) ---
-const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void, onCancel: () => void }> = ({ initialData, onSave, onCancel }) => {
+const UserForm: React.FC<{ initialData?: User | null, currentUser: User, onSave: (u: User) => void, onCancel: () => void }> = ({ initialData, currentUser, onSave, onCancel }) => {
   const departments = dataService.getAllDepartments();
   const jobProfiles = dataService.getAllJobs();
   const potentialManagers = dataService.getAllUsers(); 
@@ -165,7 +165,7 @@ const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void,
     })
     .map(u => ({ 
         value: u.id, 
-        label: u.name, 
+        label: u.employeeId ? `${u.name} (#${u.employeeId})` : u.name, 
         subLabel: `${u.role} • ${departments.find(d => d.id === u.departmentId)?.name || 'No Dept'} • ${u.orgLevel || ''}` 
     }));
 
@@ -255,7 +255,8 @@ const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void,
       avatarUrl: formData.avatarUrl,
       orgLevel: formData.orgLevel,
       location: formData.location,
-      projectName: formData.projectName
+      projectName: formData.projectName,
+      employeeId: formData.employeeId
     };
     onSave(user);
   };
@@ -268,6 +269,17 @@ const UserForm: React.FC<{ initialData?: User | null, onSave: (u: User) => void,
                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Full Name</label>
                     <input required type="text" className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 focus:border-transparent outline-none transition-all placeholder:text-slate-600" 
                         value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="e.g. John Doe"/>
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Employee ID</label>
+                    <input 
+                        type="number" 
+                        className={`w-full px-3 py-2 border rounded-sm focus:ring-2 focus:ring-slate-900 outline-none transition-all placeholder:text-slate-600 ${currentUser.role !== Role.ADMIN ? 'bg-slate-100 text-slate-600 cursor-not-allowed' : 'bg-white text-slate-900 border-slate-300'}`}
+                        value={formData.employeeId || ''} 
+                        onChange={e => setFormData({...formData, employeeId: parseInt(e.target.value)})} 
+                        readOnly={currentUser.role !== Role.ADMIN}
+                        placeholder="Auto-generated if empty"
+                    />
                 </div>
                 <div>
                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Email Address</label>
@@ -698,8 +710,8 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
        assessmentQuestion: formData.assessmentQuestion,
        levels: formData.levels as any,
        status: 'APPROVED',
-       assessmentMethod: formData.assessmentMethod || '360_EVALUATION',
-       assessmentLink: formData.assessmentMethod === 'ONLINE_ASSESSMENT' ? formData.assessmentLink : undefined
+       assessmentMethod: formData.assessmentMethod || 'OJT_OBSERVATION',
+       assessmentLink: formData.assessmentMethod === 'WRITTEN_EXAM' ? formData.assessmentLink : undefined
     } as Skill);
   };
 
@@ -725,7 +737,7 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
                           category: formData.category || 'General',
                           id: '',
                           levels: {},
-                          assessmentMethod: '360_EVALUATION'
+                          assessmentMethod: 'OJT_OBSERVATION'
                       })}
                   </span>
                   <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-none font-bold uppercase">System Reference</span>
@@ -762,17 +774,18 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
             <SearchableSelect 
               label="Assessment Method"
               options={[
-                { value: '360_EVALUATION', label: '360° Evaluation (Self/Peer/Manager)' },
-                { value: 'DOCUMENT_UPLOAD', label: 'Evidence Upload (Certificates/Proof)' },
-                { value: 'ONLINE_ASSESSMENT', label: 'Online Assessment' },
-                { value: 'INTERVIEW', label: 'Managerial Interview' }
+                { value: 'OJT_OBSERVATION', label: 'OJT Observation (On-the-Job — Manager 80% / Self 20%)' },
+                { value: 'WRITTEN_EXAM', label: 'Written Examination (External / Online Test)' },
+                { value: 'PRACTICAL_DEMO', label: 'Practical Demonstration / Simulation' },
+                { value: 'INTERVIEW', label: 'Interview & Technical Discussion' },
+                { value: 'WORK_RECORD_REVIEW', label: 'Work Record / Case Study Review' }
               ]}
-              value={formData.assessmentMethod || '360_EVALUATION'}
+              value={formData.assessmentMethod || 'OJT_OBSERVATION'}
               onChange={val => setFormData({...formData, assessmentMethod: val as any})}
             />
          </div>
 
-         {formData.assessmentMethod === 'ONLINE_ASSESSMENT' && (
+         {formData.assessmentMethod === 'WRITTEN_EXAM' && (
            <div className="md:col-span-1">
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 flex justify-between items-center">
                 <span>Assessment Link</span>
@@ -986,7 +999,9 @@ const EmployeeNode: React.FC<{
                         </div>
                         <div className="flex flex-col">
                             <div className="flex items-center gap-2">
-                                <span className="font-bold text-slate-900">{user.name}</span>
+                                <span className="font-bold text-slate-900">
+                                    {user.name} {user.employeeId && <span className="text-slate-400 font-medium text-[10px] ml-1">#{user.employeeId}</span>}
+                                </span>
                                 <span className="text-indigo-700 font-bold uppercase text-[8px] bg-indigo-50 px-1.5 py-0.5 rounded-none border border-indigo-100">{user.orgLevel || 'N/A'}</span>
                             </div>
                             <div className="flex items-center gap-1.5 text-slate-500 font-medium">
@@ -1672,6 +1687,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
     return sortedUsers.filter(user => {
       const matchesSearch = searchTerm === '' ||
         user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.employeeId?.toString().includes(searchTerm) ||
         user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
         user.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (depts.find(d => d.id === user.departmentId)?.name || '').toLowerCase().includes(searchTerm.toLowerCase());
@@ -1796,7 +1812,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
       
       if (formType === 'USER') return (
         <FormPage title={`${titlePrefix}Employee Profile`} onBack={() => setFormMode(false)}>
-            <UserForm initialData={editItem} onSave={handleSave} onCancel={() => setFormMode(false)} />
+            <UserForm initialData={editItem} currentUser={currentUser} onSave={handleSave} onCancel={() => setFormMode(false)} />
         </FormPage>
       );
       if (formType === 'JOB') return (
@@ -2191,7 +2207,9 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                                                {user.avatarUrl ? <img src={user.avatarUrl} alt="" className="w-full h-full object-cover rounded-none"/> : user.name[0]}
                                            </div>
                                            <div>
-                                               <div className="font-bold text-slate-900 group-hover:text-slate-900 transition-colors">{user.name}</div>
+                                               <div className="font-bold text-slate-900 group-hover:text-slate-900 transition-colors">
+                                                    {user.name} {user.employeeId && <span className="text-slate-400 font-medium ml-1">#{user.employeeId}</span>}
+                                                </div>
                                                <div className="text-slate-600 text-xs">{user.email}</div>
                                            </div>
                                        </div>

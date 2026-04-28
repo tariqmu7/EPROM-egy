@@ -32,8 +32,8 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, onComplete, onCanc
         ];
       case 'SKILL':
         return [
-          ['Name', 'Category (Technical/Safety/Management/Soft Skills/Behavioral)', 'Assessment Question', 'Assessment Method (360_EVALUATION/DOCUMENT_UPLOAD/ONLINE_ASSESSMENT/INTERVIEW)', 'Assessment Link', 'Code', 'Description', 'Level 1 Desc', 'Level 2 Desc', 'Level 3 Desc', 'Level 4 Desc', 'Level 5 Desc', 'Level 1 Certs', 'Level 2 Certs', 'Level 3 Certs', 'Level 4 Certs', 'Level 5 Certs'],
-          ['React.js', 'Technical', 'How proficient is the employee in React?', '360_EVALUATION', '', 'TECH-REA-01', 'Proficiency in React.js library', 'Basic knowledge', 'Can build simple components', 'Can build complex apps', 'Expert level', 'Master level', 'React Basic Cert', '', '', '', '']
+          ['Name', 'Category (Technical/Safety/Management/Soft Skills/Behavioral)', 'Assessment Question', 'Assessment Method (OJT_OBSERVATION/WORK_RECORD_REVIEW/WRITTEN_EXAM/PRACTICAL_DEMO/INTERVIEW)', 'Assessment Link', 'Code', 'Description', 'Level 1 Desc', 'Level 2 Desc', 'Level 3 Desc', 'Level 4 Desc', 'Level 5 Desc', 'Level 1 Certs', 'Level 2 Certs', 'Level 3 Certs', 'Level 4 Certs', 'Level 5 Certs'],
+          ['React.js', 'Technical', 'How proficient is the employee in React?', 'OJT_OBSERVATION', '', 'TECH-REA-01', 'Proficiency in React.js library', 'Basic knowledge', 'Can build simple components', 'Can build complex apps', 'Expert level', 'Master level', 'React Basic Cert', '', '', '', '']
         ];
       case 'DEPT':
         return [
@@ -223,7 +223,7 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, onComplete, onCanc
                         5: { level: 5, description: '', requiredCertificates: [] },
                       },
                       status: 'APPROVED',
-                      assessmentMethod: '360_EVALUATION'
+                      assessmentMethod: 'OJT_OBSERVATION'
                     };
                     await dataService.addSkill(skill);
                     skills.push(skill);
@@ -261,7 +261,7 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, onComplete, onCanc
                   name: name,
                   category: row['Category (Technical/Safety/Management/Soft Skills/Behavioral)']?.toString() || 'Technical',
                   assessmentQuestion: row['Assessment Question']?.toString() || '',
-                  assessmentMethod: (row['Assessment Method (360_EVALUATION/DOCUMENT_UPLOAD/ONLINE_ASSESSMENT/INTERVIEW)']?.toString().toUpperCase() as any) || (existingSkill?.assessmentMethod) || '360_EVALUATION',
+                  assessmentMethod: (row['Assessment Method (OJT_OBSERVATION/WORK_RECORD_REVIEW/WRITTEN_EXAM/PRACTICAL_DEMO/INTERVIEW)']?.toString().toUpperCase() as any) || (existingSkill?.assessmentMethod) || 'OJT_OBSERVATION',
                   assessmentLink: row['Assessment Link']?.toString() || '',
                   code: row['Code']?.toString() || '',
                   description: row['Description']?.toString() || '',

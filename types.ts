@@ -21,6 +21,17 @@ export const ORG_LEVEL_LABELS: Record<OrgLevel, string> = {
   'FR': 'Fresh'
 };
 
+export const ORG_LEVEL_NUMBERS: Record<OrgLevel, number> = {
+  'CEO': 0,
+  'GM': 1,
+  'AGM': 2,
+  'DM': 3,
+  'SH': 4,
+  'SP': 5,
+  'JP': 6,
+  'FR': 7
+};
+
 // Strict Hierarchy Order (Top to Bottom)
 export const ORG_HIERARCHY_ORDER: OrgLevel[] = ['CEO', 'GM', 'AGM', 'DM', 'SH', 'SP', 'JP', 'FR'];
 
@@ -45,10 +56,23 @@ export interface Skill {
   assessmentQuestion?: string;
   levels: Record<number, SkillLevel>; 
   status?: 'APPROVED' | 'PENDING';
-  assessmentMethod: '360_EVALUATION' | 'DOCUMENT_UPLOAD' | 'ONLINE_ASSESSMENT' | 'INTERVIEW';
-  assessmentLink?: string; // Used specifically for ONLINE_ASSESSMENT to link to external forms
+  assessmentMethod: 'OJT_OBSERVATION' | 'WRITTEN_EXAM' | 'PRACTICAL_DEMO' | 'INTERVIEW' | 'WORK_RECORD_REVIEW';
+  assessmentLink?: string; // Used specifically for WRITTEN_EXAM to link to external forms
   description?: string; // Optional detailed description of the skill or assessment
   code?: string; // Automatically generated professional identifier
+  requiresCertificate?: boolean; // True if the skill needs external validation
+}
+
+export type AssessmentMethod = 'WRITTEN_EXAM' | 'PRACTICAL_DEMO' | 'OJT_OBSERVATION' | 'INTERVIEW' | 'WORK_RECORD_REVIEW';
+
+export interface ScheduledAssessment {
+  id: string;
+  userId: string;
+  skillId: string;
+  method: AssessmentMethod;
+  scheduledDate: string;
+  status: 'UPCOMING' | 'OVERDUE' | 'COMPLETED';
+  assessorId?: string;
 }
 
 export interface JobProfileSkill {
@@ -82,6 +106,17 @@ export interface Certificate {
   name: string;
   issuer: string;
   dateAchieved: string;
+  expiryDate?: string;
+  renewalStatus?: 'VALID' | 'EXPIRING_SOON' | 'EXPIRED';
+}
+
+export interface TrainingCourse {
+  id: string;
+  title: string;
+  provider: string;
+  linkedSkillIds: string[];
+  type: 'INTERNAL' | 'EXTERNAL' | 'OJT';
+  link?: string;
 }
 
 export interface User {
@@ -101,6 +136,7 @@ export interface User {
   certificates?: Certificate[];
   location?: string;
   projectName?: string;
+  employeeId?: number;
 }
 
 export interface AssessmentCycle {
@@ -119,7 +155,10 @@ export interface Assessment {
   score: number; // 1-5
   comment: string;
   date: string;
-  type: 'SELF' | 'PEER' | 'MANAGER' | 'ONLINE' | 'INTERVIEW';
+  // OJT_OBSERVATION uses SELF / PEER / MANAGER rater types (weighted towards MANAGER)
+  // WRITTEN_EXAM, PRACTICAL_DEMO, INTERVIEW → single direct score from rater
+  // WORK_RECORD_REVIEW → score assigned by manager via evidence/work record approval
+  type: 'SELF' | 'PEER' | 'MANAGER' | 'WRITTEN_EXAM' | 'PRACTICAL_DEMO' | 'INTERVIEW' | 'WORK_RECORD_REVIEW';
   cycleId?: string; // Optional for backward compatibility, but used for generated cycles
   isArchived?: boolean;
 }
@@ -139,12 +178,18 @@ export interface TrainingRecommendation {
   gap: number;
   recommendation: string;
   priority: 'HIGH' | 'MEDIUM' | 'LOW';
+  status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED';
+  targetDate: string;
+  supervisorSignOff: boolean;
+  courseId?: string;
 }
 
 export interface IndividualTrainingPlan {
+  id: string;
   userId: string;
   recommendations: TrainingRecommendation[];
   generatedAt: string;
+  status: 'ACTIVE' | 'ARCHIVED';
 }
 
 export interface ActivityLog {
@@ -190,7 +235,7 @@ export interface PromotionRequirement {
 export interface CareerLevelProgress {
   level: OrgLevel;
   requirements: PromotionRequirement[];
-  isReady: boolean;
+  readinessStatus: 'READY_NOW' | 'READY_1_2_YEARS' | 'READY_3_5_YEARS' | 'DEVELOPMENT_NEEDED';
   isDefined: boolean; // True if the job profile has requirements for this level
 }
 

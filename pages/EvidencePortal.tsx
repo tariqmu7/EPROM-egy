@@ -72,7 +72,7 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
               5: { level: 5, description: 'Expert', requiredCertificates: [] }
             },
             status: 'PENDING',
-            assessmentMethod: 'DOCUMENT_UPLOAD'
+            assessmentMethod: 'WORK_RECORD_REVIEW'
           };
           await dataService.addSkill(newSkill);
           finalSkillId = newSkill.id;
@@ -102,8 +102,8 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       <div className="pb-6 border-b border-slate-300">
-        <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Evidence Upload Portal</h2>
-        <p className="text-slate-700 text-sm mt-1">Submit technical evidence (PTW, Work Orders, Reports) for competency verification.</p>
+        <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Work Record & Evidence Portal</h2>
+        <p className="text-slate-700 text-sm mt-1">Submit technical evidence (PTW, Work Orders, Case Studies) for competency verification.</p>
       </div>
 
       {successMessage && (
@@ -155,7 +155,7 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
           <div className="bg-white p-6 rounded-none  border border-slate-300">
             <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
               <Upload size={20} className="text-slate-800" />
-              Submit New Evidence
+              Submit Work Record / Case Study
             </h3>
 
             <form onSubmit={handleSubmit} className="space-y-5">
@@ -201,7 +201,7 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
                 </div>
               )}
 
-              {selectedSkill?.assessmentMethod === 'ONLINE_ASSESSMENT' && selectedSkill.assessmentLink && (
+              {selectedSkill?.assessmentMethod === 'WRITTEN_EXAM' && selectedSkill.assessmentLink && (
                  <div className="bg-blue-50 border border-blue-200 p-4 rounded-sm flex flex-col gap-3">
                     <p className="text-sm text-blue-800 font-medium flex items-center gap-2">
                        <AlertCircle size={16} /> This competency requires an online assessment!

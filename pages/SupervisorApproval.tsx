@@ -1,46 +1,88 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { dataService } from '../services/store';
 import { User, Evidence } from '../types';
-import { CheckCircle, XCircle, FileText, Download, Eye, Clock, History } from 'lucide-react';
+import { CheckCircle, XCircle, FileText, Download, Eye, Clock, History, AlertTriangle } from 'lucide-react';
 
 export const SupervisorApproval: React.FC<{ currentUser: User }> = ({ currentUser }) => {
   const [selectedEvidence, setSelectedEvidence] = useState<Evidence | null>(null);
-  const [isViewing, setIsViewing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'PENDING' | 'HISTORY'>('PENDING');
-  const [selectedLevel, setSelectedLevel] = useState<number>(3);
+  const [isViewing, setIsViewing]               = useState(false);
+  const [activeTab, setActiveTab]               = useState<'PENDING' | 'HISTORY'>('PENDING');
+  const [selectedLevel, setSelectedLevel]       = useState<number>(3);
+  const [gapWarning, setGapWarning]             = useState<string | null>(null);
+  const [isProcessing, setIsProcessing]         = useState(false);
 
-  const users = useMemo(() => dataService.getAllUsers(), []);
+  const users  = useMemo(() => dataService.getAllUsers(),  []);
   const skills = useMemo(() => dataService.getAllSkills(), []);
+  const jobs   = useMemo(() => dataService.getAllJobs(),   []);
   
-  // Get all evidence for users managed by this supervisor
+  // Get all evidence for users visible to this supervisor
   const allTeamEvidences = useMemo(() => {
     const allEvidences = dataService.getEvidences();
-    if (currentUser.role === 'ADMIN') return allEvidences;
-    
-    // Only show evidence for direct reports
-    const myReports = users.filter(u => u.managerId === currentUser.id);
-    const myReportIds = new Set(myReports.map(u => u.id));
-    
-    return allEvidences.filter(e => myReportIds.has(e.userId));
-  }, [currentUser, users]);
+    if (currentUser.role === 'ADMIN' || currentUser.role === 'CEO') return allEvidences;
+
+    const visibleUserIds = new Set(
+      dataService.getVisibleUsers(currentUser).map(u => u.id)
+    );
+    return allEvidences.filter(e => visibleUserIds.has(e.userId));
+  }, [currentUser]);
 
   const pendingEvidences = useMemo(() => allTeamEvidences.filter(e => e.status === 'PENDING'), [allTeamEvidences]);
   const historyEvidences = useMemo(() => allTeamEvidences.filter(e => e.status !== 'PENDING').sort((a, b) => new Date(b.reviewedAt || 0).getTime() - new Date(a.reviewedAt || 0).getTime()), [allTeamEvidences]);
 
-  const handleApprove = async (id: string) => {
+  // ── Gap detection helper ─────────────────────────────────────────────────
+  const getRequiredLevel = useCallback((evidence: Evidence): number => {
+    const user = users.find(u => u.id === evidence.userId);
+    if (!user?.jobProfileId || !user.orgLevel) return 0;
+    const job = jobs.find(j => j.id === user.jobProfileId);
+    return job?.requirements[user.orgLevel]?.find(r => r.skillId === evidence.skillId)?.requiredLevel ?? 0;
+  }, [users, jobs]);
+
+  const handleApprove = useCallback(async (id: string) => {
+    if (!selectedEvidence || isProcessing) return;
+    setIsProcessing(true);
+
+    const required = getRequiredLevel(selectedEvidence);
+    const willHaveGap = required > 0 && selectedLevel < required;
+
     await dataService.updateEvidenceStatus(id, 'APPROVED', currentUser.id, selectedLevel);
+
+    if (willHaveGap) {
+      setGapWarning(
+        `Approved at Level ${selectedLevel}, but this skill requires Level ${required}. Training Plan updated automatically.`
+      );
+    } else {
+      setGapWarning(null);
+    }
+
     setSelectedEvidence(null);
     setIsViewing(false);
-    setSelectedLevel(3); // Reset to default
-  };
+    setSelectedLevel(3);
+    setIsProcessing(false);
+  }, [selectedEvidence, selectedLevel, currentUser.id, getRequiredLevel, isProcessing]);
 
-  const handleReject = async (id: string) => {
+  const handleReject = useCallback(async (id: string) => {
+    if (!selectedEvidence || isProcessing) return;
+    setIsProcessing(true);
+
+    const required = getRequiredLevel(selectedEvidence);
     await dataService.updateEvidenceStatus(id, 'REJECTED', currentUser.id);
+
+    setGapWarning(
+      required > 0
+        ? `Evidence rejected. Skill gap flagged (requires Level ${required}). Training Plan updated automatically.`
+        : 'Evidence rejected. Training Plan has been reviewed.'
+    );
+
     setSelectedEvidence(null);
     setIsViewing(false);
-  };
+    setIsProcessing(false);
+  }, [selectedEvidence, currentUser.id, getRequiredLevel, isProcessing]);
 
-  const getUserName = (id: string) => users.find(u => u.id === id)?.name || 'Unknown User';
+  const getUserName = (id: string) => {
+    const user = users.find(u => u.id === id);
+    if (!user) return 'Unknown User';
+    return user.employeeId ? `${user.name} (#${user.employeeId})` : user.name;
+  };
   const getSkillName = (id: string) => {
     const skill = skills.find(s => s.id === id);
     if (!skill) return 'Unknown Skill';
@@ -51,8 +93,23 @@ export const SupervisorApproval: React.FC<{ currentUser: User }> = ({ currentUse
     <div className="space-y-6 max-w-6xl mx-auto">
       <div className="pb-6 border-b border-slate-300">
         <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Supervisor Approval Workflow</h2>
-        <p className="text-slate-700 text-sm mt-1">Review and verify technical evidence submitted by your team.</p>
+        <p className="text-slate-700 text-sm mt-1">Review and verify work records and case studies submitted by your team.</p>
       </div>
+
+      {/* ── Gap / PDP Warning Banner ──────────────────────────────────────── */}
+      {gapWarning && (
+        <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-sm px-4 py-3 text-sm">
+          <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-500" />
+          <span>{gapWarning}</span>
+          <button
+            onClick={() => setGapWarning(null)}
+            className="ml-auto text-amber-600 hover:text-amber-800 font-bold leading-none"
+            aria-label="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1">
@@ -95,7 +152,7 @@ export const SupervisorApproval: React.FC<{ currentUser: User }> = ({ currentUse
                   {pendingEvidences.length === 0 && (
                     <div className="p-8 text-center text-slate-500">
                       <CheckCircle size={32} className="mx-auto mb-3 text-emerald-500" />
-                      <p>All caught up! No pending evidence.</p>
+                      <p>All caught up! No pending work records.</p>
                     </div>
                   )}
                 </>
@@ -162,13 +219,15 @@ export const SupervisorApproval: React.FC<{ currentUser: User }> = ({ currentUse
                     <div className="flex gap-2">
                       <button 
                         onClick={() => handleReject(selectedEvidence.id)}
-                        className="flex items-center gap-2 px-4 py-2 bg-white border border-rose-200 text-rose-700 hover:bg-rose-50 rounded-sm text-sm font-medium transition-colors"
+                        disabled={isProcessing}
+                        className="flex items-center gap-2 px-4 py-2 bg-white border border-rose-200 text-rose-700 hover:bg-rose-50 rounded-sm text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        <XCircle size={16} /> Reject (Gap)
+                        <XCircle size={16} /> {isProcessing ? 'Processing…' : 'Reject (Gap)'}
                       </button>
                       <button 
                         onClick={() => handleApprove(selectedEvidence.id)}
-                        className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white hover:bg-emerald-700 rounded-sm text-sm font-medium transition-colors "
+                        disabled={isProcessing}
+                        className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white hover:bg-emerald-700 rounded-sm text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <CheckCircle size={16} /> Approve
                       </button>
@@ -191,7 +250,7 @@ export const SupervisorApproval: React.FC<{ currentUser: User }> = ({ currentUse
                     <div>
                       <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Review History</h4>
                       <p className="text-sm text-slate-700">
-                        This evidence was <span className="font-bold">{selectedEvidence.status.toLowerCase()}</span> by <span className="font-semibold">{getUserName(selectedEvidence.reviewedBy || '')}</span> on {selectedEvidence.reviewedAt ? new Date(selectedEvidence.reviewedAt).toLocaleString() : 'Unknown Date'}.
+                        This work record was <span className="font-bold">{selectedEvidence.status.toLowerCase()}</span> by <span className="font-semibold">{getUserName(selectedEvidence.reviewedBy || '')}</span> on {selectedEvidence.reviewedAt ? new Date(selectedEvidence.reviewedAt).toLocaleString() : 'Unknown Date'}.
                       </p>
                     </div>
                   </div>

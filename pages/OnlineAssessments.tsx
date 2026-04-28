@@ -27,7 +27,7 @@ export const OnlineAssessments: React.FC<OnlineAssessmentsProps> = ({ currentUse
     const levelRequirements = jobProfile.requirements[currentUser.orgLevel] || [];
     return levelRequirements
       .map(req => dataService.getSkill(req.skillId))
-      .filter((s): s is Skill => !!s && s.assessmentMethod === 'ONLINE_ASSESSMENT');
+      .filter((s): s is Skill => !!s && s.assessmentMethod === 'WRITTEN_EXAM');
   }, [currentUser]);
 
   const assessments = useMemo(() => {
@@ -36,7 +36,7 @@ export const OnlineAssessments: React.FC<OnlineAssessmentsProps> = ({ currentUse
 
   const getSkillStatus = (skillId: string) => {
     const latest = assessments
-      .filter(a => a.skillId === skillId && a.type === 'ONLINE')
+      .filter(a => a.skillId === skillId && a.type === 'WRITTEN_EXAM')
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
     
     return latest || null;
@@ -46,8 +46,8 @@ export const OnlineAssessments: React.FC<OnlineAssessmentsProps> = ({ currentUse
     <div className="space-y-8 max-w-5xl mx-auto">
       <div className="pb-6 border-b border-slate-300 flex justify-between items-end">
         <div>
-          <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Online Assessments</h2>
-          <p className="text-slate-700 text-sm mt-1">Access external assessment platforms and track your technical evaluation progress.</p>
+          <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Written Examinations</h2>
+          <p className="text-slate-700 text-sm mt-1">Access external examination platforms and track your technical test progress.</p>
         </div>
         <div className="bg-blue-50 p-2 rounded-sm border border-blue-200 flex items-center gap-2 text-sm text-blue-700 font-medium">
           <Monitor size={16} />
@@ -60,9 +60,9 @@ export const OnlineAssessments: React.FC<OnlineAssessmentsProps> = ({ currentUse
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-none bg-slate-50 text-slate-400 mb-4">
             <CheckCircle size={32} />
           </div>
-          <h3 className="text-xl font-bold text-slate-900 mb-2">No Online Assessments Required</h3>
+          <h3 className="text-xl font-bold text-slate-900 mb-2">No Written Examinations Required</h3>
           <p className="text-slate-600 max-w-md mx-auto">
-            Your current job profile and hierarchy level do not require any external online assessments at this time.
+            Your current job profile and hierarchy level do not require any external written examinations at this time.
           </p>
         </div>
       ) : (
@@ -88,12 +88,12 @@ export const OnlineAssessments: React.FC<OnlineAssessmentsProps> = ({ currentUse
                       )}
                     </div>
                     <h3 className="text-xl font-bold text-slate-900 mb-1">{skill.name}</h3>
-                    <p className="text-slate-600 text-sm max-w-2xl">{skill.description || 'Professional technical assessment for ' + skill.name + ' competency.'}</p>
+                    <p className="text-slate-600 text-sm max-w-2xl">{skill.description || 'Professional written examination for ' + skill.name + ' competency.'}</p>
                     
                     {skill.assessmentLink && (
                        <div className="mt-4 flex items-center gap-2 text-xs text-slate-500 font-medium">
                           <AlertCircle size={14} className="text-amber-500" />
-                          <span>Assessments take place on an external platform (e.g. Google Forms).</span>
+                          <span>Examinations take place on an external platform (e.g. Google Forms).</span>
                        </div>
                     )}
                   </div>
@@ -117,7 +117,7 @@ export const OnlineAssessments: React.FC<OnlineAssessmentsProps> = ({ currentUse
                           <span className="text-xs font-bold uppercase tracking-wider">Status: Pending</span>
                         </div>
                         <p className="text-[11px] text-blue-600/80 leading-tight">
-                          Please complete the online assessment to fulfill this competency requirement.
+                          Please complete the written examination to fulfill this competency requirement.
                         </p>
                       </div>
                     )}
@@ -132,7 +132,7 @@ export const OnlineAssessments: React.FC<OnlineAssessmentsProps> = ({ currentUse
                         : 'bg-slate-100 text-slate-400 cursor-not-allowed border-slate-200'
                       }`}
                     >
-                      {skill.assessmentLink ? 'Begin Assessment' : 'No Link Provided'}
+                      {skill.assessmentLink ? 'Begin Examination' : 'No Link Provided'}
                       <ExternalLink size={16} />
                     </a>
                   </div>
@@ -150,9 +150,9 @@ export const OnlineAssessments: React.FC<OnlineAssessmentsProps> = ({ currentUse
             <BookOpen size={20} />
           </div>
           <div>
-            <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-2">Assessment Integration Note</h4>
+            <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-2">Examination Integration Note</h4>
             <p className="text-xs text-slate-600 leading-relaxed max-w-3xl">
-              EPROM CMS is structured to ingest results from external assessment providers. Once you complete an assessment, the final score and evaluator comments will be synchronized with your professional record based on your workforce identifier. This ensures your competency matrix remains updated without requiring manual evidence submission for these specific skills.
+              EPROM CMS is structured to ingest results from external examination providers. Once you complete an exam, the final score and evaluator comments will be synchronized with your professional record based on your workforce identifier. This ensures your competency matrix remains updated without requiring manual evidence submission for these specific skills.
             </p>
           </div>
         </div>
