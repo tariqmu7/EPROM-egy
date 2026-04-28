@@ -1,4 +1,4 @@
-import { User, Role, JobProfile, Skill, Department, Assessment, ActivityLog, ORG_HIERARCHY_ORDER, ORG_LEVEL_NUMBERS, Notification, AssessmentCycle, Nomination, IndividualTrainingPlan, TrainingRecommendation, OrgLevel, Evidence, PromotionRequirement, CareerProgressionPlan, CareerLevelProgress, TrainingCourse, ScheduledAssessment, AssessmentMethod } from '../types';
+import { User, Role, JobProfile, Skill, Department, Assessment, ActivityLog, ORG_HIERARCHY_ORDER, ORG_LEVEL_NUMBERS, Notification, AssessmentCycle, Nomination, IndividualTrainingPlan, TrainingRecommendation, OrgLevel, Evidence, PromotionRequirement, CareerProgressionPlan, CareerLevelProgress, TrainingCourse, ScheduledAssessment, AssessmentMethod, UserStatus } from '../types';
 import { db, auth } from '../firebase';
 import { 
   collection, 
@@ -670,8 +670,27 @@ class DataService {
     if (hasSubordinates) return true;
 
     // Default fallback to hierarchy level
-    const managerialLevels: OrgLevel[] = ['GM', 'AGM', 'DM', 'SH'];
+    const managerialLevels: OrgLevel[] = ['CEO', 'GM', 'AGM', 'DM', 'SH'];
     return user.orgLevel ? managerialLevels.includes(user.orgLevel) : false;
+  }
+
+  getVisibleUsers(currentUser: User): User[] {
+    if (currentUser.role === Role.ADMIN || currentUser.role === Role.CEO) {
+      return this.users;
+    }
+    
+    // Managers can see their subordinates and indirect subordinates
+    const subordinates = this.getSubordinatesRecursive(currentUser.id);
+    return [currentUser, ...subordinates];
+  }
+
+  private getSubordinatesRecursive(managerId: string): User[] {
+    const direct = this.users.filter(u => u.managerId === managerId);
+    let all: User[] = [...direct];
+    for (const d of direct) {
+      all = [...all, ...this.getSubordinatesRecursive(d.id)];
+    }
+    return all;
   }
 
   // Objective 1: Certification Expiry & Compliance Workflows
@@ -986,7 +1005,7 @@ class DataService {
     if (!skill) return 0;
 
     // Behavioral (360) Logic
-    if (skill.assessmentMethod === '360_EVALUATION' || !skill.assessmentMethod) {
+    if (skill.assessmentMethod === 'OJT_OBSERVATION' || !skill.assessmentMethod) {
       let userAssessments = this.assessments.filter(a => a.subjectId === userId && a.skillId === skillId);
       if (!includeArchived) {
         userAssessments = userAssessments.filter(a => !a.isArchived);
@@ -1016,7 +1035,7 @@ class DataService {
     // Evidence, Online Assessment, or Interview Logic
     else {
       // Check for direct Assessment results first (Online/Interview)
-      let directAssessments = this.assessments.filter(a => a.subjectId === userId && a.skillId === skillId && (a.type === 'ONLINE' || a.type === 'INTERVIEW'));
+      let directAssessments = this.assessments.filter(a => a.subjectId === userId && a.skillId === skillId && (a.type === 'WRITTEN_EXAM' || a.type === 'INTERVIEW' || a.type === 'PRACTICAL_DEMO'));
       if (!includeArchived) {
         directAssessments = directAssessments.filter(a => !a.isArchived);
       }

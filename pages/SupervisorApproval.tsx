@@ -21,7 +21,7 @@ export const SupervisorApproval: React.FC<{ currentUser: User }> = ({ currentUse
     if (currentUser.role === 'ADMIN' || currentUser.role === 'CEO') return allEvidences;
 
     const visibleUserIds = new Set(
-      dataService.getVisibleUsers(currentUser).map(u => u.id)
+      dataService.getVisibleUsers(currentUser).map((u: User) => u.id)
     );
     return allEvidences.filter(e => visibleUserIds.has(e.userId));
   }, [currentUser]);
@@ -34,7 +34,8 @@ export const SupervisorApproval: React.FC<{ currentUser: User }> = ({ currentUse
     const user = users.find(u => u.id === evidence.userId);
     if (!user?.jobProfileId || !user.orgLevel) return 0;
     const job = jobs.find(j => j.id === user.jobProfileId);
-    return job?.requirements[user.orgLevel]?.find(r => r.skillId === evidence.skillId)?.requiredLevel ?? 0;
+    const requirements = job?.requirements as any;
+    return requirements?.[user.orgLevel]?.find((r: any) => r.skillId === evidence.skillId)?.requiredLevel ?? 0;
   }, [users, jobs]);
 
   const handleApprove = useCallback(async (id: string) => {

@@ -16,6 +16,7 @@ import {
   FileText, 
   Briefcase, 
   MapPin, 
+  User as UserIcon,
   ShieldCheck, 
   GraduationCap, 
   Target, 

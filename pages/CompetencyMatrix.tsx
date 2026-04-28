@@ -22,7 +22,7 @@ export const CompetencyMatrix: React.FC<{ currentUser: User }> = ({ currentUser 
   const relevantUsers = useMemo(() => {
     let filtered = dataService.getVisibleUsers(currentUser);
     if (selectedDeptId !== 'ALL') {
-      filtered = filtered.filter(u => u.departmentId === selectedDeptId);
+      filtered = filtered.filter((u: User) => u.departmentId === selectedDeptId);
     }
     return filtered;
   }, [currentUser, selectedDeptId]);
@@ -30,10 +30,11 @@ export const CompetencyMatrix: React.FC<{ currentUser: User }> = ({ currentUser 
   // ── Pre-compute: union of all required skill IDs for visible users ───────
   const requiredSkillIds = useMemo(() => {
     const ids = new Set<string>();
-    relevantUsers.forEach(user => {
+    relevantUsers.forEach((user: User) => {
       if (user.jobProfileId && user.orgLevel) {
         const job = jobs.find(j => j.id === user.jobProfileId);
-        job?.requirements[user.orgLevel]?.forEach(req => ids.add(req.skillId));
+        const requirements = job?.requirements as any;
+        requirements?.[user.orgLevel]?.forEach((req: any) => ids.add(req.skillId));
       }
     });
     return ids; // keep as Set for O(1) lookups below
@@ -49,7 +50,7 @@ export const CompetencyMatrix: React.FC<{ currentUser: User }> = ({ currentUser 
   //    weights are all handled there — no duplicate logic here).
   const scoreMap = useMemo<Record<string, Record<string, number>>>(() => {
     const map: Record<string, Record<string, number>> = {};
-    relevantUsers.forEach(user => {
+    relevantUsers.forEach((user: User) => {
       map[user.id] = {};
       relevantSkills.forEach(skill => {
         map[user.id][skill.id] = dataService.getUserSkillScore(user.id, skill.id);
@@ -148,7 +149,7 @@ export const CompetencyMatrix: React.FC<{ currentUser: User }> = ({ currentUser 
               </tr>
             </thead>
             <tbody>
-              {relevantUsers.map((user, index) => {
+              {relevantUsers.map((user: User, index: number) => {
                 const job = jobs.find(j => j.id === user.jobProfileId);
 
                 return (

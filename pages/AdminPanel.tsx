@@ -1812,7 +1812,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
       
       if (formType === 'USER') return (
         <FormPage title={`${titlePrefix}Employee Profile`} onBack={() => setFormMode(false)}>
-            <UserForm initialData={editItem} currentUser={currentUser} onSave={handleSave} onCancel={() => setFormMode(false)} />
+            {currentUser && <UserForm initialData={editItem} currentUser={currentUser} onSave={handleSave} onCancel={() => setFormMode(false)} />}
         </FormPage>
       );
       if (formType === 'JOB') return (
