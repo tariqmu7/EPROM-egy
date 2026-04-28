@@ -71,7 +71,7 @@ export const AssessmentHistoryLog: React.FC<AssessmentHistoryLogProps> = ({ curr
               onChange={(e) => setMethodFilter(e.target.value)}
             >
               {methods.map(m => (
-                <option key={m} value={m}>{m.replace(/_/g, ' ')}</option>
+                <option key={m} value={m}>{m?.replace(/_/g, ' ')}</option>
               ))}
             </select>
           </div>
@@ -115,7 +115,7 @@ export const AssessmentHistoryLog: React.FC<AssessmentHistoryLogProps> = ({ curr
                             item.method === 'WORK_RECORD_REVIEW' ? 'bg-blue-50 text-blue-700 border-blue-100' :
                             'bg-slate-50 text-slate-600 border-slate-200'
                         }`}>
-                            {item.method.replace(/_/g, ' ')}
+                            {item.method?.replace(/_/g, ' ') || 'EVALUATION'}
                         </span>
                     </td>
                     <td className="px-6 py-4">

@@ -106,5 +106,15 @@ service cloud.firestore {
       allow update: if isAuthenticated() && (resource.data.raterId == request.auth.uid || isAdmin());
       allow delete: if isAdmin();
     }
+
+    match /scheduledAssessments/{assessmentId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /trainingCourses/{courseId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
   }
 }
