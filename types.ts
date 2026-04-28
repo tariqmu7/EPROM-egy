@@ -155,11 +155,9 @@ export interface Assessment {
   score: number; // 1-5
   comment: string;
   date: string;
-  // OJT_OBSERVATION uses SELF / PEER / MANAGER rater types (weighted towards MANAGER)
-  // WRITTEN_EXAM, PRACTICAL_DEMO, INTERVIEW → single direct score from rater
-  // WORK_RECORD_REVIEW → score assigned by manager via evidence/work record approval
+  method: AssessmentMethod;
   type: 'SELF' | 'PEER' | 'MANAGER' | 'WRITTEN_EXAM' | 'PRACTICAL_DEMO' | 'INTERVIEW' | 'WORK_RECORD_REVIEW';
-  cycleId?: string; // Optional for backward compatibility, but used for generated cycles
+  cycleId?: string;
   isArchived?: boolean;
 }
 

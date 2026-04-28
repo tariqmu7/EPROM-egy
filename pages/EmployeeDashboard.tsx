@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { User, Role, JobProfile, Skill, IndividualTrainingPlan, ORG_HIERARCHY_ORDER, ORG_LEVEL_LABELS, ScheduledAssessment } from '../types';
 import { dataService } from '../services/store';
+import { AssessmentHistoryLog } from '../components/AssessmentHistoryLog';
 import { 
   AlertCircle, 
   CheckCircle, 
@@ -46,7 +47,7 @@ interface EmployeeDashboardProps {
 }
 
 export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({ user }) => {
-  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'ASSESSMENTS' | 'IDP' | 'CAREER'>('OVERVIEW');
+  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'ASSESSMENTS' | 'IDP' | 'CAREER' | 'HISTORY'>('OVERVIEW');
   const [assessmentQueue, setAssessmentQueue] = useState<any>(null);
 
   const jobProfile = useMemo(() => user.jobProfileId ? dataService.getJobProfile(user.jobProfileId) : null, [user.jobProfileId]);
@@ -110,9 +111,23 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                     <UserCheck size={10} /> Assessor: {dataService.getUserById(item.assessorId)?.name || 'TBD'}
                 </p>
             )}
-            <button className="w-full mt-2 py-2 bg-slate-900 text-white text-[10px] font-bold uppercase tracking-widest hover:bg-slate-800 transition-all flex items-center justify-center gap-2">
-              {actionLabel} <ChevronRight size={12} />
-            </button>
+            {item.status === 'COMPLETED' ? (
+                <div className="mt-4 p-4 bg-emerald-50 border border-emerald-100 rounded-none">
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">Achieved Proficiency</span>
+                        <span className="text-sm font-black text-emerald-900">Level {item.achievedScore}</span>
+                    </div>
+                    {item.comment && (
+                        <blockquote className="text-[11px] text-slate-600 italic border-l-2 border-emerald-200 pl-3 py-1 bg-white/50">
+                            "{item.comment}"
+                        </blockquote>
+                    )}
+                </div>
+            ) : (
+                <button className="w-full mt-2 py-2 bg-slate-900 text-white text-[10px] font-bold uppercase tracking-widest hover:bg-slate-800 transition-all flex items-center justify-center gap-2">
+                    {actionLabel} <ChevronRight size={12} />
+                </button>
+            )}
           </div>
         )) : (
           <div className="p-8 text-center text-slate-400">
@@ -173,6 +188,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
         {[
           { id: 'OVERVIEW', label: 'Dashboard Overview', icon: LayoutGrid },
           { id: 'ASSESSMENTS', label: 'Assessment Queue', icon: Zap },
+          { id: 'HISTORY', label: 'Evaluation History', icon: HistoryIcon },
           { id: 'IDP', label: 'Individual Development Plan', icon: Target },
           { id: 'CAREER', label: 'Career Progression', icon: GraduationCap },
         ].map(tab => (
@@ -292,6 +308,19 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                             "bg-blue-50"
                         )}
                     </div>
+                </div>
+            )}
+
+            {activeTab === 'HISTORY' && (
+                <div className="space-y-8 animate-in slide-in-from-right-4 duration-500">
+                    <div className="bg-slate-900 p-8 text-white relative overflow-hidden">
+                        <HistoryIcon className="absolute -right-8 -bottom-8 w-48 h-48 opacity-10" />
+                        <h2 className="text-2xl font-black uppercase tracking-tight mb-2">Evaluation History Ledger</h2>
+                        <p className="text-slate-400 text-sm max-w-xl">
+                            Permanent registry of all technical interviews, written exams, and evidence-based reviews.
+                        </p>
+                    </div>
+                    <AssessmentHistoryLog currentUser={user} />
                 </div>
             )}
 

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { dataService } from '../services/store';
 import { User, Skill } from '../types';
-import { Star, MessageSquare, Send, CheckCircle, User as UserIcon } from 'lucide-react';
+import { Star, MessageSquare, Send, CheckCircle, User as UserIcon, Search, AlertTriangle } from 'lucide-react';
 
 const UserCard = ({ user, isSelected, onClick, role, isSelf }: { user: User, isSelected: boolean, onClick: () => void, role?: string, isSelf?: boolean }) => {
   const jobProfile = user.jobProfileId ? dataService.getJobProfile(user.jobProfileId) : null;
@@ -10,16 +10,32 @@ const UserCard = ({ user, isSelected, onClick, role, isSelf }: { user: User, isS
     <button
       type="button"
       onClick={onClick}
-      className={`flex flex-col items-center p-3 rounded-none border-2 transition-all w-32 flex-shrink-0 ${isSelected ? 'border-slate-900 bg-slate-50  scale-105' : 'border-slate-300 bg-white hover:border-slate-300 hover:'}`}
+      className={`flex flex-col items-center p-4 border-2 transition-all group relative ${
+        isSelected 
+          ? 'border-slate-900 bg-slate-900 text-white shadow-xl -translate-y-1' 
+          : 'border-slate-200 bg-white hover:border-slate-400 text-slate-800'
+      }`}
     >
-      <div className={`w-10 h-10 rounded-none flex items-center justify-center text-lg font-bold mb-2 ${isSelf ? 'bg-blue-700 text-white' : 'bg-slate-200 text-slate-700'}`}>
+      <div className={`w-12 h-12 flex items-center justify-center text-xl font-black mb-3 ${
+        isSelected ? 'bg-white text-slate-900' : (isSelf ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400 group-hover:text-slate-600')
+      }`}>
         {user.name.charAt(0)}
       </div>
-      <div className="text-xs font-bold text-slate-800 text-center w-full leading-tight mb-1" title={user.name}>
-        {user.name} {user.employeeId && <span className="text-slate-400">#{user.employeeId}</span>}
+      <div className="text-[11px] font-black uppercase tracking-tight text-center w-full leading-tight mb-1">
+        {user.name}
       </div>
-      {jobProfile && <div className="text-[9px] text-slate-500 text-center leading-tight mb-1 line-clamp-2" title={jobProfile.title}>{jobProfile.title}</div>}
-      {role && <div className="text-[9px] font-bold text-slate-800 uppercase mt-auto pt-1">{role}</div>}
+      {user.employeeId && (
+        <div className={`text-[10px] font-bold ${isSelected ? 'text-slate-400' : 'text-slate-500'}`}>
+          #{user.employeeId}
+        </div>
+      )}
+      {role && (
+        <div className={`absolute -top-2 -right-2 px-2 py-0.5 text-[8px] font-black uppercase tracking-widest border ${
+          isSelected ? 'bg-blue-500 border-blue-400 text-white' : 'bg-white border-slate-200 text-slate-500'
+        }`}>
+          {role}
+        </div>
+      )}
     </button>
   );
 };
@@ -32,6 +48,7 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
   const [feedback, setFeedback] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
 
   const users = useMemo(() => dataService.getPublicUsers(), []);
   
@@ -152,59 +169,72 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
         </div>
       )}
 
-      <div className="bg-white p-8 rounded-none  border border-slate-300">
-        <div className="mb-10">
-          <label className="block text-sm font-bold text-slate-700 mb-4 text-center">Select Employee for 360° Evaluation</label>
-          
-          <div className="flex flex-col items-center gap-6 bg-slate-50 p-8 rounded-none border border-slate-300 overflow-x-auto no-scrollbar">
-            {/* Manager */}
-            {manager && (
-              <div className="flex flex-col items-center">
-                <UserCard user={manager} isSelected={selectedSubjectId === manager.id} onClick={() => setSelectedSubjectId(manager.id)} role="Manager" />
-                <div className="h-8 w-px bg-slate-300 mt-2"></div>
-              </div>
-            )}
-
-            {/* Middle Row: Peers and Self */}
-            <div className="flex items-center justify-center gap-2 min-w-max">
-              {/* Peers (Left) */}
-              {peers.slice(0, Math.ceil(peers.length / 2)).map(peer => (
-                <div key={peer.id} className="flex items-center gap-2">
-                  <UserCard user={peer} isSelected={selectedSubjectId === peer.id} onClick={() => setSelectedSubjectId(peer.id)} role="Peer" />
-                  <div className="w-4 h-px bg-slate-300"></div>
-                </div>
-              ))}
-
-              {/* Self */}
-              <div className="relative">
-                <div className="absolute -top-2 -left-2 -right-2 -bottom-2 bg-slate-200 rounded-none border-2 border-slate-300 z-0"></div>
-                <div className="relative z-10">
-                  <UserCard user={currentUser} isSelected={selectedSubjectId === currentUser.id} onClick={() => setSelectedSubjectId(currentUser.id)} role="Self" isSelf />
-                </div>
-              </div>
-
-              {/* Peers (Right) */}
-              {peers.slice(Math.ceil(peers.length / 2)).map(peer => (
-                <div key={peer.id} className="flex items-center gap-2">
-                  <div className="w-4 h-px bg-slate-300"></div>
-                  <UserCard user={peer} isSelected={selectedSubjectId === peer.id} onClick={() => setSelectedSubjectId(peer.id)} role="Peer" />
-                </div>
-              ))}
+      <div className="bg-white border border-slate-300 overflow-hidden">
+        <div className="p-8 border-b border-slate-200 bg-slate-50/50">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div>
+              <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Select Employee for 360° Evaluation</h3>
+              <p className="text-slate-500 text-xs font-medium mt-1">Evaluations are categorized by professional relationship.</p>
             </div>
+            <div className="relative max-w-xs w-full">
+              <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <input 
+                type="text"
+                placeholder="Search team members..."
+                className="w-full pl-10 pr-4 py-2 bg-white border border-slate-300 text-sm focus:ring-2 focus:ring-slate-900 outline-none transition-all"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+          </div>
+        </div>
+        
+        <div className="p-8 space-y-12">
+          {/* Relationship Categories */}
+          {[
+            { title: 'My Supervisor', users: manager ? [manager] : [], role: 'Supervisor' },
+            { title: 'Self Evaluation', users: [currentUser], role: 'Self' },
+            { title: 'My Colleagues (Peers)', users: peers, role: 'Peer' },
+            { title: 'My Direct Reports', users: subordinates, role: 'Team' }
+          ].map((category, idx) => {
+            const filteredUsers = category.users.filter(u => 
+              u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              u.employeeId?.toString().includes(searchTerm)
+            );
 
-            {/* Subordinates */}
-            {subordinates.length > 0 && (
-              <div className="flex flex-col items-center w-full min-w-max">
-                <div className="h-8 w-px bg-slate-300 mb-2"></div>
-                <div className="flex justify-center gap-6">
-                  {subordinates.map(sub => (
-                    <UserCard key={sub.id} user={sub} isSelected={selectedSubjectId === sub.id} onClick={() => setSelectedSubjectId(sub.id)} role="Team" />
+            if (filteredUsers.length === 0) return null;
+
+            return (
+              <div key={idx} className="space-y-4">
+                <div className="flex items-center gap-4">
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] whitespace-nowrap">{category.title}</h4>
+                  <div className="h-px bg-slate-200 flex-1"></div>
+                  <span className="text-[10px] font-black text-slate-300">{filteredUsers.length} Found</span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                  {filteredUsers.map(user => (
+                    <UserCard 
+                      key={user.id} 
+                      user={user} 
+                      isSelected={selectedSubjectId === user.id} 
+                      onClick={() => setSelectedSubjectId(user.id)} 
+                      role={category.role}
+                      isSelf={user.id === currentUser.id}
+                    />
                   ))}
                 </div>
               </div>
-            )}
-          </div>
+            );
+          })}
+
+          {searchTerm && !manager && peers.length === 0 && subordinates.length === 0 && (
+            <div className="py-12 text-center">
+              <AlertTriangle className="mx-auto text-slate-300 mb-4" size={48} />
+              <p className="text-slate-500 font-medium italic">No employees found matching "{searchTerm}"</p>
+            </div>
+          )}
         </div>
+      </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {selectedSubjectId ? (
@@ -308,6 +338,5 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
           )}
         </form>
       </div>
-    </div>
-  );
+    );
 };

@@ -838,7 +838,7 @@ class DataService {
     if (!job) return null;
 
     const requirements = job.requirements[user.orgLevel] || [];
-    const scheduled = this.scheduledAssessments.filter(a => a.userId === userId && a.status !== 'COMPLETED');
+    const scheduled = this.scheduledAssessments.filter(a => a.userId === userId);
 
     const writtenExams: any[] = [];
     const managerialInterviews: any[] = [];
@@ -852,6 +852,12 @@ class DataService {
         if (!skill) return;
 
         const assessment = scheduled.find(s => s.skillId === req.skillId);
+        
+        // Find the actual assessment record for this skill if it was completed
+        const result = assessment?.status === 'COMPLETED' 
+            ? this.assessments.find(a => a.subjectId === userId && a.skillId === req.skillId && !a.isArchived)
+            : null;
+
         const item = {
           skill,
           requiredLevel: req.requiredLevel,
@@ -859,7 +865,9 @@ class DataService {
           scheduledDate: assessment?.scheduledDate,
           status: assessment?.status || 'PENDING_SCHEDULE',
           assessorId: assessment?.assessorId,
-          assessmentId: assessment?.id
+          assessmentId: assessment?.id,
+          achievedScore: result?.score,
+          comment: result?.comment
         };
 
         if (skill.requiresCertificate) {
@@ -1242,6 +1250,14 @@ class DataService {
     };
     await this.persistItem('assessments', newAssessment);
     
+    // Auto-update notification for the subject
+    await this.addNotification({
+      userId: assessment.subjectId,
+      title: 'New Evaluation Result',
+      message: `A new ${assessment.method} evaluation has been registered for your profile.`,
+      type: 'INFO'
+    });
+
     const subject = this.users.find(u => u.id === assessment.subjectId)?.name || 'Employee';
     await this.logActivity('Submitted Assessment', `For ${subject}`);
 
@@ -1374,6 +1390,49 @@ class DataService {
         await this.deleteItem('departments', id);
         await this.logActivity('Removed Department', dept.name);
     }
+  }
+
+  getAssessmentHistory(viewer: User, targetSubjectId?: string) {
+    const effectiveTargetId = (viewer.role === Role.ADMIN || viewer.role === Role.CEO) 
+      ? (targetSubjectId || viewer.id)
+      : (this.isManager(viewer) ? (targetSubjectId || viewer.id) : viewer.id);
+
+    // If viewer is manager but target is not in their visible tree, restrict to self
+    const visibleUsers = this.getVisibleUsers(viewer);
+    const isTargetVisible = visibleUsers.some(u => u.id === effectiveTargetId);
+    const finalSubjectId = isTargetVisible ? effectiveTargetId : viewer.id;
+
+    const pastAssessments = this.assessments
+      .filter(a => a.subjectId === finalSubjectId)
+      .map(a => ({
+        id: a.id,
+        date: a.date,
+        method: a.method,
+        raterId: a.raterId,
+        skillId: a.skillId,
+        score: a.score,
+        comment: a.comment,
+        status: 'COMPLETED' as const,
+        source: 'ASSESSMENT' as const
+      }));
+
+    const pastEvidences = this.evidences
+      .filter(e => e.userId === finalSubjectId && (e.status === 'APPROVED' || e.status === 'REJECTED'))
+      .map(e => ({
+        id: e.id,
+        date: e.reviewedAt || e.submittedAt,
+        method: 'WORK_RECORD_REVIEW' as const,
+        raterId: e.reviewedBy || '',
+        skillId: e.skillId,
+        score: e.assignedScore || 0,
+        comment: e.reviewerComment || '',
+        status: e.status as 'COMPLETED' | 'REJECTED' | 'APPROVED',
+        source: 'EVIDENCE' as const
+      }));
+
+    return [...pastAssessments, ...pastEvidences].sort((a, b) => 
+      new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
   }
 }
 
