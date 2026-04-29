@@ -163,7 +163,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
           <div>
             <div className="flex items-center gap-3 mb-1">
                 <h1 className="text-3xl font-black text-slate-900 tracking-tight uppercase">
-                    {user.name} {user.employeeId && <span className="text-slate-400 font-medium ml-2">#{user.employeeId}</span>}
+                    {user.name} {user.employeeId && <span className="text-slate-400 font-medium ml-2">ID: {user.employeeId}</span>}
                 </h1>
                 <span className="bg-blue-50 text-blue-700 text-[10px] font-black px-2 py-0.5 border border-blue-100 uppercase tracking-widest">
                     {user.orgLevel || 'N/A'}
@@ -178,7 +178,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
         <div className="flex items-center gap-3">
             <div className="text-right mr-4 hidden md:block">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Direct Manager</p>
-                <p className="text-sm font-bold text-slate-900">{(manager && (manager.role !== Role.CEO || user.role === Role.CEO)) ? `${manager.name} (#${manager.employeeId})` : 'N/A'}</p>
+                <p className="text-sm font-bold text-slate-900">{(manager && (manager.role !== Role.CEO || user.role === Role.CEO)) ? `${manager.name} (ID: ${manager.employeeId})` : 'N/A'}</p>
             </div>
             <button className="flex items-center gap-2 px-5 py-2.5 bg-white border-2 border-slate-900 text-slate-900 font-black uppercase text-xs tracking-widest hover:bg-slate-900 hover:text-white transition-all">
                 <Download size={16} /> Export CV
@@ -190,7 +190,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
       <div className="bg-white border border-slate-200 p-6 animate-in slide-in-from-top-4 duration-500 shadow-sm">
         <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-2">
             <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Professional Identity</h3>
-            <span className="text-[10px] font-black text-slate-900 tracking-widest bg-slate-50 px-2 py-0.5 border border-slate-200">#{user.employeeId || 'PENDING'}</span>
+            <span className="text-[10px] font-black text-slate-900 tracking-widest bg-slate-50 px-2 py-0.5 border border-slate-200">ID: {user.employeeId || 'PENDING'}</span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-8 gap-y-6">
             

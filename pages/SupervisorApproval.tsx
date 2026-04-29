@@ -82,7 +82,7 @@ export const SupervisorApproval: React.FC<{ currentUser: User }> = ({ currentUse
   const getUserName = (id: string) => {
     const user = users.find(u => u.id === id);
     if (!user) return 'Unknown User';
-    return user.employeeId ? `${user.name} (#${user.employeeId})` : user.name;
+    return user.employeeId ? `${user.name} (ID: ${user.employeeId})` : user.name;
   };
   const getSkillName = (id: string) => {
     const skill = skills.find(s => s.id === id);

@@ -161,7 +161,7 @@ export const CompetencyMatrix: React.FC<{ currentUser: User }> = ({ currentUser 
                       <div className="flex items-center gap-3">
                         <img src={user.avatarUrl} alt={user.name} className="w-8 h-8 rounded-none" />
                         <div>
-                          <div className="font-semibold">{user.name} {user.employeeId && <span className="text-slate-400 text-[10px] ml-1">#{user.employeeId}</span>}</div>
+                          <div className="font-semibold">{user.name} {user.employeeId && <span className="text-slate-400 text-[10px] ml-1">ID: {user.employeeId}</span>}</div>
                           <div className="text-xs text-slate-500">{job?.title || 'No Profile'}</div>
                         </div>
                       </div>

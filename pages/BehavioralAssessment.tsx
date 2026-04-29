@@ -26,7 +26,7 @@ const UserCard = ({ user, isSelected, onClick, role, isSelf }: { user: User, isS
       </div>
       {user.employeeId && (
         <div className={`text-[10px] font-bold ${isSelected ? 'text-slate-400' : 'text-slate-500'}`}>
-          #{user.employeeId}
+          ID: {user.employeeId}
         </div>
       )}
       {role && (

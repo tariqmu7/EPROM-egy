@@ -165,7 +165,7 @@ const UserForm: React.FC<{ initialData?: User | null, currentUser: User, onSave:
     })
     .map(u => ({ 
         value: u.id, 
-        label: u.employeeId ? `${u.name} (#${u.employeeId})` : u.name, 
+        label: u.employeeId ? `${u.name} (ID: ${u.employeeId})` : u.name, 
         subLabel: `${u.role} • ${departments.find(d => d.id === u.departmentId)?.name || 'No Dept'} • ${u.orgLevel || ''}` 
     }));
 
@@ -1000,7 +1000,7 @@ const EmployeeNode: React.FC<{
                         <div className="flex flex-col">
                             <div className="flex items-center gap-2">
                                 <span className="font-bold text-slate-900">
-                                    {user.name} {user.employeeId && <span className="text-slate-400 font-medium text-[10px] ml-1">#{user.employeeId}</span>}
+                                    {user.name} {user.employeeId && <span className="text-slate-400 font-medium text-[10px] ml-1">ID: {user.employeeId}</span>}
                                 </span>
                                 <span className="text-indigo-700 font-bold uppercase text-[8px] bg-indigo-50 px-1.5 py-0.5 rounded-none border border-indigo-100">{user.orgLevel || 'N/A'}</span>
                             </div>
@@ -2208,7 +2208,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                                            </div>
                                            <div>
                                                <div className="font-bold text-slate-900 group-hover:text-slate-900 transition-colors">
-                                                    {user.name} {user.employeeId && <span className="text-slate-400 font-medium ml-1">#{user.employeeId}</span>}
+                                                    {user.name} {user.employeeId && <span className="text-slate-400 font-medium ml-1">ID: {user.employeeId}</span>}
                                                 </div>
                                                <div className="text-slate-600 text-xs">{user.email}</div>
                                            </div>
