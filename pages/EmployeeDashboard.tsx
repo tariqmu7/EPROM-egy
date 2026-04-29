@@ -38,7 +38,10 @@ import {
   FileUp,
   ClipboardCheck,
   ChevronRight,
-  AlertTriangle
+  AlertTriangle,
+  Mail,
+  Phone,
+  MessageCircle
 } from 'lucide-react';
 import { auth } from '../firebase';
 
@@ -183,6 +186,100 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
         </div>
       </div>
 
+      {/* ── Professional Identity ─────────────────────────────────────── */}
+      <div className="bg-white border border-slate-200 p-6 animate-in slide-in-from-top-4 duration-500 shadow-sm">
+        <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-2">
+            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Professional Identity</h3>
+            <span className="text-[10px] font-black text-slate-900 tracking-widest bg-slate-50 px-2 py-0.5 border border-slate-200">#{user.employeeId || 'PENDING'}</span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-8 gap-y-6">
+            
+            <div className="flex items-center gap-4">
+                <div className="w-10 h-10 bg-slate-50 flex items-center justify-center shrink-0 border border-slate-200">
+                    <Mail size={18} className="text-slate-400" />
+                </div>
+                <div className="min-w-0">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Official Email</p>
+                    <p className="text-xs font-bold text-slate-800 lowercase truncate">{user.email}</p>
+                </div>
+            </div>
+
+            {user.phone && (
+                <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-slate-50 flex items-center justify-center shrink-0 border border-slate-200">
+                        <Phone size={18} className="text-slate-400" />
+                    </div>
+                    <div>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Mobile Phone</p>
+                        <p className="text-xs font-bold text-slate-800">{user.phone}</p>
+                    </div>
+                </div>
+            )}
+
+            {user.whatsapp && (
+                <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-slate-50 flex items-center justify-center shrink-0 border border-slate-200">
+                        <MessageCircle size={18} className="text-slate-400" />
+                    </div>
+                    <div>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">WhatsApp</p>
+                        <p className="text-xs font-bold text-slate-800">{user.whatsapp}</p>
+                    </div>
+                </div>
+            )}
+
+            <div className="flex items-center gap-4">
+                <div className="w-10 h-10 bg-slate-50 flex items-center justify-center shrink-0 border border-slate-200">
+                    <Shield size={18} className="text-slate-400" />
+                </div>
+                <div>
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Hierarchy Band</p>
+                    <p className="text-xs font-bold text-slate-800 uppercase">{user.orgLevel ? `${ORG_LEVEL_LABELS[user.orgLevel]} (${user.orgLevel})` : 'N/A'}</p>
+                </div>
+            </div>
+
+            <div className="flex items-center gap-4">
+                <div className="w-10 h-10 bg-slate-50 flex items-center justify-center shrink-0 border border-slate-200">
+                    <Building2 size={18} className="text-slate-400" />
+                </div>
+                <div>
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Department / Section</p>
+                    <p className="text-xs font-bold text-slate-800 uppercase">{depts.find(d => d.id === user.departmentId)?.name || 'General Site'}</p>
+                </div>
+            </div>
+            
+            <div className="flex items-center gap-4">
+                <div className="w-10 h-10 bg-slate-50 flex items-center justify-center shrink-0 border border-slate-200">
+                    <UserCheck size={18} className="text-slate-400" />
+                </div>
+                <div>
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Direct Manager</p>
+                    <p className="text-xs font-bold text-slate-800 uppercase">{manager?.name || 'N/A'}</p>
+                </div>
+            </div>
+
+            <div className="flex items-center gap-4">
+                <div className="w-10 h-10 bg-slate-50 flex items-center justify-center shrink-0 border border-slate-200">
+                    <MapPin size={18} className="text-slate-400" />
+                </div>
+                <div>
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Site Location</p>
+                    <p className="text-xs font-bold text-slate-800 uppercase">{user.location || 'General Site'}</p>
+                </div>
+            </div>
+            
+            <div className="flex items-center gap-4">
+                <div className="w-10 h-10 bg-slate-50 flex items-center justify-center shrink-0 border border-slate-200">
+                    <Building size={18} className="text-slate-400" />
+                </div>
+                <div>
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Current Project</p>
+                    <p className="text-xs font-bold text-slate-800 uppercase">{user.projectName || 'Unassigned'}</p>
+                </div>
+            </div>
+        </div>
+      </div>
+
       {/* ── Navigation Tabs ────────────────────────────────────────────── */}
       <div className="flex items-center gap-8 border-b border-slate-200 overflow-x-auto no-scrollbar">
         {[
@@ -229,37 +326,6 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                             <div className="h-full bg-blue-500" style={{ width: '40%' }}></div>
                         </div>
                         <span className="text-[10px] font-black uppercase">Developing</span>
-                    </div>
-                </div>
-            </div>
-
-            <div className="bg-white border border-slate-200 p-6">
-                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 border-b border-slate-100 pb-2">Professional Identity</h3>
-                <div className="space-y-4">
-                    <div className="flex items-center justify-between bg-slate-50 p-3 border border-slate-100">
-                      <div className="flex items-center gap-3">
-                        <Users size={16} className="text-blue-600" />
-                        <span className="text-xs font-bold text-slate-600 uppercase tracking-widest">EPROM-ID</span>
-                      </div>
-                      <span className="text-sm font-black text-slate-900 tracking-widest">#{user.employeeId || 'PENDING'}</span>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-slate-100 flex items-center justify-center shrink-0 border border-slate-200">
-                            <MapPin size={18} className="text-slate-400" />
-                        </div>
-                        <div>
-                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Site Location</p>
-                            <p className="text-xs font-bold text-slate-800 uppercase">{user.location || 'General Site'}</p>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-slate-100 flex items-center justify-center shrink-0 border border-slate-200">
-                            <Building size={18} className="text-slate-400" />
-                        </div>
-                        <div>
-                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Current Project</p>
-                            <p className="text-xs font-bold text-slate-800 uppercase">{user.projectName || 'Unassigned'}</p>
-                        </div>
                     </div>
                 </div>
             </div>

@@ -428,6 +428,11 @@ class DataService {
       
       await this.logActivity('Self-Registration', newUserProfile.name);
       
+      // Destroy the automatic Firebase session for pending users
+      if (!isBootstrapAdmin) {
+        await signOut(auth);
+      }
+      
       return { user: newUserProfile };
     } catch (error: any) {
       return { error: error.message };
@@ -553,18 +558,32 @@ class DataService {
   async getCurrentUser() {
     if (!auth.currentUser) return null;
     
-    const profile = this.users.find(u => u.id === auth.currentUser?.uid);
-    if (profile) return profile;
+    const user = auth.currentUser;
+    const isBootstrapAdmin = user.email?.toLowerCase() === 'tarekmoh123@gmail.com';
     
-    const docSnap = await getDoc(doc(db, 'users', auth.currentUser.uid));
-    if (docSnap.exists()) {
-       const data = docSnap.data();
-       return {
-         id: docSnap.id,
-         ...data,
-         certificates: data.certificates ? JSON.parse(data.certificates) : []
-       } as User;
+    let profile = this.users.find(u => u.id === user.uid);
+    
+    if (!profile) {
+      const docSnap = await getDoc(doc(db, 'users', user.uid));
+      if (docSnap.exists()) {
+         const data = docSnap.data();
+         profile = {
+           id: docSnap.id,
+           ...data,
+           certificates: data.certificates ? JSON.parse(data.certificates) : []
+         } as User;
+      }
     }
+
+    if (profile) {
+      // Enforce approval status check
+      if (!isBootstrapAdmin && (profile.status === 'PENDING' || profile.status === 'REJECTED')) {
+        await signOut(auth);
+        return null;
+      }
+      return profile;
+    }
+
     return null;
   }
 
