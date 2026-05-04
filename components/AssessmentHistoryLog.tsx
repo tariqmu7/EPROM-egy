@@ -22,12 +22,19 @@ import {
 interface AssessmentHistoryLogProps {
   currentUser: User;
   targetUserId?: string; // If provided, shows history for this specific user
+  initialSearchTerm?: string;
 }
 
-export const AssessmentHistoryLog: React.FC<AssessmentHistoryLogProps> = ({ currentUser, targetUserId }) => {
-  const [searchTerm, setSearchTerm] = useState('');
+export const AssessmentHistoryLog: React.FC<AssessmentHistoryLogProps> = ({ currentUser, targetUserId, initialSearchTerm = '' }) => {
+  const [searchTerm, setSearchTerm] = useState(initialSearchTerm);
   const [methodFilter, setMethodFilter] = useState('ALL');
   const [selectedItem, setSelectedItem] = useState<any>(null);
+
+  React.useEffect(() => {
+    if (initialSearchTerm) {
+      setSearchTerm(initialSearchTerm);
+    }
+  }, [initialSearchTerm]);
 
   const history = useMemo(() => {
     return dataService.getAssessmentHistory(currentUser, targetUserId);

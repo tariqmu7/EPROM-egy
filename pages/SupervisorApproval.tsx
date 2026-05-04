@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { dataService } from '../services/store';
 import { User, Evidence } from '../types';
-import { CheckCircle, XCircle, FileText, Download, Eye, Clock, History, AlertTriangle } from 'lucide-react';
+import { CheckCircle, XCircle, FileText, Download, Eye, Clock, History, AlertTriangle, ShieldCheck } from 'lucide-react';
 
 export const SupervisorApproval: React.FC<{ currentUser: User }> = ({ currentUser }) => {
   const [selectedEvidence, setSelectedEvidence] = useState<Evidence | null>(null);
@@ -28,6 +28,47 @@ export const SupervisorApproval: React.FC<{ currentUser: User }> = ({ currentUse
 
   const pendingEvidences = useMemo(() => allTeamEvidences.filter(e => e.status === 'PENDING'), [allTeamEvidences]);
   const historyEvidences = useMemo(() => allTeamEvidences.filter(e => e.status !== 'PENDING').sort((a, b) => new Date(b.reviewedAt || 0).getTime() - new Date(a.reviewedAt || 0).getTime()), [allTeamEvidences]);
+
+  // Certificate Approvals
+  const pendingCertificates = useMemo(() => {
+    const visibleUserIds = new Set(dataService.getVisibleUsers(currentUser).map((u: User) => u.id));
+    const visibleUsersList = users.filter(u => visibleUserIds.has(u.id));
+    
+    const certs: { user: User, certificate: any }[] = [];
+    visibleUsersList.forEach(u => {
+      (u.certificates || []).forEach(c => {
+        // @ts-ignore
+        if (c.status === 'PENDING') {
+          certs.push({ user: u, certificate: c });
+        }
+      });
+    });
+    return certs;
+  }, [users, currentUser]);
+
+  const handleApproveCertificate = async (userId: string, certId: string) => {
+    setIsProcessing(true);
+    const user = users.find(u => u.id === userId);
+    if (user && user.certificates) {
+      const updatedCerts = user.certificates.map(c => 
+        c.id === certId ? { ...c, status: 'APPROVED' as any } : c
+      );
+      await dataService.updateUser({ ...user, certificates: updatedCerts });
+    }
+    setIsProcessing(false);
+  };
+
+  const handleRejectCertificate = async (userId: string, certId: string) => {
+    setIsProcessing(true);
+    const user = users.find(u => u.id === userId);
+    if (user && user.certificates) {
+      const updatedCerts = user.certificates.map(c => 
+        c.id === certId ? { ...c, status: 'REJECTED' as any } : c
+      );
+      await dataService.updateUser({ ...user, certificates: updatedCerts });
+    }
+    setIsProcessing(false);
+  };
 
   // ── Gap detection helper ─────────────────────────────────────────────────
   const getRequiredLevel = useCallback((evidence: Evidence): number => {
@@ -109,6 +150,44 @@ export const SupervisorApproval: React.FC<{ currentUser: User }> = ({ currentUse
           >
             ✕
           </button>
+        </div>
+      )}
+
+      {/* ── Pending Certificate Approvals ──────────────────────────────────────── */}
+      {pendingCertificates.length > 0 && (
+        <div className="bg-white rounded-none border border-slate-300 overflow-hidden mb-8 shadow-sm">
+          <div className="p-4 border-b border-slate-300 bg-amber-50/50 flex items-center justify-between">
+            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+              <ShieldCheck size={18} className="text-amber-600" /> Pending Certificate Approvals
+            </h3>
+            <span className="bg-amber-100 text-amber-800 text-xs font-bold px-2 py-0.5 rounded-none border border-amber-200">{pendingCertificates.length} Pending</span>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {pendingCertificates.map(({ user, certificate }) => (
+              <div key={`${user.id}-${certificate.id}`} className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50 hover:bg-white transition-colors">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-semibold text-slate-900 text-sm">{user.name}</span>
+                    <span className="text-[10px] bg-white text-slate-600 px-1.5 py-0.5 border border-slate-200 font-bold uppercase tracking-wider">ID: {user.employeeId || 'N/A'}</span>
+                  </div>
+                  <h4 className="text-sm font-bold text-slate-800">{certificate.name} <span className="text-slate-500 font-normal">{certificate.degree ? `(${certificate.degree})` : ''}</span></h4>
+                  <div className="text-xs text-slate-600 mt-1 flex items-center gap-4">
+                    <span><span className="font-bold uppercase tracking-tighter text-[9px] text-slate-400">Issuer:</span> {certificate.issuer}</span>
+                    <span><span className="font-bold uppercase tracking-tighter text-[9px] text-slate-400">Achieved:</span> {new Date(certificate.dateAchieved).toLocaleDateString()}</span>
+                    {certificate.fileUrl && (
+                      <a href={certificate.fileUrl} download={certificate.fileName || 'certificate'} target="_blank" rel="noreferrer" className="text-blue-600 font-bold uppercase tracking-wider text-[9px] flex items-center gap-1 hover:underline border-l border-slate-300 pl-4">
+                        <Download size={10} /> View Copy
+                      </a>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => handleRejectCertificate(user.id, certificate.id)} disabled={isProcessing} className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 transition-colors">Reject</button>
+                  <button onClick={() => handleApproveCertificate(user.id, certificate.id)} disabled={isProcessing} className="px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 transition-colors">Approve</button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

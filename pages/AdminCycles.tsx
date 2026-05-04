@@ -11,6 +11,10 @@ export const AdminCycles: React.FC = () => {
   const [selectedJob, setSelectedJob] = useState<string>('ALL');
   const [selectedSkill, setSelectedSkill] = useState<string>('ALL');
 
+  // Annual Appraisal Date Overrides
+  const [appraisalStartDate, setAppraisalStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [appraisalEndDate, setAppraisalEndDate] = useState(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+
   const departments = useMemo(() => dataService.getAllDepartments(), []);
   const jobs = useMemo(() => dataService.getAllJobs().filter(j => selectedDept === 'ALL' ? true : j.departmentId === selectedDept), [selectedDept]);
   const skills = useMemo(() => dataService.getAllSkills(), []);
@@ -19,23 +23,71 @@ export const AdminCycles: React.FC = () => {
   // Use length of all cycles purely for logging purposes
   const allCyclesCount = dataService.getAllCycles().length;
 
+  React.useEffect(() => {
+    if (activeCycle) {
+      setAppraisalStartDate(new Date(activeCycle.startDate).toISOString().split('T')[0]);
+      setAppraisalEndDate(new Date(activeCycle.dueDate).toISOString().split('T')[0]);
+    } else {
+      setAppraisalStartDate(new Date().toISOString().split('T')[0]);
+      setAppraisalEndDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+    }
+  }, [activeCycle]);
+
   const handleTriggerAnnual360 = async () => {
-    if (!window.confirm("Are you sure you want to initiate a new Annual 360 Evaluation? This will send a notification to all employees in the system.")) return;
+    if (!window.confirm("Are you sure you want to initiate a new Annual Appraisal Cycle? This will send a notification to all employees in the system.")) return;
     
     setIsProcessing(true);
     try {
-      const year = new Date().getFullYear();
+      const year = new Date(appraisalStartDate).getFullYear();
       await dataService.addCycle({
-        name: `${year} Annual 360 Evaluation`,
-        startDate: new Date().toISOString(),
-        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
+        name: `${year} Annual Appraisal`,
+        startDate: new Date(appraisalStartDate).toISOString(),
+        dueDate: new Date(appraisalEndDate).toISOString(),
         status: 'ACTIVE'
       });
-      setSuccessMessage('Annual 360 Evaluation has been successfully initiated.');
+      setSuccessMessage('Annual Appraisal cycle has been successfully initiated.');
       setTimeout(() => setSuccessMessage(''), 4000);
     } catch (e) {
       console.error(e);
       alert('Failed to initiate cycle');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleUpdateCycle = async () => {
+    if (!activeCycle) return;
+    setIsProcessing(true);
+    try {
+      await dataService.updateCycle({
+        ...activeCycle,
+        startDate: new Date(appraisalStartDate).toISOString(),
+        dueDate: new Date(appraisalEndDate).toISOString()
+      });
+      setSuccessMessage('Annual Appraisal cycle dates have been successfully updated.');
+      setTimeout(() => setSuccessMessage(''), 4000);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to update cycle');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleArchiveCycle = async () => {
+    if (!activeCycle) return;
+    if (!window.confirm("Are you sure you want to stop and archive the current Annual Appraisal Cycle? This will close it permanently.")) return;
+    setIsProcessing(true);
+    try {
+      await dataService.updateCycle({
+        ...activeCycle,
+        status: 'CLOSED'
+      });
+      setSuccessMessage('Annual Appraisal cycle has been archived successfully.');
+      setTimeout(() => setSuccessMessage(''), 4000);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to archive cycle');
     } finally {
       setIsProcessing(false);
     }
@@ -109,14 +161,29 @@ export const AdminCycles: React.FC = () => {
                 <Calendar size={24} />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-slate-900 leading-tight">Annual 360 Evaluation</h3>
+                <h3 className="text-xl font-bold text-slate-900 leading-tight">Annual Appraisal</h3>
                 <p className="text-sm font-medium text-slate-500">Global Assessment Tracker</p>
               </div>
             </div>
             
             <p className="text-slate-700 text-sm mb-6 pb-6 border-b border-slate-100">
-              Initiate the once-a-year comprehensive 360-degree evaluation across the entire organization. This triggers tasks for all employees to complete Self, Peer, and Managerial assessments.
+              Initiate the once-a-year comprehensive Annual Appraisal across the entire organization. Set the official start and end dates below.
             </p>
+
+            <div className="grid grid-cols-2 gap-4 mb-6">
+               <div>
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                     Start Date
+                  </label>
+                  <input type="date" value={appraisalStartDate} onChange={e => setAppraisalStartDate(e.target.value)} className="w-full text-sm border border-slate-300 bg-slate-50 rounded-none px-3 py-2.5 focus:ring-0 focus:border-blue-500" />
+               </div>
+               <div>
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                     End Date
+                  </label>
+                  <input type="date" value={appraisalEndDate} onChange={e => setAppraisalEndDate(e.target.value)} className="w-full text-sm border border-slate-300 bg-slate-50 rounded-none px-3 py-2.5 focus:ring-0 focus:border-blue-500" />
+               </div>
+            </div>
 
             <div className="bg-slate-50 border border-slate-200 p-4 rounded-sm mb-6">
               <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Current System Status</h4>
@@ -136,7 +203,7 @@ export const AdminCycles: React.FC = () => {
                   <div className="h-3 w-3 rounded-full bg-slate-300"></div>
                   <div>
                     <p className="text-sm font-bold text-slate-600">No Active Evaluation Cycle</p>
-                    <p className="text-xs text-slate-500 mt-0.5">Ready to initiate the next cycle. Historical Cycles: {allCyclesCount}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">Ready to initiate the next cycle. Historical Cycles: {allCyclesCount - (activeCycle ? 1 : 0)}</p>
                   </div>
                 </div>
               )}
@@ -144,17 +211,32 @@ export const AdminCycles: React.FC = () => {
           </div>
           
           <div className="bg-slate-50 p-4 border-t border-slate-200">
-            <button 
-              onClick={handleTriggerAnnual360}
-              disabled={isProcessing || activeCycle !== undefined}
-              className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-none text-sm font-bold uppercase tracking-wider transition-colors ${
-                activeCycle !== undefined 
-                ? 'bg-slate-200 text-slate-500 cursor-not-allowed border border-slate-300' 
-                : 'bg-blue-600 text-white hover:bg-blue-700 border border-blue-700'
-              }`}
-            >
-              {isProcessing ? 'Processing System...' : activeCycle ? 'Cycle Currently Active' : 'Initiate Annual 360 Evaluation'}
-            </button>
+             {activeCycle ? (
+               <div className="grid grid-cols-2 gap-4">
+                  <button 
+                    onClick={handleUpdateCycle}
+                    disabled={isProcessing}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-none text-sm font-bold uppercase tracking-wider transition-colors bg-blue-600 text-white hover:bg-blue-700 border border-blue-700"
+                  >
+                    {isProcessing ? 'Processing...' : 'Update Dates'}
+                  </button>
+                  <button 
+                    onClick={handleArchiveCycle}
+                    disabled={isProcessing}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-none text-sm font-bold uppercase tracking-wider transition-colors bg-red-50 text-red-700 hover:bg-red-100 border border-red-200"
+                  >
+                    {isProcessing ? 'Processing...' : 'Archive Session'}
+                  </button>
+               </div>
+             ) : (
+                <button 
+                  onClick={handleTriggerAnnual360}
+                  disabled={isProcessing}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-none text-sm font-bold uppercase tracking-wider transition-colors bg-blue-600 text-white hover:bg-blue-700 border border-blue-700"
+                >
+                  {isProcessing ? 'Processing System...' : 'Initiate Annual Appraisal'}
+                </button>
+             )}
           </div>
         </div>
 

@@ -90,11 +90,20 @@ export interface JobProfile {
   code?: string; // Automatically generated professional identifier
 }
 
+export interface Project {
+  id: string;
+  name: string;
+  description?: string;
+  location?: string;
+}
+
+
 export type DepartmentType = 'GENERAL' | 'DEPARTMENT' | 'SECTION';
 
 export interface Department {
   id: string;
   name: string;
+  projectId?: string; // Added link to project
   type?: DepartmentType; // New field for hierarchy level
   parentId?: string; // Support for hierarchical structure
   managerId?: string;
@@ -104,10 +113,15 @@ export interface Department {
 export interface Certificate {
   id: string;
   name: string;
+  degree?: string;
   issuer: string;
   dateAchieved: string;
   expiryDate?: string;
+  renewalDate?: string;
+  status?: 'PENDING' | 'APPROVED' | 'REJECTED';
   renewalStatus?: 'VALID' | 'EXPIRING_SOON' | 'EXPIRED';
+  fileUrl?: string;
+  fileName?: string;
 }
 
 export interface TrainingCourse {
@@ -136,6 +150,7 @@ export interface User {
   certificates?: Certificate[];
   location?: string;
   projectName?: string;
+  projectId?: string;
   employeeId?: number;
 }
 

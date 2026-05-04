@@ -77,6 +77,8 @@ class DataService {
   private evidences: Evidence[] = [];
   private trainingCourses: TrainingCourse[] = [];
   private scheduledAssessments: ScheduledAssessment[] = [];
+  private projects: Project[] = [];
+
   
   public isInitialized = false;
   private unsubscribers: Unsubscribe[] = [];
@@ -142,6 +144,7 @@ class DataService {
     this.evidences = [];
     this.trainingCourses = [];
     this.scheduledAssessments = [];
+    this.projects = [];
   }
 
   private clearListeners() {
@@ -229,6 +232,14 @@ class DataService {
         this.departments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Department));
       }, this.handleError('departments'))
     );
+
+    // Projects
+    this.unsubscribers.push(
+      onSnapshot(collection(db, 'projects'), (snapshot) => {
+        this.projects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project));
+      }, this.handleError('projects'))
+    );
+
 
     // Assessments
     this.unsubscribers.push(
@@ -999,6 +1010,9 @@ class DataService {
   getAllDepartments() { return this.departments; }
   getSkill(id: string) { return this.skills.find(s => s.id === id); }
   getSystemLogs() { return this.logs; }
+  getAllProjects() { return this.projects; }
+  getProjectById(id: string) { return this.projects.find(p => p.id === id); }
+
 
   getGeneralDeptId(deptId: string | undefined): string | undefined {
     if (!deptId) return undefined;
@@ -1349,6 +1363,20 @@ class DataService {
     await this.logActivity('Created Department', dept.name);
   }
 
+  async addProject(project: Omit<Project, 'id'>) {
+    const id = doc(collection(db, 'projects')).id;
+    const newProject = { ...project, id };
+    await this.persistItem('projects', newProject);
+    await this.logActivity('Create Project', newProject.name);
+    return newProject;
+  }
+
+  async updateProject(project: Project) {
+    await this.updateItem('projects', project);
+    await this.logActivity('Update Project', project.name);
+  }
+
+
   async updateDepartment(dept: Department) {
     await this.updateItem('departments', dept);
     await this.logActivity('Updated Department', dept.name);
@@ -1410,6 +1438,15 @@ class DataService {
         await this.logActivity('Removed Department', dept.name);
     }
   }
+
+  async removeProject(id: string) {
+    const project = this.getProjectById(id);
+    if (project) {
+      await this.deleteItem('projects', id);
+      await this.logActivity('Delete Project', project.name);
+    }
+  }
+
 
   getAssessmentHistory(viewer: User, targetSubjectId?: string) {
     const effectiveTargetId = (viewer.role === Role.ADMIN || viewer.role === Role.CEO) 

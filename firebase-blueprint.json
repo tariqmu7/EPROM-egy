@@ -138,7 +138,44 @@
         "date": { "type": "string", "format": "date-time" }
       },
       "required": ["nominatorId", "subjectId", "raterId", "status", "date"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "A high-level organizational project.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "location": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["name"]
+    },
+    "TrainingCourse": {
+      "title": "TrainingCourse",
+      "description": "A course that addresses specific skill gaps.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "provider": { "type": "string" },
+        "linkedSkillIds": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["title"]
+    },
+    "ScheduledAssessment": {
+      "title": "ScheduledAssessment",
+      "description": "A planned assessment for a user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "skillId": { "type": "string" },
+        "assessorId": { "type": "string" },
+        "scheduledDate": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["PENDING_SCHEDULE", "SCHEDULED", "COMPLETED"] }
+      },
+      "required": ["userId", "skillId", "status"]
     }
+
   },
   "firestore": {
     "/skills/{skillId}": {
@@ -180,6 +217,19 @@
     "/nominations/{nominationId}": {
       "schema": { "$ref": "#/entities/Nomination" },
       "description": "Collection of all nominations."
+    },
+    "/projects/{projectId}": {
+      "schema": { "$ref": "#/entities/Project" },
+      "description": "Collection of all projects."
+    },
+    "/trainingCourses/{courseId}": {
+      "schema": { "$ref": "#/entities/TrainingCourse" },
+      "description": "Collection of all training courses."
+    },
+    "/scheduledAssessments/{assessmentId}": {
+      "schema": { "$ref": "#/entities/ScheduledAssessment" },
+      "description": "Collection of all scheduled assessments."
     }
+
   }
 }

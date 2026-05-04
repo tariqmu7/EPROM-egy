@@ -5,7 +5,7 @@ import { dataService } from '../services/store';
 import { User, Role, JobProfile, Skill, Department, OrgLevel } from '../types';
 
 interface BulkUploadProps {
-  type: 'USER' | 'JOB' | 'SKILL' | 'DEPT';
+  type: 'USER' | 'JOB' | 'SKILL' | 'DEPT' | 'PROJECT';
   onComplete: () => void;
   onCancel: () => void;
 }
@@ -42,6 +42,12 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, onComplete, onCanc
           ['Safety Dept', 'DEPARTMENT', 'Operation', 'manager@example.com'],
           ['Environmental Section', 'SECTION', 'Safety Dept', 'sectionhead@example.com']
         ];
+      case 'PROJECT':
+        return [
+          ['Name', 'Description', 'Location'],
+          ['Project Alpha', 'Main expansion project', 'Alexandria']
+        ];
+
       default:
         return [];
     }
@@ -92,6 +98,8 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, onComplete, onCanc
         const jobs = dataService.getAllJobs();
         const users = dataService.getAllUsers();
         const skills = dataService.getAllSkills();
+        const projects = dataService.getAllProjects();
+
 
         // For JOB type, we need to group rows by Title and Department
         const jobBatch = new Map<string, JobProfile>();
@@ -304,6 +312,29 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, onComplete, onCanc
                 count++;
                 break;
               }
+              case 'PROJECT': {
+                const name = row['Name']?.toString() || '';
+                if (!name) break;
+                
+                const existingProject = projects.find(p => p.name.toLowerCase() === name.toLowerCase());
+                
+                const newProject: any = {
+                  id: existingProject ? existingProject.id : Math.random().toString(36).substr(2, 9),
+                  name: name,
+                  description: row['Description']?.toString() || '',
+                  location: row['Location']?.toString() || '',
+                  createdAt: (existingProject as any)?.createdAt || Date.now()
+                };
+                
+                if (existingProject) {
+                  await dataService.updateProject(newProject);
+                } else {
+                  await dataService.addProject(newProject);
+                }
+                count++;
+                break;
+              }
+
             }
           } catch (err) {
             console.error('Error processing row:', row, err);
@@ -340,7 +371,8 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, onComplete, onCanc
         <div className="p-6 border-b border-slate-300 flex justify-between items-center bg-slate-50">
           <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
             <FileSpreadsheet size={20} className="text-blue-700" />
-            Bulk Upload: {type === 'USER' ? 'Workforce' : type === 'JOB' ? 'Job Profiles' : type === 'SKILL' ? 'Skill Standards' : 'Departments'}
+            Bulk Upload: {type === 'USER' ? 'Workforce' : type === 'JOB' ? 'Job Profiles' : type === 'SKILL' ? 'Skill Standards' : type === 'PROJECT' ? 'Projects' : 'Departments'}
+
           </h3>
           <button onClick={onCancel} className="p-2 hover:bg-slate-200 rounded-none text-slate-600 transition-colors">
             <X size={20} />

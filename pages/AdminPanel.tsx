@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { dataService } from '../services/store';
-import { User, Role, JobProfile, Skill, JobProfileSkill, OrgLevel, ORG_LEVEL_LABELS, Department, DepartmentType, ORG_HIERARCHY_ORDER, PROFICIENCY_LABELS } from '../types';
+import { User, Role, JobProfile, Skill, JobProfileSkill, OrgLevel, ORG_LEVEL_LABELS, Department, DepartmentType, ORG_HIERARCHY_ORDER, PROFICIENCY_LABELS, Project } from '../types';
 import { PROFICIENCY_DEFINITIONS } from '../constants';
-import { Plus, Users, Briefcase, ChevronRight, CheckCircle, Shield, ShieldCheck, X, Save, Trash2, ArrowLeft, UserPlus, Building2, Search, Edit2, UserCheck, AlertCircle, Layers, BookOpen, MoreHorizontal, LayoutGrid, Activity, Eye, AlertTriangle, FileSpreadsheet } from 'lucide-react';
+import { Plus, Users, Briefcase, ChevronRight, CheckCircle, Shield, ShieldCheck, X, Save, Trash2, ArrowLeft, UserPlus, Building2, Search, Edit2, UserCheck, AlertCircle, Layers, BookOpen, MoreHorizontal, LayoutGrid, Activity, Eye, AlertTriangle, FileSpreadsheet, MapPin } from 'lucide-react';
 import { SearchableSelect, Option } from '../components/SearchableSelect';
 import { BulkUpload } from '../components/BulkUpload';
 import { AdminAnalytics } from './AdminAnalytics';
@@ -103,6 +103,9 @@ const UserForm: React.FC<{ initialData?: User | null, currentUser: User, onSave:
   const departments = dataService.getAllDepartments();
   const jobProfiles = dataService.getAllJobs();
   const potentialManagers = dataService.getAllUsers(); 
+  const projects = dataService.getAllProjects();
+
+  const hqProjectId = projects.find(p => p.name.toUpperCase() === 'HQ')?.id;
 
   const [formData, setFormData] = useState<Partial<User>>(() => {
     if (initialData) return { ...initialData };
@@ -121,8 +124,19 @@ const UserForm: React.FC<{ initialData?: User | null, currentUser: User, onSave:
 
   const isPending = initialData?.status === 'PENDING';
   const isNewUser = !initialData;
+  const projectOptions: Option[] = projects.map(p => ({ value: p.id, label: p.name }));
 
-  const generalDepts = departments.filter(d => d.type === 'GENERAL' || !d.parentId);
+  const generalDepts = departments.filter(d => {
+    // Basic type check
+    if (d.type !== 'GENERAL' && d.parentId) return false;
+    
+    // Filter by project
+    if (!formData.projectId) return true; // Show all if no project selected? Or none? 
+    // Usually better to show all if no project, but user wants filtering.
+    
+    return d.projectId === formData.projectId || (formData.projectId === hqProjectId && !d.projectId);
+  });
+
   const generalDeptOptions: Option[] = generalDepts.map(d => ({ value: d.id, label: d.name }));
   
   const filteredDepts = departments.filter(d => {
@@ -168,6 +182,19 @@ const UserForm: React.FC<{ initialData?: User | null, currentUser: User, onSave:
         label: u.employeeId ? `${u.name} (ID: ${u.employeeId})` : u.name, 
         subLabel: `${u.role} • ${departments.find(d => d.id === u.departmentId)?.name || 'No Dept'} • ${u.orgLevel || ''}` 
     }));
+
+  const handleProjectChange = (val: string) => {
+      const project = projects.find(p => p.id === val);
+      setFormData(prev => ({
+          ...prev,
+          projectId: val,
+          projectName: project?.name || '',
+          location: project?.location || '',
+          generalDepartmentId: undefined, // Reset dept selection when project changes
+          departmentId: '',
+          managerId: undefined
+      }));
+  };
 
   const handleJobProfileChange = (val: string) => {
       const job = jobProfiles.find(j => j.id === val);
@@ -256,6 +283,7 @@ const UserForm: React.FC<{ initialData?: User | null, currentUser: User, onSave:
       orgLevel: formData.orgLevel,
       location: formData.location,
       projectName: formData.projectName,
+      projectId: formData.projectId,
       employeeId: formData.employeeId
     };
     onSave(user);
@@ -372,6 +400,20 @@ const UserForm: React.FC<{ initialData?: User | null, currentUser: User, onSave:
                         ]}
                         value={formData.status || 'ACTIVE'} 
                         onChange={val => setFormData({...formData, status: val as any})}
+                    />
+                    <SearchableSelect 
+                        label="Assigned Project"
+                        options={projectOptions}
+                        value={formData.projectId || ''} 
+                        onChange={handleProjectChange}
+                        placeholder="Select Project..."
+                    />
+                    <SearchableSelect 
+                        label="Assigned Location"
+                        options={projects.map(p => ({ value: p.location || 'Remote', label: p.location || 'Remote' }))}
+                        value={formData.location || ''} 
+                        onChange={val => setFormData({...formData, location: val})}
+                        placeholder="Select Location..."
                     />
                     <SearchableSelect 
                         label="Main Department (General)"
@@ -849,12 +891,17 @@ const DepartmentForm: React.FC<{ initialData?: Department | null, onSave: (d: De
     const [type, setType] = useState<DepartmentType>(initialData?.type || 'DEPARTMENT');
     const [parentId, setParentId] = useState(initialData?.parentId || '');
     const [managerId, setManagerId] = useState(initialData?.managerId || '');
+    const [projectId, setProjectId] = useState(initialData?.projectId || '');
     const [behavioralSkillIds, setBehavioralSkillIds] = useState<string[]>(initialData?.behavioralSkillIds || []);
+
     
     const users = dataService.getAllUsers();
     const depts = dataService.getAllDepartments();
+    const projects = dataService.getAllProjects();
     
     const managerOptions = users.map(u => ({ value: u.id, label: u.name, subLabel: u.email }));
+    const projectOptions = projects.map(p => ({ value: p.id, label: p.name }));
+
     
     const typeOptions = [
         { value: 'GENERAL', label: 'General Department' },
@@ -882,10 +929,12 @@ const DepartmentForm: React.FC<{ initialData?: Department | null, onSave: (d: De
             id: initialData?.id || Math.random().toString(36).substr(2, 9), 
             name, 
             type,
+            projectId: projectId || undefined,
             parentId: parentId === 'EPROM' ? undefined : parentId,
             managerId: managerId || undefined,
             behavioralSkillIds
         });
+
     };
 
     return (
@@ -906,13 +955,24 @@ const DepartmentForm: React.FC<{ initialData?: Department | null, onSave: (d: De
                 />
             </div>
             
-            <SearchableSelect 
-                label="Parent Unit / Organization" 
-                options={parentOptions} 
-                value={parentId || 'EPROM'} 
-                onChange={setParentId} 
-                placeholder="Select Parent..." 
-            />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <SearchableSelect 
+                    label="Assigned Project" 
+                    options={projectOptions} 
+                    value={projectId} 
+                    onChange={setProjectId} 
+                    placeholder="Select Project..." 
+                />
+
+                <SearchableSelect 
+                    label="Parent Unit / Organization" 
+                    options={parentOptions} 
+                    value={parentId || 'EPROM'} 
+                    onChange={setParentId} 
+                    placeholder="Select Parent..." 
+                />
+            </div>
+
 
             <SearchableSelect label="Parent Manager (Direct Dept. Manager)" options={managerOptions} value={managerId} onChange={setManagerId} placeholder="Select Manager..." />
             
@@ -950,6 +1010,141 @@ const DepartmentForm: React.FC<{ initialData?: Department | null, onSave: (d: De
         </form>
     );
 };
+
+const ProjectForm: React.FC<{ initialData?: Project | null, onSave: (p: Project) => void, onCancel: () => void }> = ({ initialData, onSave, onCancel }) => {
+    const [name, setName] = useState(initialData?.name || '');
+    const [description, setDescription] = useState(initialData?.description || '');
+    const [location, setLocation] = useState(initialData?.location || '');
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        onSave({
+            id: initialData?.id || Math.random().toString(36).substr(2, 9),
+            name,
+            description,
+            location
+        });
+    };
+
+    return (
+        <form onSubmit={handleSubmit} className="p-8 space-y-6 bg-white text-sm">
+            <div className="space-y-4">
+                <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Project Name</label>
+                    <input required className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none"
+                        value={name} onChange={e => setName(e.target.value)} placeholder="e.g. MIDOR Expansion" />
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Location</label>
+                    <input className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none"
+                        value={location} onChange={e => setLocation(e.target.value)} placeholder="e.g. Alexandria" />
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Description</label>
+                    <textarea className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none" rows={3}
+                        value={description} onChange={e => setDescription(e.target.value)} placeholder="Project details..." />
+                </div>
+            </div>
+            <div className="pt-6 flex justify-end gap-3 border-t border-slate-100">
+                <button type="button" onClick={onCancel} className="px-6 py-2 text-slate-600 hover:bg-slate-100 rounded-sm font-bold uppercase tracking-wide text-xs transition-colors">Cancel</button>
+                <button type="submit" className="px-6 py-2 bg-blue-700 text-white rounded-sm font-bold uppercase tracking-wide text-xs  hover:bg-blue-800 flex items-center gap-2 transition-all">
+                    <Save size={16} /> Save Project
+                </button>
+            </div>
+        </form>
+    );
+};
+
+const ProjectList: React.FC<{
+    projects: Project[];
+    onSelect: (id: string) => void;
+    onEdit: (p: Project) => void;
+    onDelete: (id: string) => void;
+    onAdd: () => void;
+}> = ({ projects, onSelect, onEdit, onDelete, onAdd }) => {
+    return (
+        <div className="p-8 bg-slate-50 min-h-[500px]">
+             <div className="flex justify-between items-center mb-8 border-b border-slate-200 pb-6">
+                <div>
+                    <h2 className="text-2xl font-black text-slate-900 tracking-tight">Active Projects</h2>
+                    <p className="text-sm text-slate-500">Select a project to manage its organizational structure.</p>
+                </div>
+                <button onClick={onAdd} className="bg-blue-700 hover:bg-blue-800 text-white px-6 py-2.5 rounded-sm text-xs font-bold uppercase tracking-widest flex items-center gap-2 transition-all shadow-md">
+                    <Plus size={18} /> New Project
+                </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {projects.map(project => {
+                    const projectDepts = dataService.getAllDepartments().filter(d => 
+                        d.projectId === project.id || (project.name.toUpperCase() === 'HQ' && !d.projectId)
+                    );
+                    const totalStaff = dataService.getAllUsers().filter(u => {
+                        const dept = dataService.getAllDepartments().find(d => d.id === u.departmentId);
+                        return dept?.projectId === project.id || (project.name.toUpperCase() === 'HQ' && (!dept || !dept.projectId));
+                    }).length;
+
+                    return (
+                        <div 
+                            key={project.id} 
+                            onClick={() => onSelect(project.id)}
+                            className="bg-white rounded-none border border-slate-300 hover: transition-all group cursor-pointer overflow-hidden flex flex-col relative"
+                        >
+                            <div className="p-6 flex-1">
+                                <div className="flex justify-between items-start mb-6">
+                                    <div className="w-14 h-14 bg-emerald-50 text-emerald-700 rounded-sm flex items-center justify-center group-hover:bg-emerald-700 group-hover:text-white transition-all shadow-sm border border-emerald-100 relative">
+                                        <Briefcase size={28} />
+                                        {project.name.toUpperCase() === 'HQ' && (
+                                            <span className="absolute -top-2 -right-2 bg-indigo-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-none uppercase tracking-tighter">Default</span>
+                                        )}
+                                    </div>
+                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button onClick={(e) => { e.stopPropagation(); onEdit(project); }} className="p-1.5 text-slate-400 hover:text-slate-900 transition-colors"><Edit2 size={16}/></button>
+                                        <button onClick={(e) => { e.stopPropagation(); onDelete(project.id); }} className="p-1.5 text-slate-400 hover:text-red-700 transition-colors"><Trash2 size={16}/></button>
+                                    </div>
+                                </div>
+                                
+                                <h3 className="text-xl font-bold text-slate-900 mb-1 group-hover:text-emerald-700 transition-colors">{project.name}</h3>
+                                <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-4 flex items-center gap-1.5">
+                                    <MapPin size={12} className="text-slate-400"/> {project.location || 'Remote'}
+                                </p>
+                                
+                                <div className="space-y-3 mt-6">
+                                    <div className="grid grid-cols-2 gap-4 mt-6">
+                                        <div className="bg-slate-50 p-3 rounded-none border border-slate-100">
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Departments</p>
+                                            <p className="text-lg font-bold text-slate-900">{projectDepts.length}</p>
+                                        </div>
+                                        <div className="bg-slate-50 p-3 rounded-none border border-slate-100">
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Workforce</p>
+                                            <p className="text-lg font-bold text-slate-900">{totalStaff}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between group-hover:bg-emerald-700/5 transition-colors">
+                                <span className="text-xs font-bold text-emerald-700 uppercase tracking-widest">Select Project</span>
+                                <ChevronRight size={16} className="text-emerald-700 group-hover:translate-x-1 transition-transform" />
+                            </div>
+                            <div className="h-1 w-full bg-emerald-700 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></div>
+                        </div>
+                    );
+                })}
+                {projects.length === 0 && (
+                    <div className="col-span-full py-20 text-center bg-white border border-dashed border-slate-300 rounded-none">
+                        <Briefcase size={48} className="mx-auto text-slate-200 mb-4" />
+                        <h4 className="text-lg font-bold text-slate-400">No Projects Defined</h4>
+                        <p className="text-slate-500 max-w-xs mx-auto text-sm mt-1">Start by creating your first project to organize departments.</p>
+                        <button onClick={onAdd} className="mt-6 inline-flex items-center gap-2 px-6 py-2.5 bg-blue-700 text-white font-bold uppercase text-xs tracking-widest rounded-sm hover:bg-blue-800 transition-all shadow-md">
+                            <Plus size={16} /> Create Project
+                        </button>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
 
 // --- Hierarchical Structure Components ---
 const EmployeeNode: React.FC<{
@@ -1260,6 +1455,7 @@ const DepartmentProfileView: React.FC<DepartmentProfileViewProps> = ({
   onEditUser,
   onSelectDept
 }) => {
+    const [activeTab, setActiveTab] = useState<'PERSONNEL' | 'SUBUNITS'>('PERSONNEL');
     const dept = depts.find(d => d.id === deptId);
     if (!dept) return null;
 
@@ -1347,9 +1543,25 @@ const DepartmentProfileView: React.FC<DepartmentProfileViewProps> = ({
                 </div>
             </div>
 
-            <div className="p-8 space-y-12">
+            <div className="p-8 space-y-8">
+                <div className="flex border-b border-slate-200 gap-8">
+                    <button 
+                        onClick={() => setActiveTab('PERSONNEL')} 
+                        className={`pb-4 text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap border-b-2 flex items-center gap-2 ${activeTab === 'PERSONNEL' ? 'border-slate-900 text-slate-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+                    >
+                        <Users size={16} /> Direct Personnel ({directPersonnel.length})
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('SUBUNITS')} 
+                        className={`pb-4 text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap border-b-2 flex items-center gap-2 ${activeTab === 'SUBUNITS' ? 'border-slate-900 text-slate-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+                    >
+                        <Building2 size={16} /> Nested Units ({subUnits.length})
+                    </button>
+                </div>
+
                 {/* 1. DIRECT PERSONNEL GRID (Priority #1) */}
-                <div className="space-y-8">
+                {activeTab === 'PERSONNEL' && (
+                <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
                     <div className="flex items-center gap-3 border-b border-slate-200 pb-4">
                         <div className="w-8 h-8 bg-blue-700 text-white rounded-sm flex items-center justify-center">
                             <Users size={18} />
@@ -1413,9 +1625,11 @@ const DepartmentProfileView: React.FC<DepartmentProfileViewProps> = ({
                         </div>
                     )}
                 </div>
+                )}
 
                 {/* 2. SUB-UNITS GRID (Priority #2) */}
-                <div className="space-y-6">
+                {activeTab === 'SUBUNITS' && (
+                <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                     <div className="flex items-center gap-3 border-b border-slate-200 pb-4">
                         <div className="w-8 h-8 bg-indigo-700 text-white rounded-sm flex items-center justify-center">
                             <Building2 size={18} />
@@ -1495,23 +1709,45 @@ const DepartmentProfileView: React.FC<DepartmentProfileViewProps> = ({
                         </div>
                     )}
                 </div>
+                )}
             </div>
         </div>
     );
 };
 
 const GeneralDeptList: React.FC<{
+    projectId: string;
     depts: Department[];
     users: User[];
     currentUser: User | null;
     onSelect: (id: string) => void;
     onEdit: (d: Department) => void;
     onDelete: (id: string) => void;
-}> = ({ depts, users, currentUser, onSelect, onEdit, onDelete }) => {
-    const generalDepts = depts.filter(d => d.type === 'GENERAL' || !d.parentId);
+    onBack: () => void;
+}> = ({ projectId, depts, users, currentUser, onSelect, onEdit, onDelete, onBack }) => {
+    const project = dataService.getProjectById(projectId);
+    const generalDepts = depts.filter(d => (d.type === 'GENERAL' || !d.parentId));
 
     return (
         <div className="p-8 bg-slate-50 min-h-[500px]">
+            <div className="flex items-center gap-6 mb-8 border-b border-slate-200 pb-6">
+                <button 
+                    onClick={onBack} 
+                    className="p-3 bg-white hover:bg-slate-50 text-slate-600 rounded-sm border border-slate-200 transition-all group shadow-sm"
+                >
+                    <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
+                </button>
+                <div>
+                    <div className="flex items-center gap-3">
+                        <h2 className="text-2xl font-black text-slate-900 tracking-tight">{project?.name || 'Project Units'}</h2>
+                        <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-bold uppercase tracking-widest border border-emerald-100">Project View</span>
+                    </div>
+                    <p className="text-sm text-slate-500 mt-1 flex items-center gap-1.5">
+                        <MapPin size={14} className="text-slate-400"/> {project?.location || 'General Headquarters'}
+                    </p>
+                </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {generalDepts.map(dept => {
                     const deptManager = users.find(u => u.id === dept.managerId);
@@ -1586,12 +1822,14 @@ const GeneralDeptList: React.FC<{
 export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => void }> = React.memo(({ view, onNavigate }) => {
   const [refreshKey, setRefreshKey] = useState(0); 
   const [formMode, setFormMode] = useState(false);
-  const [formType, setFormType] = useState<'USER' | 'JOB' | 'SKILL' | 'DEPT' | null>(null);
+  const [formType, setFormType] = useState<'USER' | 'JOB' | 'SKILL' | 'DEPT' | 'PROJECT' | null>(null);
   const [editItem, setEditItem] = useState<any>(null);
   const [viewSkill, setViewSkill] = useState<Skill | null>(null);
   const [activeTab, setActiveTab] = useState<string>('ALL');
   const [selectedDeptProfileId, setSelectedDeptProfileId] = useState<string | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+
 
   useEffect(() => {
     dataService.getCurrentUser().then(setCurrentUser);
@@ -1601,12 +1839,13 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
   const [searchTerm, setSearchTerm] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [showBulkUpload, setShowBulkUpload] = useState(false);
-  const [bulkType, setBulkType] = useState<'USER' | 'JOB' | 'SKILL' | 'DEPT'>('USER');
+  const [bulkType, setBulkType] = useState<'USER' | 'JOB' | 'SKILL' | 'DEPT' | 'PROJECT'>('USER');
 
   // Reset search when view changes
   useEffect(() => {
     setSearchTerm('');
     setSelectedDeptProfileId(null);
+    setSelectedProjectId(null);
   }, [view]);
 
   const [migrating, setMigrating] = useState(false);
@@ -1672,7 +1911,13 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
   const jobs = useMemo(() => dataService.getAllJobs(), [refreshKey]);
   const skills = useMemo(() => dataService.getAllSkills(), [refreshKey]);
   const depts = useMemo(() => dataService.getAllDepartments(), [refreshKey]);
+  const projects = useMemo(() => dataService.getAllProjects(), [refreshKey]);
   const logs = useMemo(() => dataService.getSystemLogs(), [refreshKey]);
+
+  const hqProjectId = useMemo(() => {
+    return projects.find(p => p.name.toUpperCase() === 'HQ')?.id;
+  }, [projects]);
+
 
   const sortedUsers = useMemo(() => {
     return [...users].sort((a, b) => {
@@ -1752,7 +1997,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
     setRefreshKey(k => k + 1);
   }, []);
 
-  const handleEdit = useCallback((type: 'USER' | 'JOB' | 'SKILL' | 'DEPT', item: any) => {
+  const handleEdit = useCallback((type: 'USER' | 'JOB' | 'SKILL' | 'DEPT' | 'PROJECT', item: any) => {
       if (type === 'SKILL' && item.status === 'PENDING') {
         const approvedEvidences = dataService.getEvidences({ skillId: item.id, status: 'APPROVED' });
         if (approvedEvidences.length === 0) {
@@ -1766,29 +2011,34 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
       setFormMode(true);
   }, []);
 
-  const handleAdd = useCallback((type: 'USER' | 'JOB' | 'SKILL' | 'DEPT') => {
+  const handleAdd = useCallback((type: 'USER' | 'JOB' | 'SKILL' | 'DEPT' | 'PROJECT') => {
       setFormType(type);
-      setEditItem(null);
+      setEditItem(type === 'DEPT' ? { projectId: selectedProjectId || undefined } : null);
       setFormMode(true);
-  }, []);
+  }, [selectedProjectId]);
 
   const handleAddChild = useCallback((parentId: string) => {
+      const parentDept = depts.find(d => d.id === parentId);
       setFormType('DEPT');
-      setEditItem({ parentId: parentId === 'ROOT' ? undefined : parentId });
+      setEditItem({ 
+        parentId: parentId === 'ROOT' ? undefined : parentId,
+        projectId: parentDept?.projectId || selectedProjectId || undefined
+      });
       setFormMode(true);
-  }, []);
+  }, [depts, selectedProjectId]);
 
-  const handleBulkUpload = useCallback((type: 'USER' | 'JOB' | 'SKILL' | 'DEPT') => {
+  const handleBulkUpload = useCallback((type: 'USER' | 'JOB' | 'SKILL' | 'DEPT' | 'PROJECT') => {
     setBulkType(type);
     setShowBulkUpload(true);
   }, []);
 
-  const handleDelete = useCallback(async (type: 'USER' | 'JOB' | 'SKILL' | 'DEPT', id: string) => {
+  const handleDelete = useCallback(async (type: 'USER' | 'JOB' | 'SKILL' | 'DEPT' | 'PROJECT', id: string) => {
       if (window.confirm("Are you sure you want to delete this record? This action cannot be undone.")) {
           if (type === 'USER') await dataService.removeUser(id);
           if (type === 'JOB') await dataService.removeJobProfile(id);
           if (type === 'SKILL') await dataService.removeSkill(id);
           if (type === 'DEPT') await dataService.removeDepartment(id);
+          if (type === 'PROJECT') await dataService.removeProject(id);
           setRefreshKey(k => k + 1);
       }
   }, []);
@@ -1802,6 +2052,8 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
       if (formType === 'JOB') editItem ? await dataService.updateJobProfile(item) : await dataService.addJobProfile(item);
       if (formType === 'SKILL') editItem ? await dataService.updateSkill(item) : await dataService.addSkill(item);
       if (formType === 'DEPT') editItem ? await dataService.updateDepartment(item) : await dataService.addDepartment(item);
+      if (formType === 'PROJECT') editItem ? await dataService.updateProject(item) : await dataService.addProject(item);
+
 
       setFormMode(false);
       setRefreshKey(k => k + 1);
@@ -1830,6 +2082,12 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
             <DepartmentForm initialData={editItem} onSave={handleSave} onCancel={() => setFormMode(false)} />
         </FormPage>
       );
+      if (formType === 'PROJECT') return (
+        <FormPage title={`${titlePrefix}Project`} onBack={() => setFormMode(false)}>
+            <ProjectForm initialData={editItem} onSave={handleSave} onCancel={() => setFormMode(false)} />
+        </FormPage>
+      );
+
       return null;
   };
 
@@ -2148,15 +2406,23 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                     </div>
                     <div className="flex items-center gap-2 w-full md:w-auto">
                         <button 
-                            onClick={() => handleBulkUpload(view === 'USERS' ? 'USER' : view === 'JOBS' ? 'JOB' : view === 'SKILLS' ? 'SKILL' : 'DEPT')}
+                            onClick={() => handleBulkUpload(view === 'USERS' ? 'USER' : view === 'JOBS' ? 'JOB' : view === 'SKILLS' ? 'SKILL' : (view === 'DEPTS' && !selectedProjectId) ? 'PROJECT' : 'DEPT')}
                             className="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-sm text-xs font-bold uppercase tracking-wide flex items-center gap-2 transition-all flex-1 md:flex-none justify-center"
                         >
                             <FileSpreadsheet size={16} className="text-blue-700" /> Bulk Upload
                         </button>
-                        <button onClick={() => handleAdd(view === 'USERS' ? 'USER' : view === 'JOBS' ? 'JOB' : view === 'SKILLS' ? 'SKILL' : 'DEPT')}
-                            className="bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-sm text-xs font-bold uppercase tracking-wide  flex items-center gap-2 transition-all flex-1 md:flex-none justify-center">
-                            <Plus size={16} /> Add {view === 'USERS' ? 'Employee' : view === 'JOBS' ? 'Profile' : view === 'SKILLS' ? 'Skill' : 'Department'}
-                        </button>
+                         <button onClick={() => {
+                             if (view === 'DEPTS' && !selectedProjectId) handleAdd('PROJECT');
+                             else handleAdd(view === 'USERS' ? 'USER' : view === 'JOBS' ? 'JOB' : view === 'SKILLS' ? 'SKILL' : 'DEPT');
+                         }}
+                             className="bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-sm text-xs font-bold uppercase tracking-wide  flex items-center gap-2 transition-all flex-1 md:flex-none justify-center">
+                             <Plus size={16} /> Add {
+                                 view === 'USERS' ? 'Employee' : 
+                                 view === 'JOBS' ? 'Profile' : 
+                                 view === 'SKILLS' ? 'Skill' : 
+                                 (view === 'DEPTS' && !selectedProjectId) ? 'Project' : 'Department'
+                             }
+                         </button>
                     </div>
                 </div>
             )}
@@ -2164,7 +2430,15 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
            {/* Table or Tree View */}
            <div className="overflow-x-auto">
                {view === 'DEPTS' ? (
-                   selectedDeptProfileId ? (
+                   !selectedProjectId ? (
+                       <ProjectList 
+                           projects={projects}
+                           onSelect={setSelectedProjectId}
+                           onEdit={(p) => handleEdit('PROJECT', p)}
+                           onDelete={(id) => handleDelete('PROJECT', id)}
+                           onAdd={() => handleAdd('PROJECT')}
+                       />
+                   ) : selectedDeptProfileId ? (
                        <DepartmentProfileView 
                            deptId={selectedDeptProfileId}
                            depts={depts}
@@ -2180,12 +2454,17 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                        />
                    ) : (
                        <GeneralDeptList 
-                           depts={depts}
+                           projectId={selectedProjectId}
+                           depts={depts.filter(d => 
+                               d.projectId === selectedProjectId || 
+                               (selectedProjectId === hqProjectId && !d.projectId)
+                           )}
                            users={users}
                            currentUser={currentUser}
                            onSelect={setSelectedDeptProfileId}
                            onEdit={(d) => handleEdit('DEPT', d)}
                            onDelete={(id) => handleDelete('DEPT', id)}
+                           onBack={() => setSelectedProjectId(null)}
                        />
                    )
                ) : (

@@ -11,8 +11,8 @@ service cloud.firestore {
 
     function isAdmin() {
       return isAuthenticated() && (
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN' ||
-        (request.auth.token.email == "tarekmoh123@gmail.com" && request.auth.token.email_verified == true)
+        (request.auth.token.email == "tarekmoh123@gmail.com" && request.auth.token.email_verified == true) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN')
       );
     }
 
@@ -113,6 +113,11 @@ service cloud.firestore {
     }
 
     match /trainingCourses/{courseId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /projects/{projectId} {
       allow read: if isAuthenticated();
       allow write: if isAdmin();
     }
