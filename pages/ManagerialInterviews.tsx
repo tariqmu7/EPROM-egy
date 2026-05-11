@@ -44,7 +44,7 @@ export const ManagerialInterviews: React.FC<ManagerialInterviewsProps> = ({ curr
     const levelRequirements = jobProfile.requirements[user.orgLevel] || [];
     return levelRequirements
       .map(req => dataService.getSkill(req.skillId))
-      .filter((s): s is Skill => !!s && s.assessmentMethod === 'INTERVIEW');
+      .filter((s): s is Skill => !!s && (s.assessmentMethod === 'INTERVIEW' || s.assessmentMethod === 'PRACTICAL_DEMO'));
   };
 
   const myInterviewSkills = useMemo(() => getInterviewSkills(currentUser), [currentUser]);
@@ -112,14 +112,27 @@ export const ManagerialInterviews: React.FC<ManagerialInterviewsProps> = ({ curr
           <div className="grid grid-cols-1 gap-4">
             {myInterviewSkills.map(skill => {
               const result = getSkillStatus(currentUser.id, skill.id);
+              const nextDate = dataService.getNextAssessmentDate(currentUser.id, skill.id);
+              const isExpired = nextDate ? new Date() >= nextDate : false;
+              const isCompleted = !!result && !isExpired;
+              const isRenewalDue = !!result && isExpired;
+
               return (
-                <div key={skill.id} className="bg-white border border-slate-300 p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:border-slate-400 transition-colors shadow-sm">
+                <div key={skill.id} className={`bg-white border ${isRenewalDue ? 'border-amber-300' : 'border-slate-300'} p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:border-slate-400 transition-colors shadow-sm`}>
                   <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">{skill.category}</span>
-                      {result && (
-                        <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-tight text-emerald-600 px-1.5 py-0.5 bg-emerald-50 border border-emerald-100">
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                      {skill.code && (
+                        <span className="text-[10px] font-black uppercase tracking-wide text-blue-600 font-bold whitespace-nowrap">{skill.code}</span>
+                      )}
+                      <span className="text-[10px] font-black uppercase tracking-wide text-slate-500 whitespace-nowrap">{skill.category}</span>
+                      {isCompleted && (
+                        <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-tight text-emerald-600 px-1.5 py-0.5 bg-emerald-50 border border-emerald-100 whitespace-nowrap">
                           <CheckCircle size={10} /> Completed
+                        </span>
+                      )}
+                      {isRenewalDue && (
+                        <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-tight text-amber-700 px-1.5 py-0.5 bg-amber-50 border border-amber-200 whitespace-nowrap">
+                          <Clock size={10} /> Renewal Due
                         </span>
                       )}
                     </div>
@@ -128,10 +141,21 @@ export const ManagerialInterviews: React.FC<ManagerialInterviewsProps> = ({ curr
                   </div>
                   
                   <div className="flex items-center gap-6">
-                    {result ? (
+                    {isCompleted ? (
                       <div className="text-right">
-                        <div className="text-2xl font-black text-slate-900 leading-none">{result.score}/5</div>
-                        <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Interview Score</div>
+                        <div className="text-2xl font-black text-slate-900 leading-none">{result?.score}/5</div>
+                        <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wide mt-1">Interview Score</div>
+                      </div>
+                    ) : isRenewalDue ? (
+                      <div className="text-right flex items-center gap-3">
+                        <div className="flex items-center gap-2 text-amber-600">
+                          <Clock size={18} />
+                          <span className="text-xs font-bold uppercase tracking-wider">Renewal Due</span>
+                        </div>
+                        <div className="border-l border-slate-200 pl-3">
+                          <div className="text-xl font-black text-slate-400 leading-none">{result?.score}/5</div>
+                          <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide mt-1">Old Score</div>
+                        </div>
                       </div>
                     ) : (
                       <div className="flex items-center gap-2 text-amber-600">
@@ -226,7 +250,7 @@ export const ManagerialInterviews: React.FC<ManagerialInterviewsProps> = ({ curr
                     </div>
                   </div>
                   <div className="text-right">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Interview Requirements</span>
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-wide block mb-1">Interview Requirements</span>
                     <span className="text-sm font-bold text-slate-900">{subordinateInterviewSkills.length} Total Skills</span>
                   </div>
                </div>
@@ -248,20 +272,27 @@ export const ManagerialInterviews: React.FC<ManagerialInterviewsProps> = ({ curr
                           onClick={() => setSelectedSkillId(skill.id)}
                         >
                           {isSelected && <div className="absolute top-0 right-0 p-1 bg-slate-900 text-white"><CheckCircle size={14} /></div>}
-                          <div className="flex justify-between items-start">
-                            <div>
-                               <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider mb-1 block">
-                                {skill.category}
-                              </span>
-                              <h6 className="font-bold text-slate-900">{skill.name}</h6>
+                          <div className="flex justify-between items-start gap-4">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex flex-wrap gap-2 mb-1">
+                                {skill.code && (
+                                  <span className="text-[10px] font-black uppercase text-blue-600 tracking-wide whitespace-nowrap">
+                                    {skill.code}
+                                  </span>
+                                )}
+                                <span className="text-[10px] font-black uppercase text-slate-400 tracking-wide whitespace-nowrap">
+                                  {skill.category}
+                                </span>
+                              </div>
+                              <h6 className="font-bold text-slate-900 truncate">{skill.name}</h6>
                             </div>
                             {result ? (
-                              <div className="text-right">
+                              <div className="text-right shrink-0">
                                 <span className="text-lg font-black text-slate-900">{result.score}/5</span>
-                                <span className="text-[9px] font-black uppercase block text-emerald-600 mt-1">Verified</span>
+                                <span className="text-[9px] font-black uppercase block text-emerald-600 mt-1 whitespace-nowrap">Verified</span>
                               </div>
                             ) : (
-                              <span className="text-[9px] font-black uppercase text-amber-600 px-1.5 py-0.5 border border-amber-200">Pending Interview</span>
+                              <span className="text-[9px] font-black uppercase text-amber-600 px-1.5 py-0.5 border border-amber-200 shrink-0 whitespace-nowrap">Pending Interview</span>
                             )}
                           </div>
                         </div>

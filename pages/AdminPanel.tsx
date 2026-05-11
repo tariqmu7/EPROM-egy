@@ -749,11 +749,14 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
        id: initialData?.id || Math.random().toString(36).substr(2, 9),
        name: formData.name,
        category: formData.category,
+       subcategory: formData.subcategory,
        assessmentQuestion: formData.assessmentQuestion,
        levels: formData.levels as any,
        status: 'APPROVED',
        assessmentMethod: formData.assessmentMethod || 'OJT_OBSERVATION',
-       assessmentLink: formData.assessmentMethod === 'WRITTEN_EXAM' ? formData.assessmentLink : undefined
+       assessmentLink: formData.assessmentMethod === 'WRITTEN_EXAM' ? formData.assessmentLink : undefined,
+       assessmentFrequency: formData.assessmentFrequency || 'ONE_TIME',
+       periodicInterval: formData.assessmentFrequency === 'PERIODIC' ? formData.periodicInterval || 'ANNUALLY' : undefined
     } as Skill);
   };
 
@@ -777,6 +780,7 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
                       {dataService.generateSkillCode({ 
                           name: formData.name || 'Untitled', 
                           category: formData.category || 'General',
+                          subcategory: formData.subcategory || '',
                           id: '',
                           levels: {},
                           assessmentMethod: 'OJT_OBSERVATION'
@@ -805,6 +809,23 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
               placeholder="Select Category..."
             />
          </div>
+         <div>
+            <SearchableSelect 
+              label="Subcategory (Optional)"
+              options={[
+                { value: 'Maintenance', label: 'Maintenance' },
+                { value: 'Operation', label: 'Operation' },
+                { value: 'Inspection', label: 'Inspection' },
+                { value: 'IT', label: 'IT' },
+                { value: 'HR', label: 'HR' },
+                { value: 'Tech', label: 'Tech' },
+                { value: 'Managers', label: 'Managers' }
+              ]}
+              value={formData.subcategory || ''}
+              onChange={val => setFormData({...formData, subcategory: val})}
+              placeholder="Select Subcategory..."
+            />
+         </div>
           <div className="md:col-span-2">
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Assessment Question</label>
             <input className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none"
@@ -826,6 +847,34 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
               onChange={val => setFormData({...formData, assessmentMethod: val as any})}
             />
          </div>
+
+         <div className="md:col-span-1">
+            <SearchableSelect 
+              label="Assessment Frequency"
+              options={[
+                { value: 'ONE_TIME', label: 'One Time (Never expires)' },
+                { value: 'PERIODIC', label: 'Periodic (Requires renewal)' },
+                { value: 'CERTIFICATE_BASED', label: 'Certificate Based (Expires with certificate)' }
+              ]}
+              value={formData.assessmentFrequency || 'ONE_TIME'}
+              onChange={val => setFormData({...formData, assessmentFrequency: val as any})}
+            />
+         </div>
+
+         {formData.assessmentFrequency === 'PERIODIC' && (
+           <div className="md:col-span-1">
+             <SearchableSelect 
+               label="Renewal Interval"
+               options={[
+                 { value: 'MONTHLY', label: 'Monthly' },
+                 { value: 'QUARTERLY', label: 'Quarterly' },
+                 { value: 'ANNUALLY', label: 'Annually' }
+               ]}
+               value={formData.periodicInterval || 'ANNUALLY'}
+               onChange={val => setFormData({...formData, periodicInterval: val as any})}
+             />
+           </div>
+         )}
 
          {formData.assessmentMethod === 'WRITTEN_EXAM' && (
            <div className="md:col-span-1">
@@ -2548,9 +2597,9 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                            ))}{view === 'JOBS' && filteredJobs.map(job => (
                                <tr key={job.id} className="hover:bg-slate-50 transition-colors group">
                                    <td className="p-4 pl-6">
-                                       <span className="px-2 py-1 bg-blue-50 text-blue-700 border border-blue-100 rounded-none text-[10px] font-black uppercase tracking-widest leading-none">
-                                           {job.code || 'N/A'}
-                                       </span>
+                                        <span className="px-2 py-1 bg-blue-50 text-blue-700 border border-blue-100 rounded-none text-[10px] font-black uppercase tracking-wide leading-none whitespace-nowrap">
+                                            {job.code || 'N/A'}
+                                        </span>
                                    </td>
                                    <td className="p-4 font-bold text-slate-900 group-hover:text-blue-700 transition-colors">{job.title}</td>
                                    <td className="p-4 text-slate-600">{depts.find(d => d.id === job.departmentId)?.name}</td>
@@ -2567,9 +2616,9 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                            ))}{view === 'SKILLS' && filteredSkills.map(skill => (
                                <tr key={skill.id} className="hover:bg-slate-50 transition-colors group">
                                    <td className="p-4 pl-6">
-                                       <span className="px-2 py-1 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-none text-[10px] font-black uppercase tracking-widest leading-none">
-                                           {skill.code || 'N/A'}
-                                       </span>
+                                        <span className="px-2 py-1 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-none text-[10px] font-black uppercase tracking-wide leading-none whitespace-nowrap">
+                                            {skill.code || 'N/A'}
+                                        </span>
                                    </td>
                                    <td className="p-4 font-bold text-slate-900 group-hover:text-blue-700 transition-colors">{skill.name}</td>
                                    <td className="p-4">

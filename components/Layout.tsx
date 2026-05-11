@@ -13,8 +13,10 @@ interface LayoutProps {
   children: React.ReactNode;
 }
 
+const EVAL_TABS = new Set(['evaluations', 'online-assessments', 'interviews', 'emp-assessment', 'evidence-portal']);
+
 const NavItem = memo(({ id, label, icon: Icon, activeTab, onSwitchTab }: { id: string, label: string, icon: any, activeTab: string, onSwitchTab: (tab: string) => void }) => {
-  const isActive = activeTab === id;
+  const isActive = activeTab === id || (id === 'evaluations' && EVAL_TABS.has(activeTab));
   return (
     <button
       onClick={() => onSwitchTab(id)}
@@ -70,10 +72,7 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
                   {dataService.isManager(user) && (
                     <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="manager-dashboard" label="My Team" icon={Users} />
                   )}
-                  <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="online-assessments" label="Online" icon={Monitor} />
-                  <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="interviews" label="Interviews" icon={MessageSquare} />
-                  <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="emp-assessment" label="Evaluations" icon={Star} />
-                  <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="evidence-portal" label="Evidence" icon={UploadCloud} />
+                  <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="evaluations" label="Evaluations" icon={Star} />
                 </>
               )}
             </nav>

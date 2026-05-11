@@ -69,21 +69,34 @@ export const OnlineAssessments: React.FC<OnlineAssessmentsProps> = ({ currentUse
         <div className="grid grid-cols-1 gap-6">
           {requiredSkills.map(skill => {
             const result = getSkillStatus(skill.id);
-            const isCompleted = !!result;
+            const nextDate = dataService.getNextAssessmentDate(currentUser.id, skill.id);
+            const isExpired = nextDate ? new Date() >= nextDate : false;
+            const isCompleted = !!result && !isExpired;
+            const isRenewalDue = !!result && isExpired;
 
             return (
-              <div key={skill.id} className="bg-white border border-slate-300 overflow-hidden flex flex-col md:flex-row shadow-sm hover:border-slate-400 transition-all">
-                <div className={`w-2 shrink-0 ${isCompleted ? 'bg-emerald-500' : 'bg-blue-600'}`}></div>
+              <div key={skill.id} className={`bg-white border ${isRenewalDue ? 'border-amber-300' : 'border-slate-300'} overflow-hidden flex flex-col md:flex-row shadow-sm hover:border-slate-400 transition-all`}>
+                <div className={`w-2 shrink-0 ${isCompleted ? 'bg-emerald-500' : isRenewalDue ? 'bg-amber-500' : 'bg-blue-600'}`}></div>
                 
                 <div className="p-6 flex-grow flex flex-col md:flex-row gap-6 items-start md:items-center">
                   <div className="flex-grow">
-                    <div className="flex items-center gap-3 mb-2">
-                       <span className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 bg-slate-100 text-slate-600 border border-slate-200">
+                    <div className="flex flex-wrap gap-2 mb-2">
+                       {skill.code && (
+                        <span className="text-[10px] font-black uppercase tracking-wide px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 whitespace-nowrap">
+                          {skill.code}
+                        </span>
+                      )}
+                       <span className="text-[10px] font-black uppercase tracking-wide px-2 py-0.5 bg-slate-100 text-slate-600 border border-slate-200 whitespace-nowrap">
                         {skill.category}
                       </span>
                       {isCompleted && (
-                        <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-tight text-emerald-600 px-2 py-0.5 bg-emerald-50 border border-emerald-100">
+                        <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-tight text-emerald-600 px-2 py-0.5 bg-emerald-50 border border-emerald-100 whitespace-nowrap">
                           <CheckCircle size={10} /> Completed
+                        </span>
+                      )}
+                      {isRenewalDue && (
+                        <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-tight text-amber-700 px-2 py-0.5 bg-amber-50 border border-amber-200 whitespace-nowrap">
+                          <Clock size={10} /> Renewal Due
                         </span>
                       )}
                     </div>
@@ -102,13 +115,23 @@ export const OnlineAssessments: React.FC<OnlineAssessmentsProps> = ({ currentUse
                     {isCompleted ? (
                       <div className="bg-slate-50 border border-slate-200 p-4 rounded-none">
                         <div className="flex justify-between items-end mb-1">
-                          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Assessment Score</span>
-                          <span className="text-2xl font-black text-slate-900">{result.score}/5</span>
+                          <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">Assessment Score</span>
+                          <span className="text-2xl font-black text-slate-900">{result?.score}/5</span>
                         </div>
                         <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
-                           <div className="bg-emerald-500 h-full" style={{ width: `${(result.score/5) * 100}%` }}></div>
+                           <div className="bg-emerald-500 h-full" style={{ width: `${((result?.score || 0)/5) * 100}%` }}></div>
                         </div>
-                        <p className="text-[10px] text-slate-500 mt-2 italic">Completed on {new Date(result.date).toLocaleDateString()}</p>
+                        <p className="text-[10px] text-slate-500 mt-2 italic">Completed on {new Date(result?.date || '').toLocaleDateString()}</p>
+                      </div>
+                    ) : isRenewalDue ? (
+                      <div className="bg-amber-50 border border-amber-200 p-4 rounded-none">
+                        <div className="flex items-center gap-2 text-amber-800 mb-2">
+                          <Clock size={16} />
+                          <span className="text-xs font-bold uppercase tracking-wider">Status: Renewal Due</span>
+                        </div>
+                        <p className="text-[11px] text-amber-700/80 leading-tight">
+                          Your previous certification has expired. Please complete the examination again.
+                        </p>
                       </div>
                     ) : (
                       <div className="bg-blue-50 border border-blue-100 p-4 rounded-none">

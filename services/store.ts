@@ -877,10 +877,21 @@ class DataService {
 
     requirements.forEach(req => {
       const currentScore = this.getUserSkillScore(userId, req.skillId);
-      if (currentScore < req.requiredLevel) {
-        const skill = this.getSkill(req.skillId);
-        if (!skill) return;
+      const skill = this.getSkill(req.skillId);
+      if (!skill) return;
 
+      let needsAssessment = false;
+
+      if (currentScore < req.requiredLevel) {
+        needsAssessment = true;
+      } else {
+        const nextDate = this.getNextAssessmentDate(userId, req.skillId);
+        if (nextDate && new Date() >= nextDate) {
+          needsAssessment = true;
+        }
+      }
+
+      if (needsAssessment) {
         const assessment = scheduled.find(s => s.skillId === req.skillId);
         
         // Find the actual assessment record for this skill if it was completed
@@ -923,6 +934,32 @@ class DataService {
     });
 
     return { writtenExams, managerialInterviews, evaluations360, workRecords };
+  }
+
+  getNextAssessmentDate(userId: string, skillId: string): Date | null {
+    const skill = this.getSkill(skillId);
+    if (!skill) return null;
+
+    if (skill.assessmentFrequency === 'PERIODIC' && skill.periodicInterval) {
+      const userAssessments = this.assessments.filter(a => a.subjectId === userId && a.skillId === skillId && !a.isArchived);
+      if (userAssessments.length > 0) {
+        const latest = userAssessments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+        const nextDate = new Date(latest.date);
+        if (skill.periodicInterval === 'MONTHLY') nextDate.setMonth(nextDate.getMonth() + 1);
+        else if (skill.periodicInterval === 'QUARTERLY') nextDate.setMonth(nextDate.getMonth() + 3);
+        else if (skill.periodicInterval === 'ANNUALLY') nextDate.setFullYear(nextDate.getFullYear() + 1);
+        return nextDate;
+      }
+      return new Date(); // Overdue if never assessed but periodic
+    } else if (skill.assessmentFrequency === 'CERTIFICATE_BASED') {
+      const userEvidences = this.evidences.filter(e => e.userId === userId && e.skillId === skillId && e.status === 'APPROVED' && e.expiryDate);
+      if (userEvidences.length > 0) {
+        const latest = userEvidences.sort((a, b) => new Date(b.expiryDate!).getTime() - new Date(a.expiryDate!).getTime())[0];
+        return new Date(latest.expiryDate!);
+      }
+    }
+    
+    return null;
   }
 
   generateCareerPath(userId: string): CareerProgressionPlan | null {
@@ -1321,13 +1358,13 @@ class DataService {
   
   public generateSkillCode(skill: Skill): string {
     const catPrefix = (skill.category || 'GEN').substring(0, 3).toUpperCase();
-    const namePrefix = (skill.name || 'SKL').replace(/\s+/g, '').substring(0, 3).toUpperCase();
+    const subPrefix = skill.subcategory ? skill.subcategory.replace(/\s+/g, '').substring(0, 3).toUpperCase() : (skill.name || 'SKL').replace(/\s+/g, '').substring(0, 3).toUpperCase();
     
     // Count existing skills with this prefix to get a sequential index
-    const existingCount = this.skills.filter(s => s.code?.startsWith(`${catPrefix}-${namePrefix}`)).length;
+    const existingCount = this.skills.filter(s => s.code?.startsWith(`${catPrefix}-${subPrefix}`)).length;
     const index = (existingCount + 1).toString().padStart(2, '0');
     
-    return `${catPrefix}-${namePrefix}-${index}`;
+    return `${catPrefix}-${subPrefix}-${index}`;
   }
 
   async addJobProfile(job: JobProfile) { 

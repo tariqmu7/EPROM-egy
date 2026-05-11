@@ -355,7 +355,9 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
                     >
                       <option value="" disabled>Select behavior to evaluate...</option>
                       {availableSkills.map(s => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
+                        <option key={s.id} value={s.id}>
+                          {s.code ? `[${s.code}] ` : ''}{s.name}
+                        </option>
                       ))}
                     </select>
                     {availableSkills.length === 0 && (

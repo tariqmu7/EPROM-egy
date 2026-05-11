@@ -8,6 +8,7 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
   const [newSkillName, setNewSkillName] = useState('');
   const [notes, setNotes] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [expiryDate, setExpiryDate] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
 
@@ -26,7 +27,7 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
     return reqs.map(req => {
       const skill = skills.find(s => s.id === req.skillId);
       return { ...req, skill };
-    }).filter(r => r.skill !== undefined) as { skillId: string, requiredLevel: number, skill: Skill }[];
+    }).filter(r => r.skill !== undefined && (r.skill.assessmentMethod === 'WORK_RECORD_REVIEW' || r.skill.requiresCertificate)) as { skillId: string, requiredLevel: number, skill: Skill }[];
   }, [myJobProfile, currentUser.orgLevel, skills]);
 
   const otherSkills = useMemo(() => {
@@ -84,7 +85,8 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
         skillId: finalSkillId,
         fileUrl: base64String,
         fileName: file.name,
-        notes: notes
+        notes: notes,
+        ...(selectedSkill?.assessmentFrequency === 'CERTIFICATE_BASED' && expiryDate ? { expiryDate } : {})
       });
 
       setSuccessMessage('Evidence submitted successfully for review.');
@@ -129,15 +131,27 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
                       const pending = myEvidences.find(e => e.skillId === req.skillId && e.status === 'PENDING');
                       const approved = myEvidences.find(e => e.skillId === req.skillId && e.status === 'APPROVED');
                       
+                      const nextDate = dataService.getNextAssessmentDate(currentUser.id, req.skillId);
+                      const isExpired = nextDate ? new Date() >= nextDate : false;
+                      const isRenewalDue = !!approved && isExpired;
+
                       return (
-                        <li key={req.skillId} className="flex items-start justify-between text-sm">
-                          <span className="text-slate-700 font-medium">{req.skill.name}</span>
-                          {approved ? (
-                            <span title="Verified"><CheckCircle size={16} className="text-emerald-500 shrink-0 mt-0.5" /></span>
+                        <li key={req.skillId} className="flex items-start justify-between gap-4 text-sm">
+                          <div className="min-w-0">
+                            <div className="flex gap-2 mb-0.5">
+                              {req.skill.code && <span className="text-[9px] font-black uppercase text-blue-600 whitespace-nowrap">{req.skill.code}</span>}
+                              <span className="text-[9px] font-bold uppercase text-slate-400 whitespace-nowrap">{req.skill.category}</span>
+                            </div>
+                            <div className="text-slate-700 font-medium truncate">{req.skill.name}</div>
+                          </div>
+                          {isRenewalDue ? (
+                            <span title="Renewal Due" className="shrink-0 mt-2"><Clock size={16} className="text-amber-600" /></span>
+                          ) : approved ? (
+                            <span title="Verified" className="shrink-0 mt-2"><CheckCircle size={16} className="text-emerald-500" /></span>
                           ) : pending ? (
-                            <span title="Pending Review"><Clock size={16} className="text-amber-500 shrink-0 mt-0.5" /></span>
+                            <span title="Pending Review" className="shrink-0 mt-2"><Clock size={16} className="text-amber-500" /></span>
                           ) : (
-                            <span title="Evidence Required"><AlertCircle size={16} className="text-rose-500 shrink-0 mt-0.5" /></span>
+                            <span title="Evidence Required" className="shrink-0 mt-2"><AlertCircle size={16} className="text-rose-500" /></span>
                           )}
                         </li>
                       );
@@ -227,6 +241,20 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
                 </div>
                 {file && <p className="mt-2 text-sm text-slate-800 font-medium flex items-center gap-2"><CheckCircle size={16}/> Selected: {file.name}</p>}
               </div>
+
+              {selectedSkill?.assessmentFrequency === 'CERTIFICATE_BASED' && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Certificate Expiry Date</label>
+                  <input 
+                    type="date"
+                    required
+                    value={expiryDate}
+                    onChange={(e) => setExpiryDate(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-sm focus:ring-slate-900 focus:border-slate-900 block p-2.5"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">This skill requires periodic renewal based on the certificate's validity.</p>
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Context / Notes</label>

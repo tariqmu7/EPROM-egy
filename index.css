@@ -3,6 +3,11 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    /* Reserve scrollbar gutter permanently — prevents layout shift when
+       switching between tabs that have different amounts of content */
+    scrollbar-gutter: stable;
+  }
   body {
     @apply bg-slate-100 text-slate-900 font-sans;
   }

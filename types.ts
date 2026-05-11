@@ -60,7 +60,10 @@ export interface Skill {
   assessmentLink?: string; // Used specifically for WRITTEN_EXAM to link to external forms
   description?: string; // Optional detailed description of the skill or assessment
   code?: string; // Automatically generated professional identifier
+  subcategory?: string; // Related field e.g., Maintenance, Operation, IT
   requiresCertificate?: boolean; // True if the skill needs external validation
+  assessmentFrequency?: 'ONE_TIME' | 'PERIODIC' | 'CERTIFICATE_BASED';
+  periodicInterval?: 'MONTHLY' | 'QUARTERLY' | 'ANNUALLY';
 }
 
 export type AssessmentMethod = 'WRITTEN_EXAM' | 'PRACTICAL_DEMO' | 'OJT_OBSERVATION' | 'INTERVIEW' | 'WORK_RECORD_REVIEW';
@@ -225,6 +228,7 @@ export interface Evidence {
   reviewedBy?: string;
   assignedScore?: number; // 1-5 grading assigned by Manager upon approval
   reviewerComment?: string;
+  expiryDate?: string; // Used for CERTIFICATE_BASED frequency
 }
 
 export interface Notification {

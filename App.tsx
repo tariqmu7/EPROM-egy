@@ -8,6 +8,7 @@ import { AdminPanel } from './pages/AdminPanel';
 import { CEOPanel } from './pages/CEOPanel';
 import { EvidencePortal } from './pages/EvidencePortal';
 import { BehavioralAssessment } from './pages/BehavioralAssessment';
+import { EvaluationsHub } from './pages/EvaluationsHub';
 import { Logo } from './components/Logo';
 import { dataService, CONFIG } from './services/store';
 import { User, Role } from './types';
@@ -423,10 +424,12 @@ const App: React.FC = () => {
                 </div>
             );
         case 'manager-dashboard': return <ManagerDashboard user={user} />;
-        case 'online-assessments': return <OnlineAssessments currentUser={user} />;
-        case 'interviews': return <ManagerialInterviews currentUser={user} />;
-        case 'emp-assessment': return <BehavioralAssessment currentUser={user} />;
-        case 'evidence-portal': return <EvidencePortal currentUser={user} />;
+        case 'evaluations': return <EvaluationsHub currentUser={user} />;
+        // Legacy deep-link cases — open hub with correct sub-tab pre-selected
+        case 'online-assessments': return <EvaluationsHub currentUser={user} initialTab="online" />;
+        case 'interviews': return <EvaluationsHub currentUser={user} initialTab="interviews" />;
+        case 'emp-assessment': return <EvaluationsHub currentUser={user} initialTab="360" />;
+        case 'evidence-portal': return <EvaluationsHub currentUser={user} initialTab="evidence" />;
         // Admin Views - Mapped to sidebar IDs
         case 'admin-dashboard': return <AdminPanel view="OVERVIEW" onNavigate={setActiveTab} />;
         case 'admin-analytics': return <AdminPanel view="ANALYTICS" onNavigate={setActiveTab} />;

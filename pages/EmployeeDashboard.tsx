@@ -55,8 +55,7 @@ interface EmployeeDashboardProps {
 }
 
 export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({ user }) => {
-  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'ASSESSMENTS' | 'IDP' | 'HISTORY' | 'CERTIFICATES'>('OVERVIEW');
-  const [assessmentQueue, setAssessmentQueue] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'IDP' | 'HISTORY' | 'CERTIFICATES'>('OVERVIEW');
   const [historySearchTerm, setHistorySearchTerm] = useState('');
 
   // Certificate Management State
@@ -106,11 +105,6 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
   const jobProfile = useMemo(() => user.jobProfileId ? dataService.getJobProfile(user.jobProfileId) : null, [user.jobProfileId]);
   const depts = useMemo(() => dataService.getAllDepartments(), []);
   const manager = useMemo(() => user.managerId ? dataService.getUserById(user.managerId) : null, [user.managerId]);
-  
-  useEffect(() => {
-    const queue = dataService.getEmployeeAssessmentQueue(user.id);
-    setAssessmentQueue(queue);
-  }, [user.id]);
 
   const skillAnalysis = useMemo(() => {
     const requirements = jobProfile && user.orgLevel ? (jobProfile.requirements[user.orgLevel] || []) : [];
@@ -137,69 +131,6 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
   const annualCycle = useMemo(() => {
     return dataService.getAllCycles().find(c => c.name.includes('Annual Appraisal') || c.name.includes('Annual 360 Evaluation'));
   }, []);
-
-  const renderAssessmentSection = (title: string, items: any[], icon: any, actionLabel: string, colorClass: string) => (
-    <div className="bg-white border border-slate-200 overflow-hidden">
-      <div className={`p-4 border-b border-slate-100 flex items-center justify-between ${colorClass}`}>
-        <div className="flex items-center gap-2">
-          {React.createElement(icon, { size: 18, className: "text-slate-800" })}
-          <h3 className="font-bold text-slate-900 uppercase tracking-tight text-sm">{title}</h3>
-        </div>
-        <span className="bg-white/50 px-2 py-0.5 rounded-none text-[10px] font-black border border-black/10">{items.length} Pending</span>
-      </div>
-      <div className="divide-y divide-slate-100">
-        {items.length > 0 ? items.map((item, idx) => (
-          <div key={idx} className="p-4 hover:bg-slate-50 transition-colors">
-            <div className="flex justify-between items-start mb-2">
-              <div>
-                <h4 className="font-bold text-slate-900 text-sm">{item.skill.name}</h4>
-                <div className="flex items-center gap-3 mt-1">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1">
-                        <Target size={10} /> Target: Level {item.requiredLevel}
-                    </span>
-                    <span className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1">
-                        <Clock size={10} /> {item.scheduledDate ? new Date(item.scheduledDate).toLocaleDateString() : 'Scheduling...'}
-                    </span>
-                </div>
-              </div>
-              <div className="text-right">
-                <span className={`text-[9px] font-black px-1.5 py-0.5 border ${item.status === 'OVERDUE' ? 'bg-red-50 text-red-700 border-red-100' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
-                  {item.status}
-                </span>
-              </div>
-            </div>
-            {item.assessorId && (
-                <p className="text-[10px] text-slate-500 mb-3 flex items-center gap-1">
-                    <UserCheck size={10} /> Assessor: {dataService.getUserById(item.assessorId)?.name || 'TBD'}
-                </p>
-            )}
-            {item.status === 'COMPLETED' ? (
-                <div className="mt-4 p-4 bg-emerald-50 border border-emerald-100 rounded-none">
-                    <div className="flex items-center justify-between mb-2">
-                        <span className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">Achieved Proficiency</span>
-                        <span className="text-sm font-black text-emerald-900">Level {item.achievedScore}</span>
-                    </div>
-                    {item.comment && (
-                        <blockquote className="text-[11px] text-slate-600 italic border-l-2 border-emerald-200 pl-3 py-1 bg-white/50">
-                            "{item.comment}"
-                        </blockquote>
-                    )}
-                </div>
-            ) : (
-                <button className="w-full mt-2 py-2 bg-slate-900 text-white text-[10px] font-bold uppercase tracking-widest hover:bg-slate-800 transition-all flex items-center justify-center gap-2">
-                    {actionLabel} <ChevronRight size={12} />
-                </button>
-            )}
-          </div>
-        )) : (
-          <div className="p-8 text-center text-slate-400">
-            <CheckCircle size={24} className="mx-auto mb-2 opacity-20" />
-            <p className="text-xs font-medium italic">No pending tasks in this category.</p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-8 animate-in fade-in duration-500">
@@ -343,7 +274,6 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
       <div className="flex items-center gap-8 border-b border-slate-200 overflow-x-auto no-scrollbar">
         {[
           { id: 'OVERVIEW', label: 'Dashboard Overview', icon: LayoutGrid },
-          { id: 'ASSESSMENTS', label: 'Assessment Queue', icon: Zap },
           { id: 'HISTORY', label: 'Evaluation History', icon: HistoryIcon },
           { id: 'CERTIFICATES', label: 'Certificates & Credentials', icon: ShieldCheck },
           { id: 'IDP', label: 'Individual Development Plan', icon: Target },
@@ -351,7 +281,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
-            className={`flex items-center gap-2 pb-4 text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap border-b-2 ${
+            className={`flex items-center gap-2 pb-4 text-xs font-bold uppercase tracking-wide transition-all whitespace-nowrap border-b-2 ${
               activeTab === tab.id ? 'border-slate-900 text-slate-900' : 'border-transparent text-slate-400 hover:text-slate-600'
             }`}
           >
@@ -399,49 +329,6 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
         {/* Right Column: Dynamic View */}
         <div className="lg:col-span-8">
             
-            {activeTab === 'ASSESSMENTS' && assessmentQueue && (
-                <div className="space-y-8 animate-in slide-in-from-right-4 duration-500">
-                    <div className="bg-blue-900 p-8 text-white relative overflow-hidden">
-                        <Zap className="absolute -right-8 -bottom-8 w-48 h-48 opacity-10" />
-                        <h2 className="text-2xl font-black uppercase tracking-tight mb-2">Assessment Routing Center</h2>
-                        <p className="text-blue-200 text-sm max-w-xl">
-                            All pending competencies are routed here based on their evaluation method. Complete your scheduled tasks to update your matrix profile.
-                        </p>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {renderAssessmentSection(
-                            "Written Examinations Center", 
-                            assessmentQueue.writtenExams, 
-                            Monitor, 
-                            "Take Exam", 
-                            "bg-amber-50"
-                        )}
-                        {renderAssessmentSection(
-                            "Managerial Interviews", 
-                            assessmentQueue.managerialInterviews, 
-                            Users, 
-                            "Join Interview", 
-                            "bg-indigo-50"
-                        )}
-                        {renderAssessmentSection(
-                            "360-Degree Evaluation", 
-                            assessmentQueue.evaluations360, 
-                            Activity, 
-                            "Review Request", 
-                            "bg-emerald-50"
-                        )}
-                        {renderAssessmentSection(
-                            "Work Record & Evidence Portal", 
-                            assessmentQueue.workRecords, 
-                            FileUp, 
-                            "Upload Evidence", 
-                            "bg-blue-50"
-                        )}
-                    </div>
-                </div>
-            )}
-
             {activeTab === 'HISTORY' && (
                 <div className="space-y-8 animate-in slide-in-from-right-4 duration-500">
                     <div className="bg-slate-900 p-8 text-white relative overflow-hidden">
