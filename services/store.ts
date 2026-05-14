@@ -166,7 +166,8 @@ class DataService {
           return {
             id: doc.id,
             ...data,
-            certificates: data.certificates ? (typeof data.certificates === 'string' ? JSON.parse(data.certificates) : data.certificates) : []
+            certificates: data.certificates ? (typeof data.certificates === 'string' ? JSON.parse(data.certificates) : data.certificates) : [],
+            careerHistory: data.careerHistory ? (typeof data.careerHistory === 'string' ? JSON.parse(data.careerHistory) : data.careerHistory) : []
           } as User;
         });
         this.checkCertificationExpiries();
@@ -215,7 +216,10 @@ class DataService {
           const skill = {
             id: doc.id,
             ...data,
-            levels: data.levels ? JSON.parse(data.levels) : {}
+            levels: data.levels ? JSON.parse(data.levels) : {},
+            evaluationQuestions: data.evaluationQuestions ? JSON.parse(data.evaluationQuestions) : [],
+            interviewQuestions: data.interviewQuestions ? JSON.parse(data.interviewQuestions) : [],
+            threeSixtyQuestions: data.threeSixtyQuestions ? JSON.parse(data.threeSixtyQuestions) : []
           } as Skill;
 
           if (!skill.code) {
@@ -523,7 +527,8 @@ class DataService {
         const profile = {
           id: docSnap.id,
           ...data,
-          certificates: data.certificates ? JSON.parse(data.certificates) : []
+          certificates: data.certificates ? JSON.parse(data.certificates) : [],
+          careerHistory: data.careerHistory ? JSON.parse(data.careerHistory) : []
         } as User;
         
         const isBootstrapAdmin = trimmedEmail.toLowerCase() === 'tarekmoh123@gmail.com';
@@ -581,7 +586,8 @@ class DataService {
          profile = {
            id: docSnap.id,
            ...data,
-           certificates: data.certificates ? JSON.parse(data.certificates) : []
+           certificates: data.certificates ? JSON.parse(data.certificates) : [],
+           careerHistory: data.careerHistory ? JSON.parse(data.careerHistory) : []
          } as User;
       }
     }
@@ -605,14 +611,18 @@ class DataService {
       let payload = { ...item };
       
       // Serialize complex objects
-      if (collectionName === 'users' && item.certificates) {
-        payload.certificates = JSON.stringify(item.certificates);
+      if (collectionName === 'users') {
+        if (item.certificates) payload.certificates = JSON.stringify(item.certificates);
+        if (item.careerHistory) payload.careerHistory = JSON.stringify(item.careerHistory);
       }
       if (collectionName === 'jobProfiles' && item.requirements) {
         payload.requirements = JSON.stringify(item.requirements);
       }
-      if (collectionName === 'skills' && item.levels) {
-        payload.levels = JSON.stringify(item.levels);
+      if (collectionName === 'skills') {
+        if (item.levels) payload.levels = JSON.stringify(item.levels);
+        if (item.evaluationQuestions) payload.evaluationQuestions = JSON.stringify(item.evaluationQuestions);
+        if (item.interviewQuestions) payload.interviewQuestions = JSON.stringify(item.interviewQuestions);
+        if (item.threeSixtyQuestions) payload.threeSixtyQuestions = JSON.stringify(item.threeSixtyQuestions);
       }
 
       // Remove undefined values for Firestore

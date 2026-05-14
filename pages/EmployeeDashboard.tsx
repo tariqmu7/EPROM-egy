@@ -55,7 +55,8 @@ interface EmployeeDashboardProps {
 }
 
 export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({ user }) => {
-  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'IDP' | 'HISTORY' | 'CERTIFICATES'>('OVERVIEW');
+  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'IDP' | 'HISTORY' | 'CERTIFICATES' | 'CAREER'>('OVERVIEW');
+  const [careerSubTab, setCareerSubTab] = useState<'JOURNEY' | 'INVENTORY'>('JOURNEY');
   const [historySearchTerm, setHistorySearchTerm] = useState('');
 
   // Certificate Management State
@@ -102,6 +103,10 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
     setEditingCert(null);
   };
 
+  const handleExportCV = () => {
+    window.print();
+  };
+
   const jobProfile = useMemo(() => user.jobProfileId ? dataService.getJobProfile(user.jobProfileId) : null, [user.jobProfileId]);
   const depts = useMemo(() => dataService.getAllDepartments(), []);
   const manager = useMemo(() => user.managerId ? dataService.getUserById(user.managerId) : null, [user.managerId]);
@@ -129,14 +134,75 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
   const latestAppraisal = annualAppraisals[0];
 
   const annualCycle = useMemo(() => {
-    return dataService.getAllCycles().find(c => c.name.includes('Annual Appraisal') || c.name.includes('Annual 360 Evaluation'));
-  }, []);
+    if (!latestAppraisal?.cycleId) return null;
+    return dataService.getAllCycles().find(c => c.id === latestAppraisal.cycleId);
+  }, [latestAppraisal]);
+
+  const careerSkillMap = useMemo(() => {
+    const assessments = dataService.getAssessments({ subjectId: user.id });
+    const evidences = dataService.getEvidences({ userId: user.id, status: 'APPROVED' });
+
+    const skillMap: Record<string, { 
+        skill: Skill, 
+        bestScore: number, 
+        latestScore: number,
+        history: { date: string, score: number, method: string, type: string }[]
+    }> = {};
+    
+    const allRecords = [
+        ...assessments.map(a => ({ 
+            skillId: a.skillId, 
+            date: a.date, 
+            score: a.score, 
+            method: a.method, 
+            type: a.type 
+        })),
+        ...evidences.map(e => ({ 
+            skillId: e.skillId, 
+            date: e.reviewedAt || e.submittedAt, 
+            score: e.assignedScore || 0, 
+            method: 'WORK_RECORD_REVIEW', 
+            type: 'EVIDENCE' 
+        }))
+    ];
+
+    allRecords.forEach(rec => {
+        if (!skillMap[rec.skillId]) {
+            const skillDetails = dataService.getSkill(rec.skillId);
+            if (skillDetails) {
+                skillMap[rec.skillId] = {
+                    skill: skillDetails,
+                    bestScore: 0,
+                    latestScore: 0,
+                    history: []
+                };
+            }
+        }
+        
+        if (skillMap[rec.skillId]) {
+            skillMap[rec.skillId].history.push({
+                date: rec.date,
+                score: rec.score,
+                method: rec.method,
+                type: rec.type
+            });
+            if (rec.score > skillMap[rec.skillId].bestScore) skillMap[rec.skillId].bestScore = rec.score;
+        }
+    });
+
+    Object.values(skillMap).forEach(entry => {
+        entry.history.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        entry.latestScore = entry.history[0]?.score || 0;
+    });
+
+    return Object.values(skillMap).sort((a, b) => a.skill.name.localeCompare(b.skill.name));
+  }, [user.id]);
 
   return (
-    <div className="max-w-[1600px] mx-auto space-y-8 animate-in fade-in duration-500">
+    <div className="max-w-[1600px] mx-auto p-4 md:p-8 space-y-8 animate-in fade-in duration-500" id="printable-cv">
       
       {/* ── Page Header ────────────────────────────────────────────────── */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-200 pb-8">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-200 pb-8 print:hidden">
         <div className="flex items-center gap-6">
           <div className="relative group">
             <div className="w-24 h-24 bg-slate-100 border border-slate-300 rounded-none overflow-hidden flex items-center justify-center relative">
@@ -170,14 +236,17 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Direct Manager</p>
                 <p className="text-sm font-bold text-slate-900">{(manager && (manager.role !== Role.CEO || user.role === Role.CEO)) ? `${manager.name} (ID: ${manager.employeeId})` : 'N/A'}</p>
             </div>
-            <button className="flex items-center gap-2 px-5 py-2.5 bg-white border-2 border-slate-900 text-slate-900 font-black uppercase text-xs tracking-widest hover:bg-slate-900 hover:text-white transition-all">
+            <button 
+                onClick={handleExportCV}
+                className="flex items-center gap-2 px-5 py-2.5 bg-white border-2 border-slate-900 text-slate-900 font-black uppercase text-xs tracking-widest hover:bg-slate-900 hover:text-white transition-all"
+            >
                 <Download size={16} /> Export CV
             </button>
         </div>
       </div>
 
       {/* ── Professional Identity ─────────────────────────────────────── */}
-      <div className="bg-white border border-slate-200 p-6 animate-in slide-in-from-top-4 duration-500 shadow-sm">
+      <div className="bg-white border border-slate-200 p-6 animate-in slide-in-from-top-4 duration-500 shadow-sm print:border-none print:shadow-none">
         <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-2">
             <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Professional Identity</h3>
             <span className="text-[10px] font-black text-slate-900 tracking-widest bg-slate-50 px-2 py-0.5 border border-slate-200">ID: {user.employeeId || 'PENDING'}</span>
@@ -271,12 +340,13 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
       </div>
 
       {/* ── Navigation Tabs ────────────────────────────────────────────── */}
-      <div className="flex items-center gap-8 border-b border-slate-200 overflow-x-auto no-scrollbar">
+      <div className="flex items-center gap-8 border-b border-slate-200 overflow-x-auto no-scrollbar print:hidden">
         {[
           { id: 'OVERVIEW', label: 'Dashboard Overview', icon: LayoutGrid },
           { id: 'HISTORY', label: 'Evaluation History', icon: HistoryIcon },
           { id: 'CERTIFICATES', label: 'Certificates & Credentials', icon: ShieldCheck },
           { id: 'IDP', label: 'Individual Development Plan', icon: Target },
+          { id: 'CAREER', label: 'Career & Skill Profile', icon: Briefcase },
         ].map(tab => (
           <button
             key={tab.id}
@@ -659,8 +729,216 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                 </div>
             )}
 
+            {activeTab === 'CAREER' && (
+                <div className="space-y-8 animate-in slide-in-from-right-4 duration-500">
+                    <div className="bg-blue-900 p-8 text-white relative overflow-hidden">
+                        <Briefcase className="absolute -right-8 -bottom-8 w-48 h-48 opacity-10" />
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 relative z-10">
+                            <div>
+                                <h2 className="text-2xl font-black uppercase tracking-tight mb-2">Professional Career & Skill Ledger</h2>
+                                <p className="text-blue-200 text-sm max-w-xl">
+                                    A comprehensive record of your skills, evaluations, and professional journey across all roles within EPROM.
+                                </p>
+                            </div>
+                            <button 
+                                onClick={handleExportCV}
+                                className="bg-white text-blue-900 px-6 py-3 font-black uppercase tracking-widest text-xs flex items-center gap-2 hover:bg-blue-50 transition-all shadow-lg shrink-0"
+                            >
+                                <FileText size={16} /> Export Professional CV
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="space-y-6">
+                        {/* Sub-Tabs Navigation */}
+                        <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-200 bg-slate-50/50 p-1 gap-4">
+                            <div className="flex items-center gap-1">
+                                <button 
+                                    onClick={() => setCareerSubTab('JOURNEY')}
+                                    className={`flex items-center gap-2 px-6 py-3 text-xs font-black uppercase tracking-widest transition-all ${
+                                        careerSubTab === 'JOURNEY' 
+                                        ? 'bg-white text-blue-900 shadow-sm border-b-2 border-blue-900' 
+                                        : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+                                    }`}
+                                >
+                                    <HistoryIcon size={16} /> Professional Journey
+                                </button>
+                                <button 
+                                    onClick={() => setCareerSubTab('INVENTORY')}
+                                    className={`flex items-center gap-2 px-6 py-3 text-xs font-black uppercase tracking-widest transition-all ${
+                                        careerSubTab === 'INVENTORY' 
+                                        ? 'bg-white text-blue-900 shadow-sm border-b-2 border-blue-900' 
+                                        : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+                                    }`}
+                                >
+                                    <Layers size={16} /> Skill Inventory (All-Time)
+                                </button>
+                            </div>
+
+                            {careerSubTab === 'INVENTORY' && (
+                                <div className="flex gap-2 px-4">
+                                    <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-3 py-1 border border-emerald-100 uppercase tracking-tighter">
+                                        <CheckCircle size={10} /> Certified
+                                    </span>
+                                    <span className="flex items-center gap-1 text-[10px] font-bold text-blue-600 bg-blue-50 px-3 py-1 border border-blue-100 uppercase tracking-tighter">
+                                        <TrendingUp size={10} /> Evaluated
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Sub-Tab Content */}
+                        <div className="animate-in fade-in zoom-in-95 duration-300">
+                            {careerSubTab === 'JOURNEY' ? (
+                                <div className="space-y-6 max-w-4xl mx-auto py-8">
+                                    <div className="relative pl-12 space-y-12">
+                                        <div className="absolute left-[21px] top-4 bottom-4 w-1 bg-gradient-to-b from-blue-600 via-slate-200 to-slate-200"></div>
+                                        
+                                        {/* Current Position */}
+                                        <div className="relative group">
+                                            <div className="absolute -left-12 top-0 w-11 h-11 bg-white border-4 border-blue-600 rounded-none shadow-md flex items-center justify-center z-10 group-hover:scale-110 transition-transform">
+                                                <Briefcase size={18} className="text-blue-600" />
+                                            </div>
+                                            <div className="bg-white p-6 border border-slate-200 border-l-4 border-l-blue-600 shadow-sm">
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <p className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em]">Active Role / Primary Designation</p>
+                                                    <span className="text-[10px] font-bold text-slate-400">Since {user.careerHistory?.[0]?.startDate ? new Date(user.careerHistory[0].startDate).toLocaleDateString() : 'Initial Start'}</span>
+                                                </div>
+                                                <h4 className="text-2xl font-black text-slate-900 uppercase leading-none mb-2 tracking-tight">{jobProfile?.title || 'Position Asset'}</h4>
+                                                <div className="flex items-center gap-4">
+                                                    <p className="text-sm font-bold text-slate-500 uppercase tracking-wider">{depts.find(d => d.id === user.departmentId)?.name}</p>
+                                                    <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+                                                    <p className="text-xs text-slate-400">{user.projectName || 'General Site'}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Historical Roles */}
+                                        {user.careerHistory?.slice(1).map((entry, idx) => (
+                                            <div key={idx} className="relative group opacity-80 hover:opacity-100 transition-all">
+                                                <div className="absolute -left-12 top-0 w-11 h-11 bg-white border-4 border-slate-300 rounded-none shadow-sm flex items-center justify-center z-10 group-hover:border-slate-900 transition-colors">
+                                                    <HistoryIcon size={18} className="text-slate-400 group-hover:text-slate-900 transition-colors" />
+                                                </div>
+                                                <div className="bg-slate-50 p-6 border border-slate-200 hover:bg-white hover:border-slate-300 transition-all">
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Previous Professional Assignment</p>
+                                                        <p className="text-[10px] font-bold text-slate-400">
+                                                            {new Date(entry.startDate).toLocaleDateString()} - {entry.endDate ? new Date(entry.endDate).toLocaleDateString() : 'Promotion/Transfer'}
+                                                        </p>
+                                                    </div>
+                                                    <h4 className="text-xl font-black text-slate-700 uppercase leading-none mb-2 tracking-tight">{entry.jobTitle}</h4>
+                                                    <div className="flex items-center gap-4">
+                                                        <p className="text-sm font-bold text-slate-500 uppercase tracking-wider">{depts.find(d => d.id === entry.departmentId)?.name}</p>
+                                                        <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+                                                        <p className="text-xs text-slate-400">{entry.reason}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                        
+                                        {(!user.careerHistory || user.careerHistory.length <= 1) && (
+                                            <div className="p-12 bg-slate-50 border-2 border-dashed border-slate-200 text-center">
+                                                <Activity size={48} className="mx-auto mb-4 text-slate-200" />
+                                                <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">No historical transfer data recorded.</p>
+                                                <p className="text-xs text-slate-400 mt-1">Your career timeline will populate as you grow within the company.</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="space-y-6 py-8">
+                                    <div className="space-y-4">
+                                        {careerSkillMap.map((entry) => (
+                                            <div key={entry.skill.id} className="bg-white border border-slate-200 hover:border-blue-900 transition-all shadow-sm hover:shadow-md group relative overflow-hidden flex flex-col lg:flex-row items-stretch">
+                                                {/* Skill Identifier */}
+                                                <div className="p-6 lg:w-1/3 border-b lg:border-b-0 lg:border-r border-slate-100 flex flex-col justify-center">
+                                                    <div className="flex items-start justify-between mb-2">
+                                                        <p className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em]">{entry.skill.category}</p>
+                                                        <span className="text-[10px] font-bold text-slate-300">#{entry.skill.id.slice(0, 8)}</span>
+                                                    </div>
+                                                    <h4 className="text-xl font-black text-slate-900 uppercase tracking-tight leading-tight group-hover:text-blue-900 transition-colors">
+                                                        {entry.skill.name}
+                                                    </h4>
+                                                </div>
+
+                                                {/* Peak Performance Metric */}
+                                                <div className="p-6 lg:w-48 bg-slate-50/50 flex flex-col items-center justify-center border-b lg:border-b-0 lg:border-r border-slate-100">
+                                                    <div className="relative">
+                                                        <p className="text-5xl font-black text-slate-900 leading-none">
+                                                            {entry.bestScore}
+                                                            <span className="text-lg text-slate-300 ml-1">/5</span>
+                                                        </p>
+                                                    </div>
+                                                    <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mt-2">Peak Attained</p>
+                                                </div>
+
+                                                {/* Evaluation Ledger (Full History) */}
+                                                <div className="p-6 flex-1 bg-white">
+                                                    <div className="flex items-center justify-between mb-4">
+                                                        <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                                            <Activity size={12} /> Assessment Timeline ({entry.history.length} Records)
+                                                        </h5>
+                                                        <div className="h-px flex-1 bg-slate-100 mx-4 hidden sm:block"></div>
+                                                    </div>
+                                                    
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {entry.history.map((h, i) => (
+                                                            <div 
+                                                                key={i} 
+                                                                className="flex flex-col items-center justify-center px-4 py-2 bg-white border border-slate-100 shadow-sm hover:border-blue-200 transition-all min-w-[80px]"
+                                                                title={`${h.method} - ${h.type}`}
+                                                            >
+                                                                <span className={`text-lg font-black ${h.score >= 3 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                                                    {h.score}
+                                                                </span>
+                                                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">
+                                                                    {new Date(h.date).toLocaleDateString(undefined, { year: 'numeric', month: 'short' })}
+                                                                </span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+
+                                                {/* Visual Accent */}
+                                                <div className="absolute top-0 right-0 w-1.5 h-full bg-slate-100 group-hover:bg-blue-900 transition-colors"></div>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {careerSkillMap.length === 0 && (
+                                        <div className="text-center py-24 bg-slate-50 border-2 border-dashed border-slate-200 text-slate-400">
+                                            <Layers size={64} className="mx-auto mb-6 opacity-10" />
+                                            <p className="text-lg font-black uppercase tracking-[0.2em] mb-2">Inventory Ledger Empty</p>
+                                            <p className="text-sm italic max-w-md mx-auto">No standardized evaluation records or approved work evidences were found across your professional tenure.</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
         </div>
       </div>
+      
+      {/* Print-only CSS for Professional CV */}
+      <style>{`
+        @media print {
+            body * { visibility: hidden; }
+            #printable-cv, #printable-cv * { visibility: visible; }
+            #printable-cv {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                background: white;
+                color: black;
+                padding: 40px;
+            }
+            .no-print { display: none !important; }
+        }
+      `}</style>
     </div>
   );
 });

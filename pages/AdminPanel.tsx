@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { dataService } from '../services/store';
-import { User, Role, JobProfile, Skill, JobProfileSkill, OrgLevel, ORG_LEVEL_LABELS, Department, DepartmentType, ORG_HIERARCHY_ORDER, PROFICIENCY_LABELS, Project } from '../types';
+import { User, Role, JobProfile, Skill, JobProfileSkill, OrgLevel, ORG_LEVEL_LABELS, Department, DepartmentType, ORG_HIERARCHY_ORDER, PROFICIENCY_LABELS, Project, EvaluationQuestion } from '../types';
 import { PROFICIENCY_DEFINITIONS } from '../constants';
-import { Plus, Users, Briefcase, ChevronRight, CheckCircle, Shield, ShieldCheck, X, Save, Trash2, ArrowLeft, UserPlus, Building2, Search, Edit2, UserCheck, AlertCircle, Layers, BookOpen, MoreHorizontal, LayoutGrid, Activity, Eye, AlertTriangle, FileSpreadsheet, MapPin } from 'lucide-react';
+import { Plus, Users, Briefcase, ChevronRight, CheckCircle, Shield, ShieldCheck, X, Save, Trash2, ArrowLeft, UserPlus, Building2, Search, Edit2, UserCheck, AlertCircle, Layers, BookOpen, MoreHorizontal, LayoutGrid, Activity, Eye, AlertTriangle, FileSpreadsheet, MapPin, TrendingUp } from 'lucide-react';
 import { SearchableSelect, Option } from '../components/SearchableSelect';
 import { BulkUpload } from '../components/BulkUpload';
 import { AdminAnalytics } from './AdminAnalytics';
@@ -27,72 +27,236 @@ const FormPage: React.FC<{ title: string; onBack: () => void; children: React.Re
 
 // --- Skill Details Modal ---
 const SkillDetailsModal: React.FC<{ skill: Skill; onClose: () => void }> = ({ skill, onClose }) => {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-none  w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
-        <div className="p-6 border-b border-slate-300 flex justify-between items-start bg-slate-100/50 shrink-0">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-                <h3 className="text-2xl font-bold text-slate-900">{skill.name}</h3>
-                <span className="px-2 py-1 bg-slate-50 text-slate-900 text-[10px] font-bold uppercase tracking-wide rounded-none border border-slate-300">
-                    {skill.category}
-                </span>
-            </div>
-            <p className="text-slate-700 text-sm italic">"{skill.assessmentQuestion || 'No assessment question defined.'}"</p>
-          </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-none text-slate-600 hover:text-slate-600 transition-colors">
-            <X size={20} />
-          </button>
-        </div>
-        
-        <div className="p-6 overflow-y-auto custom-scrollbar space-y-6 flex-1">
-            <div className="space-y-4">
-                <h4 className="text-xs font-bold text-slate-600 uppercase tracking-widest flex items-center gap-2">
-                    <Layers size={14} /> Proficiency Levels
-                </h4>
-                <div className="grid gap-4">
-                    {[1, 2, 3, 4, 5].map((level) => {
-                        const lvlData = skill.levels[level];
-                        // @ts-ignore
-                        const genericDef = PROFICIENCY_DEFINITIONS[level];
-                        return (
-                            <div key={level} className="relative pl-6 border-l-2 border-slate-300 hover:border-slate-900 transition-colors group">
-                                <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-none bg-white border-2 border-slate-300 group-hover:border-slate-900 flex items-center justify-center text-[8px] font-bold text-slate-700 group-hover:text-slate-900 transition-colors">
-                                    {level}
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+            <div className="bg-white rounded-none shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col relative animate-in zoom-in-95 duration-300">
+                <div className="p-6 border-b border-slate-100 flex justify-between items-start">
+                    <div>
+                        <div className="flex items-center gap-3 mb-1">
+                            <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tight">{skill.name}</h3>
+                            <span className="px-2 py-1 bg-slate-100 text-slate-600 text-[10px] font-bold uppercase tracking-widest rounded-none border border-slate-200">
+                                {skill.category}
+                            </span>
+                        </div>
+                        <p className="text-slate-500 text-sm font-medium tracking-tight italic">
+                            {skill.subcategory || 'General Competency'}
+                        </p>
+                    </div>
+                    <button onClick={onClose} className="p-2 hover:bg-slate-100 transition-colors">
+                        <X size={20} />
+                    </button>
+                </div>
+
+                <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-8">
+                    <div className="space-y-4">
+                        <h4 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                            <Layers size={14} /> Proficiency Levels
+                        </h4>
+                        <div className="grid gap-4">
+                            {[1, 2, 3, 4, 5].map((level) => {
+                                const lvlData = skill.levels[level];
+                                // @ts-ignore
+                                const genericDef = PROFICIENCY_DEFINITIONS[level];
+                                return (
+                                    <div key={level} className="relative pl-6 border-l-2 border-slate-200 hover:border-slate-900 transition-colors group">
+                                        <div className="absolute -left-[9px] top-0 w-4 h-4 bg-white border-2 border-slate-200 group-hover:border-slate-900 flex items-center justify-center text-[8px] font-black text-slate-400 group-hover:text-slate-900 transition-colors">
+                                            {level}
+                                        </div>
+                                        <div className="mb-2">
+                                            <span className="text-sm font-black text-slate-900 uppercase tracking-tight">Level {level}: {PROFICIENCY_LABELS[level]}</span>
+                                        </div>
+                                        <p className="text-xs text-slate-500 mb-2 leading-relaxed">
+                                            {genericDef?.description}
+                                        </p>
+                                        <div className="text-sm text-slate-700 font-medium leading-relaxed bg-slate-50 p-3 border border-slate-100">
+                                            {lvlData?.description || <span className="text-slate-400 italic">No specific description provided for this skill level.</span>}
+                                        </div>
+                                        {lvlData?.requiredCertificates && lvlData.requiredCertificates.length > 0 && (
+                                            <div className="flex flex-wrap gap-2 mt-3">
+                                                {lvlData.requiredCertificates.map((cert, idx) => (
+                                                    <span key={idx} className="inline-flex items-center gap-1.5 px-2 py-1 bg-blue-50 text-blue-700 text-[10px] font-bold uppercase tracking-wider border border-blue-100">
+                                                        <ShieldCheck size={10} /> {cert}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    <div className="pt-6 border-t border-slate-100 space-y-4">
+                        <h4 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                            <Activity size={14} /> Assessment Methodology
+                        </h4>
+                        <div className="bg-slate-50 p-6 border border-slate-200 space-y-6">
+                            <div className="flex justify-between items-center pb-4 border-b border-slate-200/60">
+                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Method</span>
+                                <span className="text-xs font-black text-blue-700 uppercase tracking-widest bg-blue-50 px-2 py-1 border border-blue-100">{skill.assessmentMethod?.replace(/_/g, ' ') || 'OJT OBSERVATION'}</span>
+                            </div>
+                            
+                            {skill.assessmentLink && (
+                                <div className="flex justify-between items-center pb-4 border-b border-slate-200/60">
+                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Resource Link</span>
+                                    <a href={skill.assessmentLink} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-700 hover:underline flex items-center gap-1">
+                                        Open Resource <ChevronRight size={12} />
+                                    </a>
                                 </div>
-                                <div className="mb-1">
-                                    <span className="text-sm font-bold text-slate-900">Level {level}: {PROFICIENCY_LABELS[level]}</span>
-                                </div>
-                                <p className="text-xs text-slate-600 mb-2 italic border-l-2 border-slate-100 pl-2">
-                                    {genericDef?.description}
-                                </p>
-                                <p className="text-sm text-slate-600 mb-2 leading-relaxed">
-                                    {lvlData?.description || <span className="text-slate-600 italic">No specific description provided.</span>}
-                                </p>
-                                {lvlData?.requiredCertificates && lvlData.requiredCertificates.length > 0 && (
-                                    <div className="flex flex-wrap gap-2 mt-2">
-                                        {lvlData.requiredCertificates.map((cert, idx) => (
-                                            <span key={idx} className="inline-flex items-center gap-1 px-2 py-1 bg-slate-50 text-slate-700 border border-slate-100 text-[10px] font-bold uppercase tracking-wide rounded-none">
-                                                <ShieldCheck size={10} /> {cert}
-                                            </span>
+                            )}
+
+                            {skill.evaluationQuestions && skill.evaluationQuestions.length > 0 && (
+                                <div className="space-y-3">
+                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Examination Questions</p>
+                                    <div className="space-y-3">
+                                        {skill.evaluationQuestions.map((q, i) => (
+                                            <div key={q.id} className="text-sm bg-white p-4 border border-slate-200">
+                                                <p className="font-bold text-slate-900 mb-2">{i+1}. {q.text}</p>
+                                                {q.expectedCriteria && <p className="text-[10px] text-slate-500 uppercase font-bold bg-slate-50 p-2 border-l-2 border-slate-300">Guide: {q.expectedCriteria}</p>}
+                                            </div>
                                         ))}
                                     </div>
-                                )}
-                            </div>
-                        );
-                    })}
+                                </div>
+                            )}
+
+                            {skill.interviewQuestions && skill.interviewQuestions.length > 0 && (
+                                <div className="space-y-3">
+                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Interview Panel Questions</p>
+                                    <div className="space-y-3">
+                                        {skill.interviewQuestions.map((q, i) => (
+                                            <div key={q.id} className="text-sm bg-white p-4 border border-slate-200">
+                                                <p className="font-bold text-slate-900 mb-2">{i+1}. {q.text}</p>
+                                                {q.expectedCriteria && <p className="text-[10px] text-slate-500 uppercase font-bold bg-slate-50 p-2 border-l-2 border-slate-300">Criteria: {q.expectedCriteria}</p>}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {skill.threeSixtyQuestions && skill.threeSixtyQuestions.length > 0 && (
+                                <div className="space-y-3">
+                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">360° Evaluation Points</p>
+                                    <div className="space-y-3">
+                                        {skill.threeSixtyQuestions.map((q, i) => (
+                                            <div key={q.id} className="text-sm bg-white p-4 border border-slate-200">
+                                                <p className="font-bold text-slate-900 mb-2">{i+1}. {q.text}</p>
+                                                {q.expectedCriteria && <p className="text-[10px] text-slate-500 uppercase font-bold bg-slate-50 p-2 border-l-2 border-slate-300">Focus: {q.expectedCriteria}</p>}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
+    );
+};
 
-        <div className="p-4 bg-slate-100 border-t border-slate-100 flex justify-end shrink-0">
-            <button onClick={onClose} className="px-4 py-2 bg-white border border-slate-300 text-slate-600 font-bold text-xs uppercase tracking-wide rounded-none hover:bg-slate-50 hover:text-slate-800 transition-colors ">
-                Close
-            </button>
+const PromotionModal: React.FC<{ 
+    user: User; 
+    onClose: () => void;
+    onSave: (updatedUser: User) => void;
+}> = ({ user, onClose, onSave }) => {
+    const departments = dataService.getAllDepartments();
+    const jobProfiles = dataService.getAllJobs();
+    const [formData, setFormData] = useState({
+        jobProfileId: user.jobProfileId || '',
+        departmentId: user.departmentId || '',
+        orgLevel: user.orgLevel || 'FR',
+        reason: 'PROMOTION',
+        startDate: new Date().toISOString().split('T')[0]
+    });
+
+    const handleSave = () => {
+        const job = jobProfiles.find(j => j.id === formData.jobProfileId);
+        if (!job) return;
+
+        const updatedUser: User = {
+            ...user,
+            jobProfileId: formData.jobProfileId,
+            departmentId: job.departmentId, 
+            orgLevel: formData.orgLevel as OrgLevel,
+            careerHistory: [
+                {
+                    id: Math.random().toString(36).substr(2, 9),
+                    jobProfileId: formData.jobProfileId,
+                    jobTitle: job.title,
+                    orgLevel: formData.orgLevel as OrgLevel,
+                    departmentId: job.departmentId,
+                    startDate: formData.startDate,
+                    reason: formData.reason
+                },
+                ...(user.careerHistory || [])
+            ]
+        };
+
+        onSave(updatedUser);
+    };
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="bg-white rounded-none w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in-95">
+                <div className="p-6 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+                    <h3 className="text-lg font-black uppercase text-slate-900 tracking-tight">Promote / Transfer Employee</h3>
+                    <button onClick={onClose} className="p-1 hover:bg-slate-200 rounded-none transition-colors"><X size={20} /></button>
+                </div>
+                <div className="p-6 space-y-4">
+                    <div className="flex items-center gap-4 p-4 bg-blue-50 border border-blue-100 mb-4">
+                        <div className="w-12 h-12 bg-blue-600 text-white flex items-center justify-center font-black text-xl">
+                            {user.name[0]}
+                        </div>
+                        <div>
+                            <p className="text-xs font-black text-blue-900 uppercase">{user.name}</p>
+                            <p className="text-[10px] text-blue-700 font-bold uppercase">{jobProfiles.find(j => j.id === user.jobProfileId)?.title || 'Current Position'}</p>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Target Position Profile</label>
+                        <SearchableSelect 
+                            options={jobProfiles.map(j => ({ value: j.id, label: j.title, subLabel: departments.find(d => d.id === j.departmentId)?.name }))}
+                            value={formData.jobProfileId}
+                            onChange={(val) => setFormData({...formData, jobProfileId: val})}
+                            placeholder="Select new role..."
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Hierarchy Level</label>
+                        <select 
+                            value={formData.orgLevel} 
+                            onChange={e => setFormData({...formData, orgLevel: e.target.value as OrgLevel})} 
+                            className="w-full border border-slate-300 p-2 text-sm bg-slate-50 focus:ring-0 focus:border-blue-500 font-bold"
+                        >
+                            {ORG_HIERARCHY_ORDER.map(level => (
+                                <option key={level} value={level}>{level} - {ORG_LEVEL_LABELS[level]}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Effective Date</label>
+                        <input type="date" value={formData.startDate} onChange={e => setFormData({...formData, startDate: e.target.value})} className="w-full border border-slate-300 p-2 text-sm bg-slate-50 focus:ring-0 focus:border-blue-500" />
+                    </div>
+
+                    <div>
+                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Transition Reason</label>
+                        <select value={formData.reason} onChange={e => setFormData({...formData, reason: e.target.value})} className="w-full border border-slate-300 p-2 text-sm bg-slate-50 focus:ring-0 focus:border-blue-500">
+                            <option value="PROMOTION">PROMOTION</option>
+                            <option value="TRANSFER">TRANSFER / ROTATION</option>
+                            <option value="RE-DESIGNATION">RE-DESIGNATION</option>
+                        </select>
+                    </div>
+                </div>
+                <div className="p-6 bg-slate-50 border-t border-slate-200 flex justify-end gap-3">
+                    <button onClick={onClose} className="px-4 py-2 text-xs font-black uppercase text-slate-600 hover:bg-slate-100 rounded-none transition-colors">Cancel</button>
+                    <button onClick={handleSave} className="px-4 py-2 text-xs font-black uppercase bg-blue-600 text-white hover:bg-blue-700 rounded-none transition-colors">Apply Changes</button>
+                </div>
+            </div>
         </div>
-      </div>
-    </div>
-  );
+    );
 };
 
 // --- Helper functions ---
@@ -729,6 +893,77 @@ const JobForm: React.FC<{ initialData?: JobProfile | null, onSave: (j: JobProfil
   );
 };
 
+// --- Question Manager Helper ---
+const QuestionManager: React.FC<{
+  title: string;
+  questions: EvaluationQuestion[];
+  onChange: (questions: EvaluationQuestion[]) => void;
+  placeholder?: string;
+}> = ({ title, questions, onChange, placeholder }) => {
+  const addQuestion = () => {
+    const newQuestion: EvaluationQuestion = {
+      id: Math.random().toString(36).substr(2, 9),
+      text: '',
+      expectedCriteria: '',
+    };
+    onChange([...questions, newQuestion]);
+  };
+
+  const removeQuestion = (id: string) => {
+    onChange(questions.filter(q => q.id !== id));
+  };
+
+  const updateQuestion = (id: string, field: keyof EvaluationQuestion, value: any) => {
+    onChange(questions.map(q => q.id === id ? { ...q, [field]: value } : q));
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h5 className="text-xs font-bold text-slate-700 uppercase tracking-wider">{title}</h5>
+        <button type="button" onClick={addQuestion} className="flex items-center gap-1 text-blue-700 hover:text-blue-800 text-xs font-bold uppercase tracking-wide">
+          <Plus size={14} /> Add Question
+        </button>
+      </div>
+      <div className="grid grid-cols-1 gap-3">
+        {questions.length === 0 ? (
+          <div className="text-xs text-slate-500 italic p-4 border border-dashed border-slate-300 rounded-sm bg-slate-50/50 text-center">
+            No questions added yet. Click "Add Question" to start.
+          </div>
+        ) : (
+          questions.map((q, idx) => (
+            <div key={q.id} className="p-4 bg-white border border-slate-300 rounded-sm space-y-3 relative group">
+              <button type="button" onClick={() => removeQuestion(q.id)} className="absolute top-2 right-2 text-slate-400 hover:text-red-600 transition-colors">
+                <Trash2 size={14} />
+              </button>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Question {idx + 1}</label>
+                <input 
+                  type="text" 
+                  className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-sm focus:ring-1 focus:ring-slate-900 outline-none transition-all"
+                  value={q.text}
+                  onChange={e => updateQuestion(q.id, 'text', e.target.value)}
+                  placeholder={placeholder || "Enter question text..."}
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Expected Criteria / Answer Key</label>
+                <textarea 
+                  className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-sm focus:ring-1 focus:ring-slate-900 outline-none transition-all"
+                  rows={1}
+                  value={q.expectedCriteria}
+                  onChange={e => updateQuestion(q.id, 'expectedCriteria', e.target.value)}
+                  placeholder="What defines a successful answer?"
+                />
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+};
+
 // --- Skill Form (Unchanged) ---
 const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => void, onCancel: () => void }> = ({ initialData, onSave, onCancel }) => {
   const defaultLevels = {
@@ -755,6 +990,9 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
        status: 'APPROVED',
        assessmentMethod: formData.assessmentMethod || 'OJT_OBSERVATION',
        assessmentLink: formData.assessmentMethod === 'WRITTEN_EXAM' ? formData.assessmentLink : undefined,
+       evaluationQuestions: formData.assessmentMethod === 'WRITTEN_EXAM' ? formData.evaluationQuestions : [],
+       interviewQuestions: formData.assessmentMethod === 'INTERVIEW' ? formData.interviewQuestions : [],
+       threeSixtyQuestions: formData.assessmentMethod === 'THREE_SIXTY_EVALUATION' ? formData.threeSixtyQuestions : [],
        assessmentFrequency: formData.assessmentFrequency || 'ONE_TIME',
        periodicInterval: formData.assessmentFrequency === 'PERIODIC' ? formData.periodicInterval || 'ANNUALLY' : undefined
     } as Skill);
@@ -841,7 +1079,8 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
                 { value: 'WRITTEN_EXAM', label: 'Written Examination (External / Online Test)' },
                 { value: 'PRACTICAL_DEMO', label: 'Practical Demonstration / Simulation' },
                 { value: 'INTERVIEW', label: 'Interview & Technical Discussion' },
-                { value: 'WORK_RECORD_REVIEW', label: 'Work Record / Case Study Review' }
+                { value: 'WORK_RECORD_REVIEW', label: 'Work Record / Case Study Review' },
+                { value: 'THREE_SIXTY_EVALUATION', label: '360° Multi-Rater Evaluation' }
               ]}
               value={formData.assessmentMethod || 'OJT_OBSERVATION'}
               onChange={val => setFormData({...formData, assessmentMethod: val as any})}
@@ -877,15 +1116,45 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
          )}
 
          {formData.assessmentMethod === 'WRITTEN_EXAM' && (
-           <div className="md:col-span-1">
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 flex justify-between items-center">
-                <span>Assessment Link</span>
-                <span className="text-slate-400 text-[10px] lowercase">Google Form, etc.</span>
-              </label>
-              <input type="url" className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none"
-                 placeholder="https://docs.google.com/forms/..."
-                 value={formData.assessmentLink || ''} onChange={e => setFormData({...formData, assessmentLink: e.target.value})} />
+           <div className="md:col-span-2 space-y-6 bg-slate-50 p-6 border border-slate-200 rounded-sm">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 flex justify-between items-center">
+                  <span>Online Assessment Link (Optional)</span>
+                  <span className="text-slate-400 text-[10px] lowercase">Google Form, Microsoft Forms, etc.</span>
+                </label>
+                <input type="url" className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none"
+                   placeholder="https://docs.google.com/forms/..."
+                   value={formData.assessmentLink || ''} onChange={e => setFormData({...formData, assessmentLink: e.target.value})} />
+              </div>
+              <QuestionManager 
+                title="Internal Online Test Questions"
+                questions={formData.evaluationQuestions || []}
+                onChange={qs => setFormData({...formData, evaluationQuestions: qs})}
+                placeholder="Enter test question..."
+              />
            </div>
+         )}
+
+         {formData.assessmentMethod === 'INTERVIEW' && (
+            <div className="md:col-span-2 bg-slate-50 p-6 border border-slate-200 rounded-sm">
+              <QuestionManager 
+                title="Standardized Interview Questions"
+                questions={formData.interviewQuestions || []}
+                onChange={qs => setFormData({...formData, interviewQuestions: qs})}
+                placeholder="Enter technical interview question..."
+              />
+            </div>
+         )}
+
+         {formData.assessmentMethod === 'THREE_SIXTY_EVALUATION' && (
+            <div className="md:col-span-2 bg-slate-50 p-6 border border-slate-200 rounded-sm">
+              <QuestionManager 
+                title="360° Feedback Questions"
+                questions={formData.threeSixtyQuestions || []}
+                onChange={qs => setFormData({...formData, threeSixtyQuestions: qs})}
+                placeholder="Enter feedback question for colleagues..."
+              />
+            </div>
          )}
        </div>
 
@@ -1206,9 +1475,10 @@ const EmployeeNode: React.FC<{
     onDelete: (id: string) => void;
     onAddChild: (parentId: string) => void;
     onEditUser: (u: User) => void;
+    onPromoteUser: (u: User) => void;
     level: number;
     path: string[];
-}> = ({ user, allUsers, allDepts, allJobs, currentUser, onEdit, onDelete, onAddChild, onEditUser, level, path }) => {
+}> = ({ user, allUsers, allDepts, allJobs, currentUser, onEdit, onDelete, onAddChild, onEditUser, onPromoteUser, level, path }) => {
     // Reports logic: ONLY same-department employees should be nested here
     const reports = allUsers.filter(u => u.managerId === user.id && u.departmentId === user.departmentId);
     
@@ -1256,6 +1526,13 @@ const EmployeeNode: React.FC<{
                     </div>
                     <div className="flex items-center gap-2 opacity-0 group-hover/user:opacity-100 transition-opacity">
                         <button 
+                            onClick={() => onPromoteUser(user)} 
+                            className="p-1.5 text-blue-600 hover:bg-white rounded-sm border border-transparent hover:border-blue-200 transition-all" 
+                            title="Promote / Transfer"
+                        >
+                            <TrendingUp size={12}/>
+                        </button>
+                        <button 
                             onClick={() => onEditUser(user)} 
                             className="p-1.5 text-slate-600 hover:bg-white rounded-sm border border-transparent hover:border-slate-200 transition-all" 
                             title="Edit Employee Profile"
@@ -1279,6 +1556,7 @@ const EmployeeNode: React.FC<{
                                 onDelete={onDelete}
                                 onAddChild={onAddChild}
                                 onEditUser={onEditUser}
+                                onPromoteUser={onPromoteUser}
                                 level={level + 1}
                                 path={path}
                             />
@@ -1296,6 +1574,7 @@ const EmployeeNode: React.FC<{
                                 onDelete={onDelete}
                                 onAddChild={onAddChild}
                                 onEditUser={onEditUser}
+                                onPromoteUser={onPromoteUser}
                                 level={level + 1}
                                 path={[...path, d.id]}
                             />
@@ -1317,9 +1596,10 @@ const DepartmentNode: React.FC<{
     onDelete: (id: string) => void;
     onAddChild: (parentId: string) => void;
     onEditUser: (u: User) => void;
+    onPromoteUser: (u: User) => void;
     level: number;
     path: string[];
-}> = ({ dept, allDepts, allJobs, allUsers, currentUser, onEdit, onDelete, onAddChild, onEditUser, level, path }) => {
+}> = ({ dept, allDepts, allJobs, allUsers, currentUser, onEdit, onDelete, onAddChild, onEditUser, onPromoteUser, level, path }) => {
     const [isExpanded, setIsExpanded] = useState(true);
     
     // Find departments that are children via parentId
@@ -1407,6 +1687,7 @@ const DepartmentNode: React.FC<{
                                         onDelete={onDelete}
                                         onAddChild={onAddChild}
                                         onEditUser={onEditUser}
+                                        onPromoteUser={onPromoteUser}
                                         level={0}
                                         path={[...path, (dept as any).id || (dept as any).name]}
                                     />
@@ -1429,6 +1710,7 @@ const DepartmentNode: React.FC<{
                                         onDelete={onDelete}
                                         onAddChild={onAddChild}
                                         onEditUser={onEditUser}
+                                        onPromoteUser={onPromoteUser}
                                         level={level + 1}
                                         path={[...path, dept.id]}
                                     />
@@ -1451,7 +1733,8 @@ const OrgStructureView: React.FC<{
     onDelete: (id: string) => void;
     onAddChild: (parentId: string) => void;
     onEditUser: (u: User) => void;
-}> = ({ depts, jobs, users, currentUser, onEdit, onDelete, onAddChild, onEditUser }) => {
+    onPromoteUser: (u: User) => void;
+}> = ({ depts, jobs, users, currentUser, onEdit, onDelete, onAddChild, onEditUser, onPromoteUser }) => {
     const rootDept = { id: 'ROOT', name: 'EPROM', isRoot: true };
 
     return (
@@ -1467,6 +1750,7 @@ const OrgStructureView: React.FC<{
                     onDelete={onDelete}
                     onAddChild={onAddChild}
                     onEditUser={onEditUser}
+                    onPromoteUser={onPromoteUser}
                     level={0}
                     path={[]}
                 />
@@ -1488,6 +1772,7 @@ interface DepartmentProfileViewProps {
   onDelete: (id: string) => void;
   onAddChild: (id: string) => void;
   onEditUser: (u: User) => void;
+  onPromoteUser: (u: User) => void;
   onSelectDept: (id: string) => void;
 }
 
@@ -1502,6 +1787,7 @@ const DepartmentProfileView: React.FC<DepartmentProfileViewProps> = ({
   onDelete, 
   onAddChild, 
   onEditUser,
+  onPromoteUser,
   onSelectDept
 }) => {
     const [activeTab, setActiveTab] = useState<'PERSONNEL' | 'SUBUNITS'>('PERSONNEL');
@@ -1639,8 +1925,15 @@ const DepartmentProfileView: React.FC<DepartmentProfileViewProps> = ({
                                                 onClick={() => onEditUser(person)} 
                                                 className="bg-white p-5 border border-slate-200 rounded-none hover:border-blue-700 hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden"
                                             >
-                                                <div className="absolute top-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <div className="p-1 bg-blue-50 text-blue-700 rounded-sm"><Edit2 size={12}/></div>
+                                                <div className="absolute top-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                                                    <button 
+                                                        onClick={(e) => { e.stopPropagation(); onPromoteUser(person); }} 
+                                                        className="p-1 bg-blue-50 text-blue-700 rounded-sm hover:bg-blue-600 hover:text-white transition-all"
+                                                        title="Promote / Transfer"
+                                                    >
+                                                        <TrendingUp size={12}/>
+                                                    </button>
+                                                    <div className="p-1 bg-slate-50 text-slate-600 rounded-sm hover:bg-slate-900 hover:text-white transition-all"><Edit2 size={12}/></div>
                                                 </div>
                                                 <div className="flex items-center gap-4 mb-4">
                                                     <div className="w-12 h-12 rounded-none bg-slate-100 flex items-center justify-center text-slate-900 font-bold text-lg border border-slate-200 group-hover:bg-blue-700 group-hover:text-white transition-colors flex-shrink-0">
@@ -1878,11 +2171,16 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
   const [selectedDeptProfileId, setSelectedDeptProfileId] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [promotedUser, setPromotedUser] = useState<User | null>(null);
 
 
   useEffect(() => {
     dataService.getCurrentUser().then(setCurrentUser);
   }, []);
+
+  const handlePromoteUser = (user: User) => {
+    setPromotedUser(user);
+  };
   
   // Search State
   const [searchTerm, setSearchTerm] = useState('');
@@ -1890,12 +2188,22 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
   const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [bulkType, setBulkType] = useState<'USER' | 'JOB' | 'SKILL' | 'DEPT' | 'PROJECT'>('USER');
 
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 15;
+
   // Reset search when view changes
   useEffect(() => {
     setSearchTerm('');
     setSelectedDeptProfileId(null);
     setSelectedProjectId(null);
+    setCurrentPage(1);
   }, [view]);
+
+  // Reset page when search or tab changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, activeTab]);
 
   const [migrating, setMigrating] = useState(false);
   const handleMigrateCertificates = async () => {
@@ -1946,12 +2254,13 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
     }
     alert(`Success! Updated ${count} users.`);
     setRefreshKey(prev => prev + 1);
-  } catch (err: any) {
-    alert(`Failed: ${err.message}`);
-  } finally {
-    setMigrating(false);
-  }
-};
+    } catch (err: any) {
+      alert(`Failed: ${err.message}`);
+    } finally {
+      setMigrating(false);
+    }
+  };
+
 
   const users = useMemo(() => {
     if (!currentUser) return [];
@@ -2015,6 +2324,13 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
     });
   }, [skills, searchTerm, activeTab]);
 
+  const paginatedSkills = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredSkills.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredSkills, currentPage, itemsPerPage]);
+
+  const totalPages = Math.ceil(filteredSkills.length / itemsPerPage);
+
   const filteredDepts = useMemo(() => {
     return depts.filter(dept => 
       searchTerm === '' ||
@@ -2058,6 +2374,10 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
       setFormType(type);
       setEditItem(item);
       setFormMode(true);
+  }, []);
+
+  const handlePromote = useCallback((u: User) => {
+    setPromotedUser(u);
   }, []);
 
   const handleAdd = useCallback((type: 'USER' | 'JOB' | 'SKILL' | 'DEPT' | 'PROJECT') => {
@@ -2499,6 +2819,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                            onDelete={(id) => handleDelete('DEPT', id)}
                            onAddChild={handleAddChild}
                            onEditUser={(u) => handleEdit('USER', u)}
+                           onPromoteUser={handlePromoteUser}
                            onSelectDept={setSelectedDeptProfileId}
                        />
                    ) : (
@@ -2589,6 +2910,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                                    </td>
                                    <td className="p-4 text-right pr-6">
                                        <div className="flex items-center justify-end gap-2">
+                                           <button onClick={() => handlePromote(user)} className="text-blue-600 hover:text-blue-800 p-2 transition-colors" title="Promote / Transfer"><TrendingUp size={16}/></button>
                                            <button onClick={() => handleEdit('USER', user)} className="text-slate-600 hover:text-slate-900 p-2 transition-colors" title="Edit"><Edit2 size={16}/></button>
                                            <button onClick={() => handleDelete('USER', user.id)} className="text-slate-600 hover:text-slate-700 p-2 transition-colors" title="Delete"><Trash2 size={16}/></button>
                                        </div>
@@ -2613,7 +2935,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                                        </div>
                                    </td>
                                </tr>
-                           ))}{view === 'SKILLS' && filteredSkills.map(skill => (
+                           ))}{view === 'SKILLS' && paginatedSkills.map(skill => (
                                <tr key={skill.id} className="hover:bg-slate-50 transition-colors group">
                                    <td className="p-4 pl-6">
                                         <span className="px-2 py-1 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-none text-[10px] font-black uppercase tracking-wide leading-none whitespace-nowrap">
@@ -2652,6 +2974,51 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                    </table>
                )}
            </div>
+            {view === 'SKILLS' && totalPages > 1 && (
+                <div className="p-4 border-t border-slate-300 bg-slate-50/50 flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div className="text-[10px] text-slate-600 font-black uppercase tracking-widest">
+                        Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredSkills.length)} of {filteredSkills.length} entries
+                    </div>
+                    <div className="flex items-center gap-1">
+                        <button 
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                            className="p-2 border border-slate-300 bg-white text-slate-600 disabled:opacity-50 hover:bg-slate-50 transition-all rounded-none"
+                        >
+                            <ArrowLeft size={16} />
+                        </button>
+                        
+                        <div className="flex items-center gap-1 mx-1">
+                            {Array.from({ length: totalPages }, (_, i) => i + 1).filter(page => {
+                                return page === 1 || page === totalPages || (page >= currentPage - 2 && page <= currentPage + 2);
+                            }).map((page, idx, arr) => {
+                                const prevPage = arr[idx - 1];
+                                const showEllipsis = prevPage && page - prevPage > 1;
+                                
+                                return (
+                                    <React.Fragment key={page}>
+                                        {showEllipsis && <span className="text-slate-400 px-1 text-xs">...</span>}
+                                        <button
+                                            onClick={() => setCurrentPage(page)}
+                                            className={`w-8 h-8 text-[10px] font-black uppercase tracking-wider transition-all rounded-none border ${currentPage === page ? 'bg-blue-900 text-white border-blue-900' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}
+                                        >
+                                            {page}
+                                        </button>
+                                    </React.Fragment>
+                                );
+                            })}
+                        </div>
+
+                        <button 
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            disabled={currentPage === totalPages}
+                            className="p-2 border border-slate-300 bg-white text-slate-600 disabled:opacity-50 hover:bg-slate-50 transition-all rounded-none"
+                        >
+                            <ChevronRight size={16} />
+                        </button>
+                    </div>
+                </div>
+            )}
        </div>
        {viewSkill && <SkillDetailsModal skill={viewSkill} onClose={() => setViewSkill(null)} />}
        {showBulkUpload && (
@@ -2664,6 +3031,18 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
            onCancel={() => setShowBulkUpload(false)}
          />
        )}
+        {promotedUser && (
+            <PromotionModal 
+                user={promotedUser} 
+                onClose={() => setPromotedUser(null)} 
+                onSave={async (updatedUser) => {
+                    await dataService.updateUser(updatedUser);
+                    await dataService.logActivity('Promotion/Transfer', `${updatedUser.name} to ${jobs.find(j => j.id === updatedUser.jobProfileId)?.title}`);
+                    setPromotedUser(null);
+                    setRefreshKey(k => k + 1);
+                }} 
+            />
+        )}
     </div>
   );
 });

@@ -12,7 +12,7 @@ interface SearchableSelectProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
-  label: string;
+  label?: string;
   disabled?: boolean;
 }
 
@@ -49,7 +49,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({ options, val
 
   return (
     <div className="relative" ref={wrapperRef}>
-      <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>
+      {label && <label className="block text-sm font-medium text-slate-700 mb-1">{label}</label>}
       <div
         className={`w-full px-3 py-2 border rounded-sm bg-white flex items-center justify-between transition-all ${
             disabled ? 'bg-slate-100 cursor-not-allowed border-slate-300' : 'cursor-pointer border-slate-300 hover:border-slate-900'

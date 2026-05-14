@@ -56,8 +56,11 @@ export interface Skill {
   assessmentQuestion?: string;
   levels: Record<number, SkillLevel>; 
   status?: 'APPROVED' | 'PENDING';
-  assessmentMethod: 'OJT_OBSERVATION' | 'WRITTEN_EXAM' | 'PRACTICAL_DEMO' | 'INTERVIEW' | 'WORK_RECORD_REVIEW';
+  assessmentMethod: 'OJT_OBSERVATION' | 'WRITTEN_EXAM' | 'PRACTICAL_DEMO' | 'INTERVIEW' | 'WORK_RECORD_REVIEW' | 'THREE_SIXTY_EVALUATION';
   assessmentLink?: string; // Used specifically for WRITTEN_EXAM to link to external forms
+  evaluationQuestions?: EvaluationQuestion[]; // For written exams/online tests
+  interviewQuestions?: EvaluationQuestion[]; // For interviews
+  threeSixtyQuestions?: EvaluationQuestion[]; // For 360 evaluations
   description?: string; // Optional detailed description of the skill or assessment
   code?: string; // Automatically generated professional identifier
   subcategory?: string; // Related field e.g., Maintenance, Operation, IT
@@ -66,7 +69,15 @@ export interface Skill {
   periodicInterval?: 'MONTHLY' | 'QUARTERLY' | 'ANNUALLY';
 }
 
-export type AssessmentMethod = 'WRITTEN_EXAM' | 'PRACTICAL_DEMO' | 'OJT_OBSERVATION' | 'INTERVIEW' | 'WORK_RECORD_REVIEW';
+export type AssessmentMethod = 'WRITTEN_EXAM' | 'PRACTICAL_DEMO' | 'OJT_OBSERVATION' | 'INTERVIEW' | 'WORK_RECORD_REVIEW' | 'THREE_SIXTY_EVALUATION';
+
+export interface EvaluationQuestion {
+  id: string;
+  text: string;
+  expectedCriteria?: string;
+  minRating?: number;
+  maxRating?: number;
+}
 
 export interface ScheduledAssessment {
   id: string;
@@ -136,6 +147,18 @@ export interface TrainingCourse {
   link?: string;
 }
 
+export interface CareerHistoryEntry {
+  id: string;
+  jobProfileId: string;
+  jobTitle: string;
+  orgLevel: OrgLevel;
+  departmentId: string;
+  projectName?: string;
+  startDate: string;
+  endDate?: string;
+  reason?: string; // e.g., 'PROMOTION', 'TRANSFER', 'NEW_HIRE'
+}
+
 export interface User {
   id: string;
   name: string;
@@ -143,18 +166,19 @@ export interface User {
   phone?: string;
   whatsapp?: string;
   role: Role;
-  status: UserStatus; // New Field
+  status: UserStatus; 
   departmentId: string;
-  generalDepartmentId?: string; // Top-level General Department
-  orgLevel?: OrgLevel; // Position in the hierarchy
+  generalDepartmentId?: string;
+  orgLevel?: OrgLevel; 
   jobProfileId?: string;
-  managerId?: string; // Direct reporting line (can be inferred from structure or explicit)
+  managerId?: string; 
   avatarUrl?: string;
   certificates?: Certificate[];
   location?: string;
   projectName?: string;
   projectId?: string;
   employeeId?: number;
+  careerHistory?: CareerHistoryEntry[];
 }
 
 export interface AssessmentCycle {
