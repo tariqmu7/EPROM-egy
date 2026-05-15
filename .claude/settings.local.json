@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "PowerShell($doc = Get-Content \"C:\\\\Users\\\\tariq\\\\.claude\\\\projects\\\\c--Users-tariq-Desktop-work-github-EPROM-egy\\\\d586dd72-0b6d-4a37-8292-94a84deea85c\\\\tool-results\\\\mcp-plugin_firebase_firebase-firestore_get_document-1778800986629.txt\" | ConvertFrom-Json; $doc.fields | Select-Object userId, status, skillId)",
+      "mcp__plugin_firebase_firebase__firebase_deploy",
+      "mcp__plugin_firebase_firebase__firebase_deploy_status",
+      "mcp__plugin_firebase_firebase__firebase_get_security_rules",
+      "mcp__plugin_firebase_firebase__firebase_validate_security_rules",
+      "Bash(npx firebase *)",
+      "mcp__plugin_firebase_firebase__firebase_list_projects",
+      "mcp__plugin_firebase_firebase__firebase_update_environment",
+      "mcp__plugin_firebase_firebase__firestore_list_documents",
+      "mcp__plugin_firebase_firebase__firestore_update_document",
+      "Bash(python -c ' *)"
+    ]
+  }
+}

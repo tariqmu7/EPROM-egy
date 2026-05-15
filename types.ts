@@ -131,11 +131,15 @@ export interface Certificate {
   issuer: string;
   dateAchieved: string;
   expiryDate?: string;
+  noExpiry?: boolean;
   renewalDate?: string;
   status?: 'PENDING' | 'APPROVED' | 'REJECTED';
   renewalStatus?: 'VALID' | 'EXPIRING_SOON' | 'EXPIRED';
   fileUrl?: string;
   fileName?: string;
+  credentialId?: string;
+  credentialUrl?: string;
+  category?: 'PROFESSIONAL' | 'ACADEMIC' | 'TECHNICAL' | 'SAFETY' | 'LANGUAGE' | 'OTHER';
 }
 
 export interface TrainingCourse {

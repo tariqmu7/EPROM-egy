@@ -11,6 +11,8 @@ import { BehavioralAssessment } from './pages/BehavioralAssessment';
 import { EvaluationsHub } from './pages/EvaluationsHub';
 import { Logo } from './components/Logo';
 import { dataService, CONFIG } from './services/store';
+import { auth } from './firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import { User, Role } from './types';
 import { ShieldCheck, Loader2, Lock, User as UserIcon, CheckCircle, ArrowRight, Activity, X, ArrowLeft } from 'lucide-react';
 
@@ -31,27 +33,46 @@ const App: React.FC = () => {
   const [authLoading, setAuthLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Initialize Data Service
+  // Initialize Data Service and listen for auth state changes
   useEffect(() => {
-    const init = async () => {
-      await dataService.initialize();
-      const currentUser = await dataService.getCurrentUser();
-      if (currentUser) {
-          setUser(currentUser);
-          // Set default tab based on role
-          if (currentUser.role === Role.ADMIN) {
+    let mounted = true;
+
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (!mounted) return;
+
+      if (firebaseUser) {
+        try {
+          await dataService.initialize();
+          const currentUser = await dataService.getCurrentUser();
+          if (mounted && currentUser) {
+            setUser(currentUser);
+            if (currentUser.role === Role.ADMIN) {
               setActiveTab('admin-dashboard');
-          } else if (currentUser.role === Role.CEO) {
+            } else if (currentUser.role === Role.CEO) {
               setActiveTab('ceo-dashboard');
-          } else if (dataService.isManager(currentUser)) {
+            } else if (dataService.isManager(currentUser)) {
               setActiveTab('manager-dashboard');
-          } else {
+            } else {
               setActiveTab('emp-dashboard');
+            }
+          } else if (mounted) {
+            setUser(null);
           }
+        } catch (err) {
+          console.error('Auth init error:', err);
+          if (mounted) setUser(null);
+        }
+      } else {
+        if (mounted) setUser(null);
       }
-      setIsLoading(false);
+
+      if (mounted) setIsLoading(false);
+    });
+
+    return () => {
+      mounted = false;
+      unsubscribe();
     };
-    init();
   }, []);
 
   const handleAuth = useCallback(async (e: React.FormEvent) => {

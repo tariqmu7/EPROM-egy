@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { User, Role, JobProfile, Skill, IndividualTrainingPlan, ORG_HIERARCHY_ORDER, ORG_LEVEL_LABELS, ScheduledAssessment } from '../types';
+import { User, Role, JobProfile, Skill, IndividualTrainingPlan, ORG_HIERARCHY_ORDER, ORG_LEVEL_LABELS, ScheduledAssessment, Certificate } from '../types';
 import { dataService } from '../services/store';
 import { AssessmentHistoryLog } from '../components/AssessmentHistoryLog';
 import { 
@@ -46,7 +46,8 @@ import {
   Plus,
   Edit2,
   Trash2,
-  X
+  X,
+  ExternalLink
 } from 'lucide-react';
 import { auth } from '../firebase';
 
@@ -61,6 +62,8 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
 
   // Certificate Management State
   const [editingCert, setEditingCert] = useState<Partial<any> | null>(null);
+  const [certDeleteId, setCertDeleteId] = useState<string | null>(null);
+  const [certDetailView, setCertDetailView] = useState<any | null>(null);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -81,17 +84,25 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
     e.preventDefault();
     if (!editingCert) return;
 
-    const newCert = {
+    const isEdit = !!editingCert.id;
+    const existingCert = isEdit ? (user.certificates || []).find(c => c.id === editingCert.id) : undefined;
+    const newStatus: Certificate['status'] = existingCert?.status === 'APPROVED' ? 'PENDING' : (existingCert?.status ?? 'PENDING');
+
+    const newCert: Certificate = {
       id: editingCert.id || crypto.randomUUID(),
       name: editingCert.name || '',
       degree: editingCert.degree || '',
       issuer: editingCert.issuer || '',
       dateAchieved: editingCert.dateAchieved || new Date().toISOString().split('T')[0],
       expiryDate: editingCert.expiryDate || '',
+      noExpiry: editingCert.noExpiry || false,
       renewalDate: editingCert.renewalDate || '',
       fileUrl: editingCert.fileUrl || '',
       fileName: editingCert.fileName || '',
-      status: 'PENDING' as const
+      credentialId: editingCert.credentialId || '',
+      credentialUrl: editingCert.credentialUrl || '',
+      category: editingCert.category,
+      status: newStatus,
     };
 
     const existingCerts = user.certificates || [];
@@ -101,6 +112,13 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
 
     await dataService.updateUser({ ...user, certificates: updatedCerts });
     setEditingCert(null);
+  };
+
+  const handleDeleteCertificate = async (certId: string) => {
+    const updatedCerts = (user.certificates || []).filter(c => c.id !== certId);
+    await dataService.updateUser({ ...user, certificates: updatedCerts });
+    setCertDeleteId(null);
+    if (editingCert?.id === certId) setEditingCert(null);
   };
 
   const handleExportCV = () => {
@@ -198,7 +216,137 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
     return Object.values(skillMap).sort((a, b) => a.skill.name.localeCompare(b.skill.name));
   }, [user.id]);
 
+  const CERT_STATUS: Record<string, { label: string; cls: string }> = {
+    PENDING:  { label: 'Waiting for Approval', cls: 'bg-amber-100 text-amber-700 border-amber-200' },
+    APPROVED: { label: 'Approved',             cls: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+    REJECTED: { label: 'Declined',             cls: 'bg-red-100 text-red-700 border-red-200' },
+  };
+
   return (
+    <>
+    {/* Certificate Detail Modal */}
+    {certDetailView && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="bg-white border border-slate-300 shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+          <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+            <div className="flex items-center gap-2">
+              <Award size={16} className="text-violet-500" />
+              <span className="font-bold text-slate-900 text-sm">Certificate Details</span>
+              <span className={`text-[10px] font-bold px-2 py-0.5 border ${CERT_STATUS[certDetailView.status]?.cls || CERT_STATUS.PENDING.cls}`}>
+                {CERT_STATUS[certDetailView.status]?.label || certDetailView.status}
+              </span>
+            </div>
+            <button onClick={() => setCertDetailView(null)} className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors rounded-none">
+              <X size={18} />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-5 space-y-5">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Certificate Name</p>
+                <p className="text-sm font-bold text-slate-900">{certDetailView.name}</p>
+              </div>
+              {certDetailView.degree && (
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Degree / Specialization</p>
+                  <p className="text-sm text-slate-700">{certDetailView.degree}</p>
+                </div>
+              )}
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Issuing Institution</p>
+                <p className="text-sm text-slate-700">{certDetailView.issuer}</p>
+              </div>
+              {certDetailView.category && (
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Category</p>
+                  <p className="text-sm text-slate-700 capitalize">{certDetailView.category}</p>
+                </div>
+              )}
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Issue Date</p>
+                <p className="text-sm text-slate-700">{new Date(certDetailView.dateAchieved).toLocaleDateString()}</p>
+              </div>
+              {certDetailView.expiryDate && !certDetailView.noExpiry && (
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Expiry Date</p>
+                  <p className="text-sm text-slate-700">{new Date(certDetailView.expiryDate).toLocaleDateString()}</p>
+                </div>
+              )}
+              {certDetailView.noExpiry && (
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Validity</p>
+                  <p className="text-sm text-emerald-600 font-bold">No Expiry</p>
+                </div>
+              )}
+              {certDetailView.credentialId && (
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Credential ID</p>
+                  <p className="text-sm text-slate-700 font-mono">{certDetailView.credentialId}</p>
+                </div>
+              )}
+            </div>
+
+            {certDetailView.credentialUrl && (
+              <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200">
+                <ExternalLink size={14} className="text-blue-500 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider mb-0.5">Verification Link</p>
+                  <a href={certDetailView.credentialUrl} target="_blank" rel="noreferrer"
+                    className="text-xs text-blue-700 font-semibold hover:underline flex items-center gap-1 truncate">
+                    {certDetailView.credentialUrl} <ExternalLink size={10} className="shrink-0" />
+                  </a>
+                </div>
+              </div>
+            )}
+
+            {certDetailView.reviewerComment && (
+              <div className="p-3 bg-slate-50 border border-slate-200">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Manager Note</p>
+                <p className="text-sm text-slate-700">{certDetailView.reviewerComment}</p>
+              </div>
+            )}
+
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Attached Copy</p>
+              {certDetailView.fileUrl ? (
+                certDetailView.fileUrl.startsWith('data:image') ? (
+                  <div className="border border-slate-200 bg-slate-50 flex items-center justify-center p-2 min-h-[200px]">
+                    <img src={certDetailView.fileUrl} alt="Certificate" className="max-w-full max-h-[400px] object-contain" />
+                  </div>
+                ) : (
+                  <div className="border border-slate-200 bg-slate-50 p-6 flex flex-col items-center gap-3">
+                    <FileText size={40} className="text-slate-300" />
+                    <p className="text-sm font-medium text-slate-600">{certDetailView.fileName || 'Certificate file'}</p>
+                    <a href={certDetailView.fileUrl} download={certDetailView.fileName}
+                      className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white text-xs font-bold hover:bg-slate-700 transition-colors">
+                      <Download size={13} /> Download File
+                    </a>
+                  </div>
+                )
+              ) : (
+                <div className="border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-slate-400">
+                  <FileText size={28} className="mx-auto mb-2 text-slate-300" />
+                  <p className="text-xs">No file attached</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="px-5 py-3 border-t border-slate-200 bg-slate-50 flex justify-between items-center">
+            <button
+              onClick={() => { setCertDetailView(null); setEditingCert(certDetailView); setActiveTab('CERTIFICATES'); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-600 border border-slate-300 hover:bg-slate-100 transition-colors"
+            >
+              <Edit2 size={12} /> Edit
+            </button>
+            <button onClick={() => setCertDetailView(null)} className="px-4 py-2 text-xs font-bold text-white bg-slate-800 hover:bg-slate-700 transition-colors">
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     <div className="max-w-[1600px] mx-auto p-4 md:p-8 space-y-8 animate-in fade-in duration-500" id="printable-cv">
       
       {/* ── Page Header ────────────────────────────────────────────────── */}
@@ -534,26 +682,21 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                                     </button>
                                 </div>
                                 <div className="space-y-4">
-                                    {user.certificates && user.certificates.length > 0 ? user.certificates.slice(0, 3).map(cert => (
-                                        <div key={cert.id} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 relative group">
+                                    {user.certificates && user.certificates.length > 0 ? user.certificates.slice(0, 3).map(cert => {
+                                        const sInfo = { PENDING: { label: 'Waiting for Approval', cls: 'bg-amber-100 text-amber-700 border-amber-200' }, APPROVED: { label: 'Approved', cls: 'bg-emerald-100 text-emerald-700 border-emerald-200' }, REJECTED: { label: 'Declined', cls: 'bg-red-100 text-red-700 border-red-200' } }[cert.status as string] || { label: 'Waiting for Approval', cls: 'bg-amber-100 text-amber-700 border-amber-200' };
+                                        return (
+                                        <div key={cert.id} onClick={() => setCertDetailView(cert)} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 hover:border-blue-300 transition-colors cursor-pointer group">
                                             <div className="flex items-center gap-3">
                                                 <Award size={16} className="text-slate-400" />
                                                 <div>
-                                                    <p className="text-xs font-bold text-slate-800 uppercase">{cert.name}</p>
+                                                    <p className="text-xs font-bold text-slate-800 uppercase group-hover:text-blue-700 transition-colors">{cert.name}</p>
                                                     <p className="text-[9px] text-slate-500 font-bold tracking-tighter uppercase">{cert.issuer}</p>
                                                 </div>
                                             </div>
-                                            {/* Status Badge */}
-                                            {/* @ts-ignore */}
-                                            {cert.status === 'PENDING' ? (
-                                                <span className="text-[9px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 border border-amber-200">PENDING</span>
-                                            ) : cert.status === 'REJECTED' ? (
-                                                <span className="text-[9px] font-bold bg-red-100 text-red-700 px-2 py-0.5 border border-red-200">REJECTED</span>
-                                            ) : (
-                                                <BadgeCheck size={16} className="text-emerald-500" />
-                                            )}
+                                            <span className={`text-[9px] font-bold px-2 py-0.5 border ${sInfo.cls}`}>{sInfo.label}</span>
                                         </div>
-                                    )) : (
+                                        );
+                                    }) : (
                                         <p className="text-xs text-slate-400 italic py-4">No certificates currently on record.</p>
                                     )}
                                 </div>
@@ -626,9 +769,9 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                         </p>
                     </div>
 
-                    <div className="flex gap-6 flex-col md:flex-row">
-                        {/* Left: Certificate List */}
-                        <div className="flex-1 space-y-4">
+                    <div className="space-y-4">
+                        {!editingCert && (
+                        <div className="space-y-4">
                             <div className="flex justify-between items-center mb-2">
                                 <h4 className="text-xs font-black uppercase text-slate-700 tracking-widest">Your Records</h4>
                                 <button onClick={() => setEditingCert({})} className="flex items-center gap-1 text-[10px] font-bold text-blue-600 uppercase hover:underline">
@@ -637,55 +780,138 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                             </div>
                             {user.certificates && user.certificates.length > 0 ? (
                                 <div className="space-y-3">
-                                    {user.certificates.map(cert => (
-                                        <div key={cert.id} className="p-4 bg-white border border-slate-200 hover:border-blue-300 transition-colors cursor-pointer" onClick={() => setEditingCert(cert)}>
-                                            <div className="flex justify-between items-start mb-2">
-                                                <div>
-                                                    <h5 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                                                        {cert.name} 
-                                                        {cert.fileUrl && <FileUp size={12} className="text-slate-400" />}
-                                                    </h5>
-                                                    <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">{cert.issuer}</p>
+                                    {user.certificates.map((cert: any) => {
+                                        const isExpiringSoon = cert.expiryDate && !cert.noExpiry && (() => {
+                                            const days = (new Date(cert.expiryDate!).getTime() - Date.now()) / 86400000;
+                                            return days > 0 && days <= 90;
+                                        })();
+                                        const isExpired = cert.expiryDate && !cert.noExpiry && new Date(cert.expiryDate) < new Date();
+                                        const categoryColors: Record<string, string> = {
+                                            PROFESSIONAL: 'bg-blue-50 text-blue-700 border-blue-200',
+                                            ACADEMIC: 'bg-purple-50 text-purple-700 border-purple-200',
+                                            TECHNICAL: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+                                            SAFETY: 'bg-orange-50 text-orange-700 border-orange-200',
+                                            LANGUAGE: 'bg-pink-50 text-pink-700 border-pink-200',
+                                            OTHER: 'bg-slate-50 text-slate-600 border-slate-200',
+                                        };
+                                        const statusInfo = CERT_STATUS[cert.status as string] || CERT_STATUS.PENDING;
+                                        return (
+                                            <div
+                                              key={cert.id}
+                                              onClick={() => setCertDetailView(cert)}
+                                              className={`p-4 bg-white border transition-colors cursor-pointer group ${editingCert?.id === (cert as any).id ? 'border-blue-400 ring-1 ring-blue-200' : 'border-slate-200 hover:border-blue-400 hover:shadow-sm'} ${isExpired ? 'border-l-4 border-l-red-400' : isExpiringSoon ? 'border-l-4 border-l-amber-400' : ''}`}
+                                            >
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <div className="flex-1 min-w-0 pr-2">
+                                                        <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                                                            <h5 className="text-sm font-bold text-slate-900 group-hover:text-blue-700 transition-colors">{cert.name}</h5>
+                                                            {cert.fileUrl && <FileUp size={11} className="text-slate-400 shrink-0" />}
+                                                            {cert.credentialUrl && <ExternalLink size={11} className="text-blue-400 shrink-0" />}
+                                                        </div>
+                                                        <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider truncate">{cert.issuer}</p>
+                                                        {cert.credentialId && <p className="text-[10px] text-slate-400 mt-0.5">ID: {cert.credentialId}</p>}
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                        <span className={`text-[9px] font-bold px-2 py-0.5 border ${statusInfo.cls}`}>
+                                                            {statusInfo.label}
+                                                        </span>
+                                                    </div>
                                                 </div>
-                                                {/* @ts-ignore */}
-                                                {cert.status === 'PENDING' ? (
-                                                    <span className="text-[9px] font-bold bg-amber-100 text-amber-700 px-2 py-0.5 border border-amber-200">PENDING</span>
-                                                ) : cert.status === 'REJECTED' ? (
-                                                    <span className="text-[9px] font-bold bg-red-100 text-red-700 px-2 py-0.5 border border-red-200">REJECTED</span>
-                                                ) : (
-                                                    <span className="text-[9px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 border border-emerald-200">APPROVED</span>
+                                                <div className="flex flex-wrap items-center justify-between gap-2 mt-2">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        {cert.category && (
+                                                            <span className={`text-[9px] font-bold px-2 py-0.5 border uppercase tracking-wide ${categoryColors[cert.category] || categoryColors.OTHER}`}>
+                                                                {cert.category}
+                                                            </span>
+                                                        )}
+                                                        <span className="text-[10px] text-slate-400">Issued: {new Date(cert.dateAchieved).toLocaleDateString()}</span>
+                                                        {cert.noExpiry ? (
+                                                            <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 border border-emerald-100">NO EXPIRY</span>
+                                                        ) : cert.expiryDate ? (
+                                                            <span className={`text-[9px] font-bold px-2 py-0.5 border ${isExpired ? 'bg-red-50 text-red-600 border-red-200' : isExpiringSoon ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
+                                                                {isExpired ? 'EXPIRED' : isExpiringSoon ? `EXPIRING ${new Date(cert.expiryDate).toLocaleDateString()}` : `EXP: ${new Date(cert.expiryDate).toLocaleDateString()}`}
+                                                            </span>
+                                                        ) : null}
+                                                    </div>
+                                                    <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                                                        <button onClick={() => setEditingCert(cert)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors" title="Edit">
+                                                            <Edit2 size={12} />
+                                                        </button>
+                                                        <button onClick={() => setCertDeleteId(cert.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Delete">
+                                                            <Trash2 size={12} />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                {certDeleteId === cert.id && (
+                                                    <div className="mt-3 p-3 bg-red-50 border border-red-200 flex items-center justify-between gap-3" onClick={e => e.stopPropagation()}>
+                                                        <p className="text-[10px] font-bold text-red-700 uppercase">Delete this certificate?</p>
+                                                        <div className="flex gap-2">
+                                                            <button onClick={() => setCertDeleteId(null)} className="text-[9px] font-bold uppercase px-2 py-1 border border-slate-300 text-slate-600 hover:bg-slate-100">Cancel</button>
+                                                            <button onClick={() => handleDeleteCertificate(cert.id)} className="text-[9px] font-bold uppercase px-2 py-1 bg-red-600 text-white hover:bg-red-700">Confirm Delete</button>
+                                                        </div>
+                                                    </div>
                                                 )}
                                             </div>
-                                            <p className="text-[10px] text-slate-400">Achieved: {new Date(cert.dateAchieved).toLocaleDateString()}</p>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             ) : (
-                                <div className="text-center py-8 bg-white border border-slate-200 text-slate-400">
-                                    <p className="text-xs font-medium italic">No certificates recorded.</p>
+                                <div className="text-center py-12 bg-white border border-dashed border-slate-300 text-slate-400 flex flex-col items-center gap-3">
+                                    <ShieldCheck size={32} className="text-slate-300" />
+                                    <div>
+                                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">No certificates yet</p>
+                                        <p className="text-[10px] text-slate-400 mt-1">Click "Add New" to record your first certificate or credential.</p>
+                                    </div>
                                 </div>
                             )}
                         </div>
+                        )}
 
-                        {/* Right: Editor Form */}
                         {editingCert && (
-                            <div className="flex-1 bg-white border border-slate-200 p-6 h-fit sticky top-6">
+                            <div className="bg-white border border-slate-200 p-6">
                                 <h4 className="text-xs font-black uppercase text-slate-700 tracking-widest mb-4 border-b border-slate-100 pb-2">
                                     {editingCert.id ? 'Edit Certificate' : 'New Certificate'}
                                 </h4>
                                 <form onSubmit={handleSaveCertificate} className="space-y-4">
+                                    {/* Category */}
                                     <div>
-                                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Certificate Name *</label>
+                                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Category</label>
+                                        <select value={editingCert.category || ''} onChange={e => setEditingCert({...editingCert, category: e.target.value || undefined})} className="w-full border border-slate-300 p-2 text-sm bg-slate-50 focus:ring-0 focus:border-blue-500">
+                                            <option value="">— Select category —</option>
+                                            <option value="PROFESSIONAL">Professional</option>
+                                            <option value="ACADEMIC">Academic / Degree</option>
+                                            <option value="TECHNICAL">Technical</option>
+                                            <option value="SAFETY">Safety & Compliance</option>
+                                            <option value="LANGUAGE">Language</option>
+                                            <option value="OTHER">Other</option>
+                                        </select>
+                                    </div>
+
+                                    {/* Name */}
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Certificate / Credential Name *</label>
                                         <input required type="text" value={editingCert.name || ''} onChange={e => setEditingCert({...editingCert, name: e.target.value})} className="w-full border border-slate-300 p-2 text-sm bg-slate-50 focus:ring-0 focus:border-blue-500" placeholder="As it appears on the certificate" />
                                     </div>
+
+                                    {/* Issuer */}
                                     <div>
                                         <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Issuing Institution / University *</label>
                                         <input required type="text" value={editingCert.issuer || ''} onChange={e => setEditingCert({...editingCert, issuer: e.target.value})} className="w-full border border-slate-300 p-2 text-sm bg-slate-50 focus:ring-0 focus:border-blue-500" />
                                     </div>
+
+                                    {/* Degree */}
                                     <div>
-                                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Degree (Optional)</label>
-                                        <input type="text" value={editingCert.degree || ''} onChange={e => setEditingCert({...editingCert, degree: e.target.value})} className="w-full border border-slate-300 p-2 text-sm bg-slate-50 focus:ring-0 focus:border-blue-500" placeholder="e.g., BSc, MSc" />
+                                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Degree / Specialization (Optional)</label>
+                                        <input type="text" value={editingCert.degree || ''} onChange={e => setEditingCert({...editingCert, degree: e.target.value})} className="w-full border border-slate-300 p-2 text-sm bg-slate-50 focus:ring-0 focus:border-blue-500" placeholder="e.g., BSc Petroleum Engineering, PMP" />
                                     </div>
+
+                                    {/* Credential ID */}
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Credential ID / License Number</label>
+                                        <input type="text" value={editingCert.credentialId || ''} onChange={e => setEditingCert({...editingCert, credentialId: e.target.value})} className="w-full border border-slate-300 p-2 text-sm bg-slate-50 focus:ring-0 focus:border-blue-500" placeholder="e.g., CER-2024-00123" />
+                                    </div>
+
+                                    {/* Dates */}
                                     <div className="grid grid-cols-2 gap-4">
                                         <div>
                                             <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Issue Date *</label>
@@ -693,22 +919,39 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                                         </div>
                                         <div>
                                             <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Expiry Date</label>
-                                            <input type="date" value={editingCert.expiryDate || ''} onChange={e => setEditingCert({...editingCert, expiryDate: e.target.value})} className="w-full border border-slate-300 p-2 text-sm bg-slate-50 focus:ring-0 focus:border-blue-500" />
+                                            <input type="date" disabled={!!editingCert.noExpiry} value={editingCert.expiryDate || ''} onChange={e => setEditingCert({...editingCert, expiryDate: e.target.value})} className="w-full border border-slate-300 p-2 text-sm bg-slate-50 focus:ring-0 focus:border-blue-500 disabled:opacity-40 disabled:cursor-not-allowed" />
                                         </div>
                                     </div>
+
+                                    {/* No expiry toggle */}
+                                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                                        <input type="checkbox" checked={!!editingCert.noExpiry} onChange={e => setEditingCert({...editingCert, noExpiry: e.target.checked, expiryDate: e.target.checked ? '' : editingCert.expiryDate})} className="w-3.5 h-3.5 accent-emerald-600" />
+                                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">This credential does not expire</span>
+                                    </label>
+
+                                    {/* Renewal */}
+                                    {!editingCert.noExpiry && (
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Renewal Date (If Applicable)</label>
+                                            <input type="date" value={editingCert.renewalDate || ''} onChange={e => setEditingCert({...editingCert, renewalDate: e.target.value})} className="w-full border border-slate-300 p-2 text-sm bg-slate-50 focus:ring-0 focus:border-blue-500" />
+                                        </div>
+                                    )}
+
+                                    {/* Credential URL */}
                                     <div>
-                                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Renewal Date (If Applicable)</label>
-                                        <input type="date" value={editingCert.renewalDate || ''} onChange={e => setEditingCert({...editingCert, renewalDate: e.target.value})} className="w-full border border-slate-300 p-2 text-sm bg-slate-50 focus:ring-0 focus:border-blue-500" />
+                                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Verification URL (Optional)</label>
+                                        <input type="url" value={editingCert.credentialUrl || ''} onChange={e => setEditingCert({...editingCert, credentialUrl: e.target.value})} className="w-full border border-slate-300 p-2 text-sm bg-slate-50 focus:ring-0 focus:border-blue-500" placeholder="https://www.credly.com/badges/..." />
                                     </div>
-                                    
+
+                                    {/* File upload */}
                                     <div className="border border-slate-300 p-4 bg-slate-50 relative">
                                         <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 flex items-center gap-1">
-                                            <FileUp size={12} /> Digital Copy
+                                            <FileUp size={12} /> Digital Copy (PDF or Image)
                                         </label>
-                                        <input 
-                                            type="file" 
-                                            onChange={handleFileUpload} 
-                                            accept=".pdf,image/*" 
+                                        <input
+                                            type="file"
+                                            onChange={handleFileUpload}
+                                            accept=".pdf,image/*"
                                             className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                                         />
                                         {editingCert.fileName && (
@@ -718,9 +961,16 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                                         )}
                                     </div>
 
-                                    <div className="pt-4 flex justify-end gap-2">
-                                        <button type="button" onClick={() => setEditingCert(null)} className="px-4 py-2 border border-slate-300 text-slate-600 text-[10px] font-bold uppercase tracking-widest hover:bg-slate-50">Cancel</button>
-                                        <button type="submit" className="px-4 py-2 bg-blue-600 text-white text-[10px] font-bold uppercase tracking-widest hover:bg-blue-700">Submit for Approval</button>
+                                    <div className="pt-4 flex justify-between items-center gap-2">
+                                        {editingCert.id && (
+                                            <button type="button" onClick={() => setCertDeleteId(editingCert.id)} className="px-3 py-2 border border-red-200 text-red-500 text-[10px] font-bold uppercase tracking-widest hover:bg-red-50 flex items-center gap-1">
+                                                <Trash2 size={11} /> Delete
+                                            </button>
+                                        )}
+                                        <div className="flex gap-2 ml-auto">
+                                            <button type="button" onClick={() => setEditingCert(null)} className="px-4 py-2 border border-slate-300 text-slate-600 text-[10px] font-bold uppercase tracking-widest hover:bg-slate-50">Cancel</button>
+                                            <button type="submit" className="px-4 py-2 bg-blue-600 text-white text-[10px] font-bold uppercase tracking-widest hover:bg-blue-700">Submit for Approval</button>
+                                        </div>
                                     </div>
                                 </form>
                             </div>
@@ -940,5 +1190,6 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
         }
       `}</style>
     </div>
+    </>
   );
 });

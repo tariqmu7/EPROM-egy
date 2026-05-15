@@ -334,7 +334,49 @@ class DataService {
     return newEvidence;
   }
 
-  async updateEvidenceStatus(id: string, status: 'APPROVED' | 'REJECTED', reviewerId: string, level?: number) {
+  async updateEvidence(id: string, updates: { notes?: string; fileUrl?: string; fileName?: string; expiryDate?: string }) {
+    const evidence = this.evidences.find(e => e.id === id);
+    if (!evidence) return;
+    const wasActedOn = evidence.status === 'APPROVED' || evidence.status === 'REJECTED';
+    const updatedEvidence: Evidence = {
+      ...evidence,
+      ...updates,
+      status: 'PENDING',
+      submittedAt: new Date().toISOString(),
+      reviewedAt: undefined,
+      reviewedBy: undefined,
+      assignedScore: undefined,
+      reviewerComment: undefined
+    };
+    await this.updateItem('evidences', updatedEvidence);
+    const user = this.users.find(u => u.id === evidence.userId);
+    if (user && user.managerId) {
+      await this.addNotification({
+        userId: user.managerId,
+        title: 'Evidence Re-Submitted for Review',
+        message: `${user.name} edited their evidence${wasActedOn ? ` (previously ${evidence.status.toLowerCase()})` : ''} and it requires re-approval.`,
+        type: 'WARNING'
+      });
+    }
+  }
+
+  async deleteEvidence(id: string) {
+    const evidence = this.evidences.find(e => e.id === id);
+    if (!evidence) return;
+    const wasActedOn = evidence.status === 'APPROVED' || evidence.status === 'REJECTED';
+    await this.deleteItem('evidences', id);
+    const user = this.users.find(u => u.id === evidence.userId);
+    if (wasActedOn && user && user.managerId) {
+      await this.addNotification({
+        userId: user.managerId,
+        title: 'Evidence Withdrawn',
+        message: `${user.name} deleted their evidence that was previously ${evidence.status.toLowerCase()}. No further action is needed.`,
+        type: 'INFO'
+      });
+    }
+  }
+
+  async updateEvidenceStatus(id: string, status: 'APPROVED' | 'REJECTED', reviewerId: string, level?: number, comment?: string) {
     const evidence = this.evidences.find(e => e.id === id);
     if (evidence) {
       const updatedEvidence = {
@@ -342,7 +384,8 @@ class DataService {
         status,
         reviewedAt: new Date().toISOString(),
         reviewedBy: reviewerId,
-        assignedScore: status === 'APPROVED' ? (level || 3) : undefined
+        assignedScore: status === 'APPROVED' ? (level || 3) : undefined,
+        reviewerComment: comment || undefined
       };
       await this.updateItem('evidences', updatedEvidence);
 
@@ -350,7 +393,7 @@ class DataService {
       await this.addNotification({
         userId: evidence.userId,
         title: `Evidence ${status}`,
-        message: `Your evidence submission was ${status.toLowerCase()}.`,
+        message: `Your evidence submission was ${status.toLowerCase()}.${comment ? ` Reviewer note: ${comment}` : ''}`,
         type: status === 'APPROVED' ? 'SUCCESS' : 'ERROR'
       });
     }
@@ -573,23 +616,45 @@ class DataService {
 
   async getCurrentUser() {
     if (!auth.currentUser) return null;
-    
+
     const user = auth.currentUser;
     const isBootstrapAdmin = user.email?.toLowerCase() === 'tarekmoh123@gmail.com';
-    
+
     let profile = this.users.find(u => u.id === user.uid);
-    
+
     if (!profile) {
-      const docSnap = await getDoc(doc(db, 'users', user.uid));
-      if (docSnap.exists()) {
-         const data = docSnap.data();
-         profile = {
-           id: docSnap.id,
-           ...data,
-           certificates: data.certificates ? JSON.parse(data.certificates) : [],
-           careerHistory: data.careerHistory ? JSON.parse(data.careerHistory) : []
-         } as User;
+      try {
+        const docSnap = await getDoc(doc(db, 'users', user.uid));
+        if (docSnap.exists()) {
+           const data = docSnap.data();
+           profile = {
+             id: docSnap.id,
+             ...data,
+             certificates: data.certificates ? JSON.parse(data.certificates) : [],
+             careerHistory: data.careerHistory ? JSON.parse(data.careerHistory) : []
+           } as User;
+        } else if (user.email) {
+          // UID mismatch (post-migration): fall back to email query
+          const emailQuery = query(collection(db, 'users'), where('email', '==', user.email.toLowerCase()));
+          const emailSnap = await getDocs(emailQuery);
+          if (!emailSnap.empty) {
+            const data = emailSnap.docs[0].data();
+            profile = {
+              id: emailSnap.docs[0].id,
+              ...data,
+              certificates: data.certificates ? JSON.parse(data.certificates) : [],
+              careerHistory: data.careerHistory ? JSON.parse(data.careerHistory) : []
+            } as User;
+          }
+        }
+      } catch (err) {
+        console.error('getCurrentUser: profile lookup failed', err);
       }
+    }
+
+    // Also check in-memory cache by email as a last resort
+    if (!profile && user.email) {
+      profile = this.users.find(u => u.email?.toLowerCase() === user.email!.toLowerCase());
     }
 
     if (profile) {
@@ -606,32 +671,37 @@ class DataService {
 
   // --- PERSISTENCE HELPERS ---
 
+  private preparePayload(collectionName: string, item: any) {
+    let payload = { ...item };
+    
+    // Serialize complex objects
+    if (collectionName === 'users') {
+      if (item.certificates) payload.certificates = JSON.stringify(item.certificates);
+      if (item.careerHistory) payload.careerHistory = JSON.stringify(item.careerHistory);
+    }
+    if (collectionName === 'jobProfiles' && item.requirements) {
+      payload.requirements = JSON.stringify(item.requirements);
+    }
+    if (collectionName === 'skills') {
+      if (item.levels) payload.levels = JSON.stringify(item.levels);
+      if (item.evaluationQuestions) payload.evaluationQuestions = JSON.stringify(item.evaluationQuestions);
+      if (item.interviewQuestions) payload.interviewQuestions = JSON.stringify(item.interviewQuestions);
+      if (item.threeSixtyQuestions) payload.threeSixtyQuestions = JSON.stringify(item.threeSixtyQuestions);
+    }
+
+    // Remove undefined values for Firestore
+    Object.keys(payload).forEach(key => {
+      if (payload[key] === undefined) {
+        delete payload[key];
+      }
+    });
+
+    return payload;
+  }
+
   private async persistItem(collectionName: string, item: any) {
     try {
-      let payload = { ...item };
-      
-      // Serialize complex objects
-      if (collectionName === 'users') {
-        if (item.certificates) payload.certificates = JSON.stringify(item.certificates);
-        if (item.careerHistory) payload.careerHistory = JSON.stringify(item.careerHistory);
-      }
-      if (collectionName === 'jobProfiles' && item.requirements) {
-        payload.requirements = JSON.stringify(item.requirements);
-      }
-      if (collectionName === 'skills') {
-        if (item.levels) payload.levels = JSON.stringify(item.levels);
-        if (item.evaluationQuestions) payload.evaluationQuestions = JSON.stringify(item.evaluationQuestions);
-        if (item.interviewQuestions) payload.interviewQuestions = JSON.stringify(item.interviewQuestions);
-        if (item.threeSixtyQuestions) payload.threeSixtyQuestions = JSON.stringify(item.threeSixtyQuestions);
-      }
-
-      // Remove undefined values for Firestore
-      Object.keys(payload).forEach(key => {
-        if (payload[key] === undefined) {
-          delete payload[key];
-        }
-      });
-
+      const payload = this.preparePayload(collectionName, item);
       await setDoc(doc(db, collectionName, item.id), payload);
     } catch (e) {
       this.handleFirestoreError(e, OperationType.WRITE, `${collectionName}/${item.id}`);
@@ -649,7 +719,14 @@ class DataService {
   }
 
   private async updateItem(collectionName: string, item: any) {
-     await this.persistItem(collectionName, item);
+    try {
+      const payload = this.preparePayload(collectionName, item);
+      const { id, ...data } = payload;
+      await updateDoc(doc(db, collectionName, id), data);
+    } catch (e) {
+      this.handleFirestoreError(e, OperationType.WRITE, `${collectionName}/${item.id}`);
+      throw e;
+    }
   }
 
   async uploadAvatar(userId: string, file: File): Promise<string> {

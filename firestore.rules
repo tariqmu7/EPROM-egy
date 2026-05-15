@@ -20,6 +20,18 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    function isManagerOf(userId) {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/users/$(userId)) &&
+        get(/databases/$(database)/documents/users/$(userId)).data.managerId == request.auth.uid;
+    }
+
+    function isManagerLevel() {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.orgLevel in ['CEO', 'GM', 'AGM', 'DM', 'SH', 'SP'];
+    }
+
     function hasRequiredFields(fields) {
       return request.resource.data.keys().hasAll(fields);
     }
@@ -32,10 +44,12 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       // Allow users to create their own profile, or admins to create any profile
       allow create: if isAuthenticated() && (isOwner(userId) || isAdmin());
-      // Allow users to update their own profile (but not role), or admins to update any
+      // Allow users to update their own profile (but not role), admins to update any,
+      // or managers to update their subordinates (but not role)
       allow update: if isAuthenticated() && (
-        (isOwner(userId) && request.resource.data.role == resource.data.role) || 
-        isAdmin()
+        (isOwner(userId) && request.resource.data.role == resource.data.role) ||
+        isAdmin() ||
+        ((resource.data.managerId == request.auth.uid || isManagerLevel()) && request.resource.data.role == resource.data.role)
       );
       // Allow users to delete their own profile (e.g. during migration from bulk upload) or admins
       allow delete: if isAdmin() || (isAuthenticated() && 'email' in resource.data && resource.data.email.lower() == request.auth.token.email.lower());
@@ -75,10 +89,12 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       // Users can create their own evidence
       allow create: if isAuthenticated() && (request.resource.data.userId == request.auth.uid || isAdmin());
-      // Users can update their own evidence (if pending), admins can update any
+      // Users can update their own evidence (if pending), admins/managers to update any
       allow update: if isAuthenticated() && (
         (resource.data.userId == request.auth.uid && resource.data.status == 'PENDING') || 
-        isAdmin()
+        isAdmin() ||
+        isManagerOf(resource.data.userId) || 
+        isManagerLevel()
       );
       allow delete: if isAdmin();
     }

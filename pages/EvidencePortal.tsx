@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { dataService } from '../services/store';
-import { User, JobProfile, Skill } from '../types';
-import { Upload, FileText, CheckCircle, Clock, AlertCircle, ExternalLink } from 'lucide-react';
+import { User, JobProfile, Skill, Evidence } from '../types';
+import { Upload, FileText, CheckCircle, Clock, AlertCircle, ExternalLink, Pencil, Trash2, XCircle, RefreshCw } from 'lucide-react';
 
 export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser }) => {
   const [selectedSkillId, setSelectedSkillId] = useState<string>('');
@@ -11,6 +11,13 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
   const [expiryDate, setExpiryDate] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+
+  // Edit / delete state
+  const [editEvidence, setEditEvidence] = useState<Evidence | null>(null);
+  const [editNotes, setEditNotes] = useState('');
+  const [editFile, setEditFile] = useState<File | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Evidence | null>(null);
+  const [isActioning, setIsActioning] = useState(false);
 
   const jobs = useMemo(() => dataService.getAllJobs(), []);
   const skills = useMemo(() => dataService.getAllSkills(), []);
@@ -101,12 +108,138 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
     reader.readAsDataURL(file);
   };
 
+  const openEdit = (ev: Evidence) => {
+    setEditEvidence(ev);
+    setEditNotes(ev.notes);
+    setEditFile(null);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editEvidence || isActioning) return;
+    setIsActioning(true);
+    const apply = async (fileUrl?: string, fileName?: string) => {
+      await dataService.updateEvidence(editEvidence.id, {
+        notes: editNotes,
+        ...(fileUrl ? { fileUrl, fileName } : {})
+      });
+      setEditEvidence(null);
+      setEditFile(null);
+      setSuccessMessage('Evidence updated. Manager has been notified to re-review.');
+      setTimeout(() => setSuccessMessage(''), 4000);
+      setIsActioning(false);
+    };
+    if (editFile) {
+      const reader = new FileReader();
+      reader.onloadend = () => apply(reader.result as string, editFile.name);
+      reader.readAsDataURL(editFile);
+    } else {
+      await apply();
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget || isActioning) return;
+    setIsActioning(true);
+    await dataService.deleteEvidence(deleteTarget.id);
+    setDeleteTarget(null);
+    setSuccessMessage('Evidence deleted. Manager has been notified if it was previously reviewed.');
+    setTimeout(() => setSuccessMessage(''), 4000);
+    setIsActioning(false);
+  };
+
+  const getSkillName = (skillId: string) => skills.find(s => s.id === skillId)?.name ?? 'Unknown Skill';
+
+  const STATUS_COLORS: Record<string, string> = {
+    PENDING:  'bg-amber-50 text-amber-700 border-amber-200',
+    APPROVED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    REJECTED: 'bg-rose-50 text-rose-700 border-rose-200',
+  };
+
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       <div className="pb-6 border-b border-slate-300">
         <h2 className="text-3xl font-bold text-slate-900 tracking-tight">Work Record & Evidence Portal</h2>
         <p className="text-slate-700 text-sm mt-1">Submit technical evidence (PTW, Work Orders, Case Studies) for competency verification.</p>
       </div>
+
+      {/* Edit Modal */}
+      {editEvidence && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white border border-slate-300 shadow-xl w-full max-w-lg mx-4">
+            <div className="p-4 border-b border-slate-200 flex items-center gap-2">
+              <RefreshCw size={16} className="text-slate-600" />
+              <span className="font-bold text-slate-900 text-sm">Edit Evidence</span>
+              {(editEvidence.status === 'APPROVED' || editEvidence.status === 'REJECTED') && (
+                <span className="ml-auto text-[11px] bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 font-bold flex items-center gap-1">
+                  <AlertCircle size={11} /> Will reset to Pending — manager re-approval required
+                </span>
+              )}
+            </div>
+            <form onSubmit={handleEditSubmit} className="p-5 space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Skill</label>
+                <p className="text-sm text-slate-800 font-medium">{getSkillName(editEvidence.skillId)}</p>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Notes</label>
+                <textarea
+                  rows={3}
+                  value={editNotes}
+                  onChange={e => setEditNotes(e.target.value)}
+                  required
+                  className="w-full border border-slate-300 text-sm p-2 rounded-none focus:outline-none focus:ring-1 focus:ring-slate-400 resize-none bg-slate-50"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Replace File <span className="font-normal text-slate-400">(optional)</span></label>
+                <input type="file" accept="image/*,.pdf" onChange={e => setEditFile(e.target.files?.[0] ?? null)}
+                  className="text-sm text-slate-700" />
+                {!editFile && <p className="text-xs text-slate-400 mt-1">Leave empty to keep existing file: <span className="font-medium">{editEvidence.fileName}</span></p>}
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <button type="button" onClick={() => setEditEvidence(null)}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 border border-slate-300 hover:bg-slate-50">Cancel</button>
+                <button type="submit" disabled={isActioning}
+                  className="px-4 py-2 text-xs font-bold text-white bg-slate-800 hover:bg-slate-700 disabled:opacity-50">
+                  {isActioning ? 'Saving…' : 'Save & Re-Submit'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white border border-slate-300 shadow-xl w-full max-w-md mx-4">
+            <div className="p-4 border-b border-rose-200 bg-rose-50 flex items-center gap-2">
+              <Trash2 size={16} className="text-rose-600" />
+              <span className="font-bold text-slate-900 text-sm">Delete Evidence</span>
+            </div>
+            <div className="p-5 space-y-4">
+              <p className="text-sm text-slate-700">
+                Are you sure you want to delete the evidence for <strong>{getSkillName(deleteTarget.skillId)}</strong>?
+              </p>
+              {(deleteTarget.status === 'APPROVED' || deleteTarget.status === 'REJECTED') && (
+                <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs px-3 py-2 flex items-start gap-2">
+                  <AlertCircle size={13} className="mt-0.5 shrink-0" />
+                  This evidence was <strong>{deleteTarget.status.toLowerCase()}</strong> by your manager. Deleting it will notify them and remove the associated score.
+                </div>
+              )}
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setDeleteTarget(null)}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 border border-slate-300 hover:bg-slate-50">Cancel</button>
+                <button onClick={handleDelete} disabled={isActioning}
+                  className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-50">
+                  {isActioning ? 'Deleting…' : 'Confirm Delete'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {successMessage && (
         <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-sm flex items-center gap-3">
@@ -282,6 +415,46 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
           </div>
         </div>
       </div>
+      {/* My Submissions */}
+      {myEvidences.length > 0 && (
+        <div className="bg-white border border-slate-300">
+          <div className="px-5 py-3 border-b border-slate-200">
+            <h3 className="text-sm font-bold text-slate-900">My Submissions</h3>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {[...myEvidences].sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()).map(ev => (
+              <div key={ev.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-3 hover:bg-slate-50">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                    <span className="text-sm font-semibold text-slate-800">{getSkillName(ev.skillId)}</span>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 border ${STATUS_COLORS[ev.status]}`}>
+                      {ev.status}{ev.assignedScore ? ` · L${ev.assignedScore}` : ''}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 truncate max-w-sm">{ev.notes}</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    Submitted: {new Date(ev.submittedAt).toLocaleDateString()}
+                    {ev.reviewedAt && ` · Reviewed: ${new Date(ev.reviewedAt).toLocaleDateString()}`}
+                  </p>
+                  {ev.reviewerComment && (
+                    <p className="text-xs text-slate-600 mt-1 italic">Manager note: {ev.reviewerComment}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button onClick={() => openEdit(ev)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-600 border border-slate-300 hover:bg-slate-100 transition-colors">
+                    <Pencil size={12} /> Edit
+                  </button>
+                  <button onClick={() => setDeleteTarget(ev)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-rose-600 border border-rose-200 hover:bg-rose-50 transition-colors">
+                    <Trash2 size={12} /> Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
