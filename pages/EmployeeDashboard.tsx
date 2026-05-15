@@ -799,7 +799,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                                             <div
                                               key={cert.id}
                                               onClick={() => setCertDetailView(cert)}
-                                              className={`p-4 bg-white border transition-colors cursor-pointer group ${editingCert?.id === (cert as any).id ? 'border-blue-400 ring-1 ring-blue-200' : 'border-slate-200 hover:border-blue-400 hover:shadow-sm'} ${isExpired ? 'border-l-4 border-l-red-400' : isExpiringSoon ? 'border-l-4 border-l-amber-400' : ''}`}
+                                              className={`p-4 bg-white border transition-colors cursor-pointer group ${editingCert?.id === cert.id ? 'border-blue-400 ring-1 ring-blue-200' : 'border-slate-200 hover:border-blue-400 hover:shadow-sm'} ${isExpired ? 'border-l-4 border-l-red-400' : isExpiringSoon ? 'border-l-4 border-l-amber-400' : ''}`}
                                             >
                                                 <div className="flex justify-between items-start mb-2">
                                                     <div className="flex-1 min-w-0 pr-2">
