@@ -61,7 +61,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
   const [historySearchTerm, setHistorySearchTerm] = useState('');
 
   // Certificate Management State
-  const [editingCert, setEditingCert] = useState<Partial<any> | null>(null);
+  const [editingCert, setEditingCert] = useState<Partial<Certificate> | null>(null);
   const [certDeleteId, setCertDeleteId] = useState<string | null>(null);
   const [certDetailView, setCertDetailView] = useState<any | null>(null);
 
@@ -795,11 +795,12 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                                             OTHER: 'bg-slate-50 text-slate-600 border-slate-200',
                                         };
                                         const statusInfo = CERT_STATUS[cert.status as string] || CERT_STATUS.PENDING;
+                                        const isEditingThis = (editingCert as any)?.id === cert.id;
                                         return (
                                             <div
                                               key={cert.id}
                                               onClick={() => setCertDetailView(cert)}
-                                              className={`p-4 bg-white border transition-colors cursor-pointer group ${editingCert?.id === cert.id ? 'border-blue-400 ring-1 ring-blue-200' : 'border-slate-200 hover:border-blue-400 hover:shadow-sm'} ${isExpired ? 'border-l-4 border-l-red-400' : isExpiringSoon ? 'border-l-4 border-l-amber-400' : ''}`}
+                                              className={`p-4 bg-white border transition-colors cursor-pointer group ${isEditingThis ? 'border-blue-400 ring-1 ring-blue-200' : 'border-slate-200 hover:border-blue-400 hover:shadow-sm'} ${isExpired ? 'border-l-4 border-l-red-400' : isExpiringSoon ? 'border-l-4 border-l-amber-400' : ''}`}
                                             >
                                                 <div className="flex justify-between items-start mb-2">
                                                     <div className="flex-1 min-w-0 pr-2">
@@ -876,7 +877,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                                     {/* Category */}
                                     <div>
                                         <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Category</label>
-                                        <select value={editingCert.category || ''} onChange={e => setEditingCert({...editingCert, category: e.target.value || undefined})} className="w-full border border-slate-300 p-2 text-sm bg-slate-50 focus:ring-0 focus:border-blue-500">
+                                        <select value={editingCert.category || ''} onChange={e => setEditingCert({...editingCert, category: (e.target.value || undefined) as Certificate['category']})} className="w-full border border-slate-300 p-2 text-sm bg-slate-50 focus:ring-0 focus:border-blue-500">
                                             <option value="">— Select category —</option>
                                             <option value="PROFESSIONAL">Professional</option>
                                             <option value="ACADEMIC">Academic / Degree</option>
@@ -963,7 +964,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
 
                                     <div className="pt-4 flex justify-between items-center gap-2">
                                         {editingCert.id && (
-                                            <button type="button" onClick={() => setCertDeleteId(editingCert.id)} className="px-3 py-2 border border-red-200 text-red-500 text-[10px] font-bold uppercase tracking-widest hover:bg-red-50 flex items-center gap-1">
+                                            <button type="button" onClick={() => setCertDeleteId(editingCert.id ?? null)} className="px-3 py-2 border border-red-200 text-red-500 text-[10px] font-bold uppercase tracking-widest hover:bg-red-50 flex items-center gap-1">
                                                 <Trash2 size={11} /> Delete
                                             </button>
                                         )}
