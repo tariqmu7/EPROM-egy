@@ -143,7 +143,7 @@ Routing is tab-based state in `App.tsx` (no React Router). `activeTab` drives wh
 - `types.ts` is the source of truth for all interfaces; update it before adding new fields.
 - `constants.ts` holds proficiency level labels — the scale is always 1–5.
 - The app has no backend server; all logic runs client-side against Firestore.
-- Firebase config is in `firebase.ts`; environment variables for Supabase are in `.env`.
+- Firebase config is loaded by `firebase.ts` from `VITE_FIREBASE_*` env vars (`.env.local` / `.env.production`); see `.env.example` for the required keys.
 
 ---
 
@@ -156,10 +156,10 @@ Routing is tab-based state in `App.tsx` (no React Router). `activeTab` drives wh
 | Project ID | `eprom-cms` |
 | Firestore DB | `(default)` |
 | Auth domain | `eprom-cms.firebaseapp.com` |
-| Config file | `firebase-applet-config.json` |
+| Config | `VITE_FIREBASE_*` env vars (`.env.local` dev / `.env.production` build) |
 | Rules file | `firestore.rules` |
 
-`firebase.ts` uses `getFirestore(app)` — no custom database ID needed.
+`firebase.ts` reads config from `import.meta.env.VITE_FIREBASE_*`; env files are gitignored. Copy `.env.example` to `.env.local` / `.env.production` and fill in values from Firebase Console. `getFirestore(app)` is used — no custom database ID needed.
 
 ### Migration notes
 - All Firestore collections migrated with original document IDs preserved.

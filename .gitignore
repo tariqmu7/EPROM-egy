@@ -13,6 +13,17 @@ dist
 dist-ssr
 *.local
 
+# Environment variables (contain Firebase credentials — never commit)
+.env
+.env.local
+.env.development
+.env.production
+.env.*.local
+!.env.example
+
+# Firebase credentials — use the VITE_FIREBASE_* env vars instead
+firebase-applet-config.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
