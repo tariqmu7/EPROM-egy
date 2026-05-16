@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { dataService } from '../services/store';
+import { useStoreData } from '../hooks/useStoreData';
 import { User, Evidence } from '../types';
 import {
   CheckCircle, XCircle, FileText, Download, Eye, Clock, History,
@@ -42,15 +43,17 @@ export const SupervisorApproval: React.FC<{ currentUser: User }> = ({ currentUse
   const [certComment, setCertComment] = useState('');
   const [certDetail,  setCertDetail]  = useState<{ user: User; certificate: any } | null>(null);
 
-  const users  = useMemo(() => dataService.getAllUsers(),  [refreshKey]);
-  const skills = useMemo(() => dataService.getAllSkills(), [refreshKey]);
-  const jobs   = useMemo(() => dataService.getAllJobs(),   [refreshKey]);
+  const storeVersion = useStoreData();
+
+  const users  = useMemo(() => dataService.getAllUsers(),  [refreshKey, storeVersion]);
+  const skills = useMemo(() => dataService.getAllSkills(), [refreshKey, storeVersion]);
+  const jobs   = useMemo(() => dataService.getAllJobs(),   [refreshKey, storeVersion]);
 
   // Users this supervisor can manage (direct + indirect subordinates via managerId)
   const managedUsers = useMemo(() => {
     if (currentUser.role === 'ADMIN' || currentUser.role === 'CEO') return users;
     return dataService.getVisibleUsers(currentUser).filter(u => u.id !== currentUser.id);
-  }, [currentUser, users]);
+  }, [currentUser, users, storeVersion]);
 
   const managedUserIds = useMemo(() => new Set(managedUsers.map(u => u.id)), [managedUsers]);
 
@@ -60,7 +63,7 @@ export const SupervisorApproval: React.FC<{ currentUser: User }> = ({ currentUse
     const all = dataService.getEvidences();
     if (currentUser.role === 'ADMIN' || currentUser.role === 'CEO') return all;
     return all.filter(e => managedUserIds.has(e.userId));
-  }, [currentUser, managedUserIds, refreshKey]);
+  }, [currentUser, managedUserIds, refreshKey, storeVersion]);
 
   const pendingEvidences = useMemo(
     () => allTeamEvidences.filter(e => e.status === 'PENDING'),

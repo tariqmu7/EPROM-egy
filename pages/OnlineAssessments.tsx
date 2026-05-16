@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { User, Skill, JobProfile } from '../types';
 import { dataService } from '../services/store';
-import { 
+import { useStoreData } from '../hooks/useStoreData';
+import {
   ExternalLink, 
   CheckCircle, 
   Clock, 
@@ -18,6 +19,8 @@ interface OnlineAssessmentsProps {
 export const OnlineAssessments: React.FC<OnlineAssessmentsProps> = ({ currentUser }) => {
   const [successMessage, setSuccessMessage] = useState('');
 
+  const storeVersion = useStoreData();
+
   const requiredSkills = useMemo(() => {
     if (!currentUser.jobProfileId || !currentUser.orgLevel) return [];
     
@@ -28,11 +31,11 @@ export const OnlineAssessments: React.FC<OnlineAssessmentsProps> = ({ currentUse
     return levelRequirements
       .map(req => dataService.getSkill(req.skillId))
       .filter((s): s is Skill => !!s && s.assessmentMethod === 'WRITTEN_EXAM');
-  }, [currentUser]);
+  }, [currentUser, storeVersion]);
 
   const assessments = useMemo(() => {
     return dataService.getAssessments({ subjectId: currentUser.id });
-  }, [currentUser.id]);
+  }, [currentUser.id, storeVersion]);
 
   const getSkillStatus = (skillId: string) => {
     const latest = assessments

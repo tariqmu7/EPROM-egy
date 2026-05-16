@@ -1,20 +1,23 @@
 import React, { useMemo, useState } from 'react';
 import { dataService } from '../services/store';
+import { useStoreData } from '../hooks/useStoreData';
 import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend, BarChart, Bar } from 'recharts';
 import { Activity, TrendingUp, Users, Building2 } from 'lucide-react';
 
 export const AdminAnalytics: React.FC = () => {
   const [selectedDeptId, setSelectedDeptId] = useState<string>('ALL');
 
-  const depts = useMemo(() => dataService.getAllDepartments(), []);
-  const users = useMemo(() => dataService.getAllUsers(), []);
-  const jobs = useMemo(() => dataService.getAllJobs(), []);
-  
+  const storeVersion = useStoreData();
+
+  const depts = useMemo(() => dataService.getAllDepartments(), [storeVersion]);
+  const users = useMemo(() => dataService.getAllUsers(), [storeVersion]);
+  const jobs = useMemo(() => dataService.getAllJobs(), [storeVersion]);
+
   // Fetch all assessments
   const allAssessments = useMemo(() => {
     // We need to get all assessments. We can just call getAssessments with empty filter
     return dataService.getAssessments({});
-  }, []);
+  }, [storeVersion]);
 
   const trendData = useMemo(() => {
     // Filter users by department if selected

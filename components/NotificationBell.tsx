@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Bell, Check, Info, AlertTriangle, CheckCircle, XCircle, Trash2 } from 'lucide-react';
 import { dataService } from '../services/store';
+import { useStoreData } from '../hooks/useStoreData';
 import { User, Notification } from '../types';
 
 interface NotificationBellProps {
@@ -26,10 +27,18 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ user, onNavi
   const dropdownRef = useRef<HTMLDivElement>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const storeVersion = useStoreData();
+
   const fetchNotifications = useCallback(() => {
     const notifs = dataService.getNotifications(user.id);
     setNotifications(notifs);
   }, [user.id]);
+
+  // Refetch the moment the notifications listener delivers a snapshot, so
+  // alerts appear instantly instead of waiting for the 30s poll below.
+  useEffect(() => {
+    fetchNotifications();
+  }, [storeVersion, fetchNotifications]);
 
   useEffect(() => {
     fetchNotifications();

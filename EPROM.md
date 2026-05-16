@@ -117,7 +117,7 @@ UserStatus: ACTIVE | PENDING | REJECTED
 - Has any direct subordinate (`managerId === user.id`)
 - OrgLevel is in `['CEO', 'GM', 'AGM', 'DM', 'SH']`
 
-**Account approval gate:** New sign-ups land in `PENDING` status. Login is blocked until an Admin sets them to `ACTIVE`. Bootstrap admin `tarekmoh123@gmail.com` is auto-approved.
+**Account approval gate:** New sign-ups land in `PENDING` status. Login is blocked until an Admin sets them to `ACTIVE`. The bootstrap admin (email set via the `VITE_BOOTSTRAP_ADMIN_EMAIL` env var) is auto-approved.
 
 ---
 
@@ -572,7 +572,7 @@ The service uses Firestore **real-time listeners** (`onSnapshot`) for all collec
 | `trainingCourses` | Any authenticated | Admin only |
 | `activityLogs` | Any authenticated | Any auth creates; Admin updates/deletes |
 
-**Admin check in rules:** email is `tarekmoh123@gmail.com` (bootstrap) OR user doc has `role == 'ADMIN'`.
+**Admin check in rules:** email equals the bootstrap admin (`VITE_BOOTSTRAP_ADMIN_EMAIL`, baked into the generated `firestore.rules` by `npm run rules:build`) OR user doc has `role == 'ADMIN'`.
 
 ---
 

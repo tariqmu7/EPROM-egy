@@ -18,15 +18,15 @@ Work through these one at a time, top to bottom. Check the box when done.
 
 - [x] **#1** Move Firebase credentials out of source code — `firebase-applet-config.json` is committed to Git; migrate all keys to `.env.local` (dev) and `.env.production` (build) using `import.meta.env.VITE_FIREBASE_*` and add the JSON file to `.gitignore`; on a local server anyone with access to the Git repo or deployment folder can read the keys
 
-- [ ] **#2** Remove hardcoded admin email from `store.ts` (lines 457, 547, 577, 621) and `firestore.rules` (line 14); drive it from `VITE_BOOTSTRAP_ADMIN_EMAIL` env var instead
+- [x] **#2** Remove hardcoded admin email from `store.ts` (lines 457, 547, 577, 621) and `firestore.rules` (line 14); drive it from `VITE_BOOTSTRAP_ADMIN_EMAIL` env var instead
 
 - [deferred] **#31** Implement Firebase Auth Custom Claims for role/admin verification — replace email string comparisons in `firestore.rules` and frontend with token claim checks (e.g. `request.auth.token.admin == true`); set claims via a bootstrap Cloud Function or Admin SDK script
 
-- [ ] **#3** Fix Firestore evidence update rule in `firestore.rules:92-98` — remove `isManagerLevel()` fallback so only the actual manager of the evidence owner (or admin) can update it
+- [x] **#3** Fix Firestore evidence update rule in `firestore.rules:92-98` — remove `isManagerLevel()` fallback so only the actual manager of the evidence owner (or admin) can update it
 
-- [ ] **#4** Scope Firestore real-time listeners in `store.ts:163-302` — non-admin users currently download every user's profiles, assessments, and evidence; add `where` clauses to limit data to what the current user is permitted to see
+- [x] **#4** Scope Firestore real-time listeners in `store.ts:163-302` — non-admin users currently download every user's profiles, assessments, and evidence; add `where` clauses to limit data to what the current user is permitted to see
 
-- [ ] **#5** Fix `Math.max()` crash on empty array in `store.ts:1217` — add `if (relevantEvidence.length === 0) return 0;` before the spread call to prevent `-Infinity` being returned as a skill score
+- [x] **#5** Fix `Math.max()` crash on empty array in `store.ts:1217` — add `if (relevantEvidence.length === 0) return 0;` before the spread call to prevent `-Infinity` being returned as a skill score
 
 ---
 
@@ -38,27 +38,27 @@ Work through these one at a time, top to bottom. Check the box when done.
 
 - [ ] **#41** Add a build and deployment runbook (`DEPLOY.md`) — document the exact steps: set env vars → `npm run build` → copy `dist/` to web server root → reload server; this prevents the IT team from accidentally deploying a dev build or missing env vars
 
-- [ ] **#6** ⚠️ DEPLOY BLOCKER — Gate the dev login bypass in `App.tsx:345-363` behind `import.meta.env.DEV`; add a runtime guard that throws if `CONFIG.SOURCE === 'MOCK'` in production; a mock bypass reachable on the live internal server is a complete auth bypass for all company users
+- [x] **#6** ⚠️ DEPLOY BLOCKER — Gate the dev login bypass in `App.tsx:345-363` behind `import.meta.env.DEV`; add a runtime guard that throws if `CONFIG.SOURCE === 'MOCK'` in production; a mock bypass reachable on the live internal server is a complete auth bypass for all company users
 
-- [ ] **#7** Restrict CEO role to only `admin-depts` tab in `App.tsx:373-391` — current check allows CEO to access every `admin-*` route
+- [x] **#7** Restrict CEO role to only `admin-depts` tab in `App.tsx:373-391` — current check allows CEO to access every `admin-*` route
 
-- [ ] **#8** Replace the hard-coded 1-second `setTimeout` on login in `store.ts:508` with a proper Promise that resolves once the first Firestore snapshot arrives
+- [x] **#8** Replace the hard-coded 1-second `setTimeout` on login in `store.ts:508` with a proper Promise that resolves once the first Firestore snapshot arrives
 
-- [ ] **#32** Fix login flow for `PENDING` users — currently the app authenticates them, detects pending status, then calls `signOut(auth)`, causing a jarring dashboard flash; route them directly to a dedicated "Waiting for Approval" screen before any dashboard renders
+- [x] **#32** Fix login flow for `PENDING` users — currently the app authenticates them, detects pending status, then calls `signOut(auth)`, causing a jarring dashboard flash; route them directly to a dedicated "Waiting for Approval" screen before any dashboard renders
 
 - [ ] **#33** Wrap `JSON.parse(data.certificates)` and `JSON.parse(data.careerHistory)` calls inside Firestore snapshot listeners in `store.ts` with `try/catch` blocks — a single malformed string in the database currently crashes the entire real-time listener silently
 
-- [ ] **#9** Fix BehavioralAssessment double-submit race condition in `pages/BehavioralAssessment.tsx:182-226` — remove `setTimeout` wrapper; use `try/finally` to set `isSubmitting = false` after the `await` resolves
+- [x] **#9** Fix BehavioralAssessment double-submit race condition in `pages/BehavioralAssessment.tsx:182-226` — remove `setTimeout` wrapper; use `try/finally` to set `isSubmitting = false` after the `await` resolves
 
-- [ ] **#10** Fix EvidencePortal async bug in `pages/EvidencePortal.tsx:51-109` — success message is shown before `FileReader.readAsDataURL()` completes; move all post-read logic inside `reader.onloadend`
+- [x] **#10** Fix EvidencePortal async bug in `pages/EvidencePortal.tsx:51-109` — success message is shown before `FileReader.readAsDataURL()` completes; move all post-read logic inside `reader.onloadend`
 
-- [ ] **#11** Add role guard to `components/BulkUpload.tsx` — return `<AccessDenied />` if `user.role !== Role.ADMIN`
+- [x] **#11** Add role guard to `components/BulkUpload.tsx` — return `<AccessDenied />` if `user.role !== Role.ADMIN`
 
-- [ ] **#12** Add `limit()` and `where` scoping to unbounded Firestore listeners across all collections in `store.ts` to prevent downloading the entire database on every login
+- [x] **#12** Add `limit()` and `where` scoping to unbounded Firestore listeners across all collections in `store.ts` to prevent downloading the entire database on every login — non-privileged viewers (employees + dept/section managers) now scope `users` to their own `departmentId` (Direct Department / Section); a `MAX_LISTENER_DOCS` safety cap is layered on every listener. NOTE: true department-scoping of `assessments`/`evidences`/`nominations` needs a denormalized `departmentId` on those docs + backfill (deferred, see TODO in `store.ts` / #31); pure employees there remain self-scoped (already tighter than dept).
 
-- [ ] **#13** Add `request.resource.data.raterId != null` validation to the nominations `create` rule in `firestore.rules:119-121`
+- [x] **#13** Add `request.resource.data.raterId != null` validation to the nominations `create` rule in `firestore.rules:119-121`
 
-- [ ] **#14** Sanitize Excel cell values in `components/BulkUpload.tsx` — strip leading `=`, `@`, `+` characters to prevent formula injection attacks
+- [x] **#14** Sanitize Excel cell values in `components/BulkUpload.tsx` — strip leading `=`, `@`, `+` characters to prevent formula injection attacks
 
 ---
 

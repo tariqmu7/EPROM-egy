@@ -24,6 +24,10 @@ dist-ssr
 # Firebase credentials — use the VITE_FIREBASE_* env vars instead
 firebase-applet-config.json
 
+# Generated from firestore.rules.template by `npm run rules:build`
+# (bakes in VITE_BOOTSTRAP_ADMIN_EMAIL). Edit the template, not this file.
+firestore.rules
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

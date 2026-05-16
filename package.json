@@ -7,7 +7,8 @@
     "dev": "vite --host",
     "build": "tsc && vite build",
     "lint": "tsc --noEmit",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "rules:build": "node scripts/gen-firestore-rules.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.7",

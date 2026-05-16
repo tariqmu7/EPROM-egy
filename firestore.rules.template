@@ -1,3 +1,11 @@
+// ===================================================================
+// SOURCE OF TRUTH for Firestore security rules.
+//
+// Do NOT edit firestore.rules directly — it is generated from this
+// file by `npm run rules:build`, which substitutes the bootstrap
+// admin email from the VITE_BOOTSTRAP_ADMIN_EMAIL env var.
+// Edit this template, then run the generator before deploying.
+// ===================================================================
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -11,7 +19,7 @@ service cloud.firestore {
 
     function isAdmin() {
       return isAuthenticated() && (
-        (request.auth.token.email == "tarekmoh123@gmail.com" && request.auth.token.email_verified == true) ||
+        (request.auth.token.email == "__BOOTSTRAP_ADMIN_EMAIL__" && request.auth.token.email_verified == true) ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN')
       );
     }
@@ -89,12 +97,12 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       // Users can create their own evidence
       allow create: if isAuthenticated() && (request.resource.data.userId == request.auth.uid || isAdmin());
-      // Users can update their own evidence (if pending), admins/managers to update any
+      // Users can update their own evidence (if pending); only the evidence
+      // owner's actual manager or an admin can update it otherwise
       allow update: if isAuthenticated() && (
-        (resource.data.userId == request.auth.uid && resource.data.status == 'PENDING') || 
+        (resource.data.userId == request.auth.uid && resource.data.status == 'PENDING') ||
         isAdmin() ||
-        isManagerOf(resource.data.userId) || 
-        isManagerLevel()
+        isManagerOf(resource.data.userId)
       );
       allow delete: if isAdmin();
     }
@@ -117,7 +125,9 @@ service cloud.firestore {
     match /nominations/{nominationId} {
       allow read: if isAuthenticated();
       // Users can create nominations
-      allow create: if isAuthenticated() && request.resource.data.nominatorId == request.auth.uid;
+      allow create: if isAuthenticated()
+        && request.resource.data.nominatorId == request.auth.uid
+        && request.resource.data.raterId != null;
       // Users can update nominations if they are the rater (to approve/reject)
       allow update: if isAuthenticated() && (resource.data.raterId == request.auth.uid || isAdmin());
       allow delete: if isAdmin();

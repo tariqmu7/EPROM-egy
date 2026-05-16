@@ -10,11 +10,11 @@ import { EvidencePortal } from './pages/EvidencePortal';
 import { BehavioralAssessment } from './pages/BehavioralAssessment';
 import { EvaluationsHub } from './pages/EvaluationsHub';
 import { Logo } from './components/Logo';
-import { dataService, CONFIG } from './services/store';
+import { dataService, CONFIG, isBootstrapAdminEmail } from './services/store';
 import { auth } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { User, Role } from './types';
-import { ShieldCheck, Loader2, Lock, User as UserIcon, CheckCircle, ArrowRight, Activity, X, ArrowLeft } from 'lucide-react';
+import { ShieldCheck, Loader2, Lock, User as UserIcon, CheckCircle, ArrowRight, Activity, X, ArrowLeft, Clock } from 'lucide-react';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -27,6 +27,7 @@ const App: React.FC = () => {
   const [fullName, setFullName] = useState('');
   const [signupSuccess, setSignupSuccess] = useState(false);
   const [resetSuccess, setResetSuccess] = useState(false);
+  const [pendingApproval, setPendingApproval] = useState(false);
   
   const [activeTab, setActiveTab] = useState('emp-dashboard');
   const [error, setError] = useState('');
@@ -41,6 +42,13 @@ const App: React.FC = () => {
       if (!mounted) return;
 
       if (firebaseUser) {
+        // The throwaway auto-session from a pending sign-up is torn down
+        // inside signUp(); don't chase it with a getCurrentUser/signOut
+        // round-trip that just flickers the UI. signUp drives the result.
+        if (dataService.isSignUpInProgress()) {
+          if (mounted) setIsLoading(false);
+          return;
+        }
         try {
           await dataService.initialize();
           const currentUser = await dataService.getCurrentUser();
@@ -104,6 +112,11 @@ const App: React.FC = () => {
                 } else {
                     setActiveTab('emp-dashboard');
                 }
+            } else if ('pending' in result && result.pending) {
+                // PENDING users are signed out inside loginWithPassword (no
+                // live session); show a dedicated waiting screen instead of
+                // bouncing back to the login form with a terse error.
+                setPendingApproval(true);
             } else {
                 setError(result.error || 'Login failed');
             }
@@ -142,6 +155,58 @@ const App: React.FC = () => {
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-slate-600 gap-4">
         <Loader2 className="animate-spin text-slate-900" size={48} />
         <p className="font-bold tracking-widest text-xs uppercase animate-pulse">Initializing System...</p>
+      </div>
+    );
+  }
+
+  // --- PENDING APPROVAL ---
+  // Shown when a PENDING user signs in. They are already signed out (no live
+  // session); this is a terminal, unauthenticated screen reached before any
+  // dashboard can render, so there is no jarring authenticated flash.
+  if (pendingApproval) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-8">
+        <div className="w-full max-w-md text-center animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="flex items-center gap-4 mb-12 justify-center">
+            <div className="w-20 h-20 rounded-none overflow-hidden flex items-center justify-center bg-white border border-slate-300 p-2">
+              <Logo className="w-full h-full" />
+            </div>
+            <div className="flex flex-col text-left">
+              <span className="font-bold text-3xl tracking-tight leading-none text-slate-900">EPROM CMS</span>
+              <span className="text-xs text-slate-900 font-bold uppercase tracking-widest mt-1">EPROM Competency program</span>
+            </div>
+          </div>
+
+          <div className="bg-white border border-slate-200 p-10">
+            <div className="w-16 h-16 mx-auto mb-6 rounded-none flex items-center justify-center bg-amber-100 text-amber-700 border border-amber-200">
+              <Clock size={32} />
+            </div>
+            <h2 className="text-2xl font-bold text-slate-900 tracking-tight mb-3">
+              Account Pending Approval
+            </h2>
+            <p className="text-slate-600 leading-relaxed mb-8">
+              Your account has been created but is awaiting administrator
+              approval. You will be able to sign in once an administrator
+              activates your profile. Please check back later or contact your
+              system administrator.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setPendingApproval(false);
+                setEmail('');
+                setPassword('');
+                setError('');
+                setIsLoginMode(true);
+                setIsForgotPassword(false);
+              }}
+              className="w-full bg-blue-700 hover:bg-blue-800 text-white font-medium py-3 rounded-none transition-all flex items-center justify-center gap-2 group"
+            >
+              <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform opacity-70" />
+              Back to Sign in
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -223,8 +288,8 @@ const App: React.FC = () => {
                             <div className="text-sm">
                                 <p className="font-bold">Registration Successful</p>
                                 <p className="text-slate-700 mt-1">
-                                    {email.toLowerCase() === 'tarekmoh123@gmail.com' 
-                                        ? 'Admin account created. You can now sign in.' 
+                                    {isBootstrapAdminEmail(email)
+                                        ? 'Admin account created. You can now sign in.'
                                         : 'Your profile is pending administrator approval (if new) or activated successfully (if pre-existing).'}
                                 </p>
                             </div>
@@ -342,7 +407,7 @@ const App: React.FC = () => {
                     </div>
                 </form>
 
-                {CONFIG.SOURCE === 'MOCK' && isLoginMode && (
+                {import.meta.env.DEV && CONFIG.SOURCE === 'MOCK' && isLoginMode && (
                     <div className="mt-12 pt-8 border-t border-slate-300">
                         <p className="text-[10px] text-slate-600 mb-4 font-bold uppercase tracking-widest text-center">Development Access</p>
                         <div className="flex flex-col gap-2">
@@ -370,8 +435,9 @@ const App: React.FC = () => {
   // Router Logic
   const renderContent = () => {
     // Role Validation
-    // CEO can access admin-depts (Org Structure)
-    if (activeTab.startsWith('admin-') && user.role !== Role.ADMIN && user.role !== Role.CEO) {
+    // ADMIN can access every admin-* route; CEO is restricted to admin-depts (Org Structure) only
+    const isCeoOrgStructureAccess = user.role === Role.CEO && activeTab === 'admin-depts';
+    if (activeTab.startsWith('admin-') && user.role !== Role.ADMIN && !isCeoOrgStructureAccess) {
       return (
         <div className="flex flex-col items-center justify-center h-[60vh] p-12 text-center animate-fade-in">
           <div className="bg-slate-50 text-slate-500 p-6 rounded-none mb-6">

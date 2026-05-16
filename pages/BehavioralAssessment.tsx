@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { dataService } from '../services/store';
+import { useStoreData } from '../hooks/useStoreData';
 import { User, Skill } from '../types';
 import { Star, MessageSquare, Send, CheckCircle, User as UserIcon, Search, AlertTriangle } from 'lucide-react';
 
@@ -66,8 +67,10 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
     { title: "Professional Development", text: "Did the employee complete required industry training and actively work to update their technical skills or certifications relevant to the energy sector?" }
   ], []);
 
-  const users = useMemo(() => dataService.getPublicUsers(), []);
-  
+  const storeVersion = useStoreData();
+
+  const users = useMemo(() => dataService.getPublicUsers(), [storeVersion]);
+
   // The selection of the employee must be related to the same department of the user who will do the evaluation
   const departmentUsers = useMemo(() => {
     return users.filter(u => u.departmentId === currentUser.departmentId);
@@ -75,15 +78,15 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
 
   const manager = useMemo(() => {
     return currentUser.managerId ? dataService.getUserById(currentUser.managerId) : undefined;
-  }, [currentUser.managerId]);
+  }, [currentUser.managerId, storeVersion]);
 
   const peers = useMemo(() => {
     return dataService.getPeers(currentUser.id);
-  }, [currentUser.id]);
+  }, [currentUser.id, storeVersion]);
 
   const subordinates = useMemo(() => {
     return dataService.getSubordinates(currentUser.id);
-  }, [currentUser.id]);
+  }, [currentUser.id, storeVersion]);
 
   const selectedEmployee = useMemo(() => {
     return departmentUsers.find(u => u.id === selectedSubjectId);
@@ -115,7 +118,7 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
       targetCategories.includes(s.category) && 
       allRelevantSkillIds.includes(s.id)
     );
-  }, [selectedEmployee]);
+  }, [selectedEmployee, storeVersion]);
 
   const existingAssessment = useMemo(() => {
     if (!selectedSubjectId || !selectedSkillId) return null;
@@ -124,7 +127,7 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
       subjectId: selectedSubjectId, 
       skillId: selectedSkillId 
     }).find(Boolean) || null;
-  }, [selectedSubjectId, selectedSkillId, currentUser.id]);
+  }, [selectedSubjectId, selectedSkillId, currentUser.id, storeVersion]);
 
   const existingAppraisal = useMemo(() => {
     if (!selectedSubjectId) return null;
@@ -133,7 +136,7 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
       subjectId: selectedSubjectId,
       skillId: 'annual-appraisal'
     }).find(Boolean) || null;
-  }, [selectedSubjectId, currentUser.id]);
+  }, [selectedSubjectId, currentUser.id, storeVersion]);
 
   useEffect(() => {
     if (evalType === 'OTHER_SKILLS') {
@@ -176,43 +179,43 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
     e.preventDefault();
     if (evalType === 'OTHER_SKILLS' && (!selectedSubjectId || !selectedSkillId || rating === 0)) return;
     if (evalType === 'ANNUAL_APPRAISAL' && !selectedSubjectId) return;
+    if (isSubmitting) return;
 
     setIsSubmitting(true);
 
-    // Simulate network request
-    setTimeout(async () => {
-        const isSelf = selectedSubjectId === currentUser.id;
-        const isManagerOfSubject = subordinates.some(sub => sub.id === selectedSubjectId);
-        const isPeerOfSubject = peers.some(p => p.id === selectedSubjectId);
-        
-        // Relationship-based type assignment
-        // If not self, not subordinate (manager role), and not peer, it is an 'OTHER' or 'MANAGER' 
-        // evaluation from a subordinate perspective. We'll label as PEER only if they are true peers.
-        const typeAssignment = isSelf ? 'SELF' : (isManagerOfSubject ? 'MANAGER' : (isPeerOfSubject ? 'PEER' : 'PEER'));
+    try {
+      const isSelf = selectedSubjectId === currentUser.id;
+      const isManagerOfSubject = subordinates.some(sub => sub.id === selectedSubjectId);
+      const isPeerOfSubject = peers.some(p => p.id === selectedSubjectId);
 
-        if (evalType === 'ANNUAL_APPRAISAL') {
-          const score = appraisalAnswers.filter(a => a).length;
-          const commentData = `[APPRAISAL_DATA:${appraisalAnswers.join(',')}]\n${feedback}`;
-          await dataService.addAssessment({
-            raterId: currentUser.id,
-            subjectId: selectedSubjectId,
-            skillId: 'annual-appraisal',
-            score: score,
-            comment: commentData,
-            method: 'OJT_OBSERVATION',
-            type: typeAssignment
-          });
-        } else {
-          await dataService.addAssessment({
-            raterId: currentUser.id,
-            subjectId: selectedSubjectId,
-            skillId: selectedSkillId,
-            score: rating,
-            comment: feedback,
-            method: 'OJT_OBSERVATION',
-            type: typeAssignment 
-          });
-        }
+      // Relationship-based type assignment
+      // If not self, not subordinate (manager role), and not peer, it is an 'OTHER' or 'MANAGER'
+      // evaluation from a subordinate perspective. We'll label as PEER only if they are true peers.
+      const typeAssignment = isSelf ? 'SELF' : (isManagerOfSubject ? 'MANAGER' : (isPeerOfSubject ? 'PEER' : 'PEER'));
+
+      if (evalType === 'ANNUAL_APPRAISAL') {
+        const score = appraisalAnswers.filter(a => a).length;
+        const commentData = `[APPRAISAL_DATA:${appraisalAnswers.join(',')}]\n${feedback}`;
+        await dataService.addAssessment({
+          raterId: currentUser.id,
+          subjectId: selectedSubjectId,
+          skillId: 'annual-appraisal',
+          score: score,
+          comment: commentData,
+          method: 'OJT_OBSERVATION',
+          type: typeAssignment
+        });
+      } else {
+        await dataService.addAssessment({
+          raterId: currentUser.id,
+          subjectId: selectedSubjectId,
+          skillId: selectedSkillId,
+          score: rating,
+          comment: feedback,
+          method: 'OJT_OBSERVATION',
+          type: typeAssignment
+        });
+      }
 
       setSuccessMessage(isSelf ? 'Self-evaluation submitted successfully.' : 'Feedback submitted successfully.');
       setSelectedSubjectId('');
@@ -220,10 +223,11 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
       setRating(0);
       setFeedback('');
       setAppraisalAnswers(new Array(10).fill(false));
-      setIsSubmitting(false);
 
       setTimeout(() => setSuccessMessage(''), 3000);
-    }, 500);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

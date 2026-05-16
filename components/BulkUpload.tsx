@@ -1,16 +1,35 @@
 import React, { useState } from 'react';
 import * as XLSX from 'xlsx';
-import { Download, Upload, X, AlertCircle, CheckCircle, FileSpreadsheet, Loader2 } from 'lucide-react';
+import { Download, Upload, X, AlertCircle, CheckCircle, FileSpreadsheet, Loader2, Lock } from 'lucide-react';
 import { dataService } from '../services/store';
 import { User, Role, JobProfile, Skill, Department, OrgLevel } from '../types';
 
 interface BulkUploadProps {
   type: 'USER' | 'JOB' | 'SKILL' | 'DEPT' | 'PROJECT';
+  user: User | null;
   onComplete: () => void;
   onCancel: () => void;
 }
 
-export const BulkUpload: React.FC<BulkUploadProps> = ({ type, onComplete, onCancel }) => {
+// Prevent spreadsheet formula injection (a.k.a. CSV injection): a cell whose
+// value begins with =, @ or + is interpreted as a formula when the data is
+// later opened in Excel/Sheets. Strip those leading characters so every
+// imported value is treated as inert text. Repeated leading markers (e.g.
+// "=+cmd|...") are stripped together.
+const sanitizeCellValue = (value: any): any => {
+  if (typeof value !== 'string') return value;
+  return value.replace(/^[=@+]+/, '');
+};
+
+const sanitizeRow = (row: Record<string, any>): Record<string, any> => {
+  const clean: Record<string, any> = {};
+  for (const key of Object.keys(row)) {
+    clean[key] = sanitizeCellValue(row[key]);
+  }
+  return clean;
+};
+
+export const BulkUpload: React.FC<BulkUploadProps> = ({ type, user, onComplete, onCancel }) => {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,7 +104,7 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, onComplete, onCanc
         const workbook = XLSX.read(data, { type: 'array' });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet) as any[];
+        const jsonData = (XLSX.utils.sheet_to_json(worksheet) as any[]).map(sanitizeRow);
 
         if (jsonData.length === 0) {
           setError('The file is empty.');
@@ -364,6 +383,40 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, onComplete, onCanc
       setLoading(false);
     }
   };
+
+  if (!user || user.role !== Role.ADMIN) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+        <div className="bg-white rounded-none w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl border border-slate-300">
+          <div className="p-6 border-b border-slate-300 flex justify-between items-center bg-slate-50">
+            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <Lock size={20} className="text-rose-600" />
+              Access Denied
+            </h3>
+            <button onClick={onCancel} className="p-2 hover:bg-slate-200 rounded-none text-slate-600 transition-colors">
+              <X size={20} />
+            </button>
+          </div>
+          <div className="p-8 text-center space-y-4">
+            <div className="w-12 h-12 bg-rose-50 text-rose-600 rounded-none flex items-center justify-center mx-auto">
+              <Lock size={24} />
+            </div>
+            <p className="text-sm text-slate-600">
+              You do not have the required permissions to perform bulk imports. This action is restricted to administrators.
+            </p>
+          </div>
+          <div className="p-4 bg-slate-50 border-t border-slate-300 flex justify-end">
+            <button
+              onClick={onCancel}
+              className="px-4 py-2 text-slate-600 font-bold text-xs uppercase tracking-wide hover:bg-slate-100 transition-colors rounded-none"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">

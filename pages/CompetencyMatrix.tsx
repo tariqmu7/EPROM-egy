@@ -1,22 +1,25 @@
 import React, { useState, useMemo } from 'react';
 import { dataService } from '../services/store';
+import { useStoreData } from '../hooks/useStoreData';
 import { User, Role } from '../types';
 import { CheckCircle, AlertTriangle, Clock } from 'lucide-react';
 
 export const CompetencyMatrix: React.FC<{ currentUser: User }> = ({ currentUser }) => {
   const [selectedDeptId, setSelectedDeptId] = useState<string>('ALL');
 
+  const storeVersion = useStoreData();
+
   // ── Static reference data ────────────────────────────────────────────────
-  const depts = useMemo(() => dataService.getAllDepartments(), []);
+  const depts = useMemo(() => dataService.getAllDepartments(), [storeVersion]);
   const users = useMemo(
     () =>
       currentUser.role === Role.CEO
         ? dataService.getAllUsers()
         : dataService.getPublicUsers(),
-    [currentUser.role]
+    [currentUser.role, storeVersion]
   );
-  const jobs  = useMemo(() => dataService.getAllJobs(),   []);
-  const skills = useMemo(() => dataService.getAllSkills(), []);
+  const jobs  = useMemo(() => dataService.getAllJobs(),   [storeVersion]);
+  const skills = useMemo(() => dataService.getAllSkills(), [storeVersion]);
 
   // ── Filtered users visible to this viewer ────────────────────────────────
   const relevantUsers = useMemo(() => {
@@ -25,7 +28,7 @@ export const CompetencyMatrix: React.FC<{ currentUser: User }> = ({ currentUser 
       filtered = filtered.filter((u: User) => u.departmentId === selectedDeptId);
     }
     return filtered;
-  }, [currentUser, selectedDeptId]);
+  }, [currentUser, selectedDeptId, storeVersion]);
 
   // ── Pre-compute: union of all required skill IDs for visible users ───────
   const requiredSkillIds = useMemo(() => {
@@ -57,7 +60,7 @@ export const CompetencyMatrix: React.FC<{ currentUser: User }> = ({ currentUser 
       });
     });
     return map;
-  }, [relevantUsers, relevantSkills]);
+  }, [relevantUsers, relevantSkills, storeVersion]);
 
   // ── Pending evidence set: "userId::skillId" for O(1) lookups ────────────
   const pendingEvidenceKeys = useMemo(() => {
@@ -65,7 +68,7 @@ export const CompetencyMatrix: React.FC<{ currentUser: User }> = ({ currentUser 
     const allEvidences = dataService.getEvidences({ status: 'PENDING' });
     allEvidences.forEach(e => keys.add(`${e.userId}::${e.skillId}`));
     return keys;
-  }, []); // refreshed whenever the component re-renders from snapshot updates
+  }, [storeVersion]); // recomputed whenever a Firestore snapshot lands
 
   // ── Cell status (O(1) using pre-computed maps) ───────────────────────────
   const getCellStatus = (userId: string, skillId: string, requiredLevel: number): 'VERIFIED' | 'PENDING' | 'GAP' => {

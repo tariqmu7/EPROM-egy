@@ -8,9 +8,10 @@ import {
   setDoc, 
   updateDoc, 
   deleteDoc, 
-  query, 
-  where, 
-  orderBy, 
+  query,
+  where,
+  or,
+  orderBy,
   limit,
   onSnapshot,
   Unsubscribe,
@@ -29,8 +30,51 @@ import {
 // 🔧 APP CONFIGURATION
 // ==========================================
 export const CONFIG = {
-  SOURCE: 'FIREBASE', 
+  SOURCE: 'FIREBASE',
 };
+
+// 🛡️ Production safety guard.
+// A 'MOCK' data source bypasses Firebase Auth entirely and exposes the dev
+// login buttons. If a production build ever ships with SOURCE === 'MOCK',
+// any company user could sign in as anyone — a complete auth bypass.
+// Fail loudly at module load instead of silently serving an insecure app.
+if (import.meta.env.PROD && CONFIG.SOURCE === 'MOCK') {
+  throw new Error(
+    "FATAL: CONFIG.SOURCE is 'MOCK' in a production build. This is a complete " +
+    "authentication bypass. Set CONFIG.SOURCE to 'FIREBASE' before deploying."
+  );
+}
+
+// ==========================================
+// 🔑 BOOTSTRAP ADMIN
+// ==========================================
+// Email that is granted admin access before any user holds the ADMIN role.
+// Set via the VITE_BOOTSTRAP_ADMIN_EMAIL env var (.env.local / .env.production).
+// If unset, no email is treated as bootstrap admin — role-based admin still works.
+export const BOOTSTRAP_ADMIN_EMAIL = (import.meta.env.VITE_BOOTSTRAP_ADMIN_EMAIL || '')
+  .trim()
+  .toLowerCase();
+
+export const isBootstrapAdminEmail = (email?: string | null): boolean =>
+  BOOTSTRAP_ADMIN_EMAIL !== '' &&
+  (email ?? '').trim().toLowerCase() === BOOTSTRAP_ADMIN_EMAIL;
+
+// ==========================================
+// 📉 LISTENER SAFETY CAP
+// ==========================================
+// Defensive runaway guard for every real-time listener. This is a
+// circuit-breaker, NOT a functional page size: it must sit well above
+// realistic org volume so it never silently truncates legitimate
+// admin/CEO org-wide data (a too-low cap corrupts skill scores by
+// dropping assessment/evidence docs). Non-privileged viewers are scoped
+// by Direct Department / Section before this cap is ever reached, so for
+// them this only ever trips on a misconfigured or abusively large
+// collection. Tune if EPROM headcount/assessment volume approaches it.
+// HARD LIMIT: Firestore rejects any structured query whose limit()
+// exceeds 10000 ("Limit value ... is over the maximum value of 10000"),
+// which fails the listener entirely. Do not raise this above 10000;
+// scale past it via pagination/sharding, not a bigger cap.
+const MAX_LISTENER_DOCS = 10000;
 
 // ==========================================
 // 🚀 DATA SERVICE
@@ -82,15 +126,89 @@ class DataService {
   
   public isInitialized = false;
   private unsubscribers: Unsubscribe[] = [];
+
+  // True for the brief window of a non-bootstrap sign-up.
+  // `createUserWithEmailAndPassword` auto-signs the new user in, which would
+  // normally trigger the full listener fleet — but a pending user is
+  // immediately signed out again, so those streams would just get torn down
+  // by the rules engine ("Missing or insufficient permissions"). This guard
+  // keeps the throwaway auto-session from ever opening them.
+  private signUpInProgress = false;
+  public isSignUpInProgress = () => this.signUpInProgress;
   private authReadyResolver: () => void = () => {};
   public authReady = new Promise<void>((resolve) => {
     this.authReadyResolver = resolve;
   });
 
+  // True once the `users` real-time listener has delivered at least one
+  // snapshot for the current session. Reset on sign-out / listener re-setup
+  // so a re-login waits for the new session's data instead of stale rows.
+  private usersLoaded = false;
+  private usersSnapshotWaiters: Array<() => void> = [];
+
+  // The `users` directory is assembled from up to two scoped listeners so a
+  // dept/section manager also sees explicit direct reports who sit in a
+  // different Direct Department / Section (see setupListeners). Each listener
+  // writes its own buffer; `this.users` is their de-duped union.
+  private usersScopedDocs: User[] = [];
+  private usersDirectReportDocs: User[] = [];
+  private usersManagerDocs: User[] = [];
+  // Canonical `id` field → real Firestore doc-path id (they diverge for
+  // users who re-signed up post-migration). Used to target user writes.
+  private userDocPathById = new Map<string, string>();
+
+  // --- Reactive subscription (consumed by hooks/useStoreData) ---
+  // Firestore onSnapshot listeners mutate the in-memory arrays above
+  // silently; React has no way to know data arrived. Components subscribe
+  // here and re-render when a snapshot lands, instead of only on an
+  // unrelated re-render (a tab switch or a manual edit). Without this,
+  // late-arriving data (e.g. the viewer's Direct Manager) stays invisible
+  // until something else forces the component to recompute.
+  private subscribers = new Set<() => void>();
+  private snapshotVersion = 0;
+  private notifyScheduled = false;
+
+  // Arrow-bound so the identities stay constant across renders —
+  // useSyncExternalStore requires a stable subscribe and getSnapshot.
+  subscribe = (cb: () => void): (() => void) => {
+    this.subscribers.add(cb);
+    return () => {
+      this.subscribers.delete(cb);
+    };
+  };
+
+  // useSyncExternalStore's getSnapshot must return a value that is
+  // referentially stable between real changes — a primitive counter, not
+  // one of the arrays (returning a fresh array there loops forever).
+  getSnapshotVersion = (): number => this.snapshotVersion;
+
+  // Snapshot callbacks fire in bursts (one per collection on login, plus
+  // rebuildUsers' three-way fan-in). Coalesce into a single notify per
+  // microtask so every subscriber re-renders once, not a dozen times.
+  private scheduleNotify = (): void => {
+    if (this.notifyScheduled) return;
+    this.notifyScheduled = true;
+    queueMicrotask(() => {
+      this.notifyScheduled = false;
+      this.snapshotVersion++;
+      this.subscribers.forEach(cb => {
+        try {
+          cb();
+        } catch (err) {
+          console.error('store subscriber threw', err);
+        }
+      });
+    });
+  };
+
   constructor() {
     // Listen to auth state changes
     onAuthStateChanged(auth, (user) => {
       if (user) {
+        // Skip the throwaway auto-session created by a pending sign-up — it
+        // is signed out again within the same call, so opening listeners
+        // here only produces benign permission-denied teardown noise.
+        if (this.signUpInProgress) return;
         // User is signed in, setup listeners
         this.setupListeners();
       } else {
@@ -121,7 +239,14 @@ class DataService {
       operationType,
       path
     };
-    console.error('Firestore Error: ', JSON.stringify(errInfo));
+    // A permission error while no user is signed in (or mid sign-up
+    // teardown) is the expected result of the rules engine tearing down a
+    // listener after sign-out — not a bug. Keep it out of the error stream.
+    if (!auth.currentUser || this.signUpInProgress) {
+      console.debug('Firestore listener torn down after sign-out: ', JSON.stringify(errInfo));
+    } else {
+      console.error('Firestore Error: ', JSON.stringify(errInfo));
+    }
     return errInfo;
   }
 
@@ -133,6 +258,10 @@ class DataService {
 
   private clearData() {
     this.users = [];
+    this.usersScopedDocs = [];
+    this.usersDirectReportDocs = [];
+    this.usersManagerDocs = [];
+    this.userDocPathById.clear();
     this.jobs = [];
     this.skills = [];
     this.assessments = [];
@@ -145,6 +274,8 @@ class DataService {
     this.trainingCourses = [];
     this.scheduledAssessments = [];
     this.projects = [];
+    this.usersLoaded = false;
+    this.scheduleNotify();
   }
 
   private clearListeners() {
@@ -152,31 +283,277 @@ class DataService {
     this.unsubscribers = [];
   }
 
-  private setupListeners() {
+  // Resolves once the `users` listener has delivered its first snapshot for
+  // the current session, so callers (e.g. login) can read `this.users`
+  // without racing the listener. Falls back after `timeoutMs` so a slow or
+  // unreachable Firestore never hangs the UI — the caller then handles a
+  // missing profile via its own direct getDoc fallback.
+  private waitForUsersSnapshot(timeoutMs = 8000): Promise<void> {
+    if (this.usersLoaded) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      let settled = false;
+      let timer: ReturnType<typeof setTimeout>;
+      const done = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve();
+      };
+      timer = setTimeout(done, timeoutMs);
+      this.usersSnapshotWaiters.push(done);
+    });
+  }
+
+  private resolveUsersSnapshot() {
+    this.usersLoaded = true;
+    if (this.usersSnapshotWaiters.length === 0) return;
+    const waiters = this.usersSnapshotWaiters;
+    this.usersSnapshotWaiters = [];
+    waiters.forEach(w => w());
+  }
+
+  private mapUserDoc(d: any): User {
+    const data = d.data();
+    // Canonical identity is the `id` *field* (what `managerId`,
+    // `getUserById` and the manager-picker key on). Post-migration it can
+    // diverge from the Firestore doc-path id, so remember the mapping —
+    // writes (updateItem/deleteItem) must target the real doc path.
+    const canonicalId: string = data.id ?? d.id;
+    this.userDocPathById.set(canonicalId, d.id);
+    return {
+      ...data,
+      id: canonicalId,
+      certificates: data.certificates ? (typeof data.certificates === 'string' ? JSON.parse(data.certificates) : data.certificates) : [],
+      careerHistory: data.careerHistory ? (typeof data.careerHistory === 'string' ? JSON.parse(data.careerHistory) : data.careerHistory) : []
+    } as User;
+  }
+
+  // Resolve a user's canonical `id` field to its real Firestore doc-path id
+  // for writes. Cache hit (any loaded user) → zero extra reads; miss → one
+  // indexed lookup by the `id` field; last-resort → the id itself so
+  // updateDoc surfaces a clear not-found instead of silently misbehaving.
+  private async resolveUserDocPath(idField: string): Promise<string> {
+    const cached = this.userDocPathById.get(idField);
+    if (cached) return cached;
+    try {
+      const snap = await getDocs(
+        query(collection(db, 'users'), where('id', '==', idField), limit(1))
+      );
+      if (!snap.empty) {
+        this.userDocPathById.set(idField, snap.docs[0].id);
+        return snap.docs[0].id;
+      }
+    } catch (err) {
+      console.error('resolveUserDocPath: lookup failed', err);
+    }
+    return idField;
+  }
+
+  // Recompute the visible roster as the de-duped union of the dept-scoped
+  // listener, the viewer's own manager, and the viewer's explicit direct
+  // reports (the latter two may live in a different Direct Department /
+  // Section). Keyed by the canonical `id` field; scoped set wins on conflict.
+  private rebuildUsers() {
+    const byId = new Map<string, User>();
+    for (const u of this.usersManagerDocs) byId.set(u.id, u);
+    for (const u of this.usersDirectReportDocs) byId.set(u.id, u);
+    for (const u of this.usersScopedDocs) byId.set(u.id, u);
+    this.users = Array.from(byId.values());
+    // Fire-and-forget: rebuildUsers() is a synchronous onSnapshot fan-in, so
+    // we can't await here — but the promise must not float unhandled.
+    void this.checkCertificationExpiries().catch(err =>
+      console.error('rebuildUsers: certification expiry check failed', err)
+    );
+    this.scheduleNotify();
+  }
+
+  // Resolves the signed-in user's profile (own uid first, e-mail fallback
+  // for post-migration UID mismatches) so listeners can be scoped by role
+  // before any collection-wide subscription is opened.
+  private async resolveViewerProfile(userId: string): Promise<Pick<User, 'id' | 'role' | 'orgLevel' | 'departmentId' | 'managerId'> | null> {
+    try {
+      // Return the canonical `id` *field* (not the Firestore doc-path id):
+      // post-migration these differ, and `id` is what `managerId`
+      // references, `getUserById`, and the manager-picker all key on.
+      const ownSnap = await getDoc(doc(db, 'users', userId));
+      if (ownSnap.exists()) {
+        const data = ownSnap.data();
+        return { id: data.id ?? ownSnap.id, role: data.role, orgLevel: data.orgLevel, departmentId: data.departmentId, managerId: data.managerId };
+      }
+      const email = auth.currentUser?.email;
+      if (email) {
+        const emailSnap = await getDocs(query(collection(db, 'users'), where('email', '==', email.toLowerCase())));
+        if (!emailSnap.empty) {
+          const data = emailSnap.docs[0].data();
+          return { id: data.id ?? emailSnap.docs[0].id, role: data.role, orgLevel: data.orgLevel, departmentId: data.departmentId, managerId: data.managerId };
+        }
+      }
+    } catch (err) {
+      console.error('setupListeners: viewer profile lookup failed', err);
+    }
+    return null;
+  }
+
+  private async setupListeners() {
+    // Defense in depth: never attach listeners for a pending sign-up's
+    // throwaway session (it is about to be signed out).
+    if (this.signUpInProgress) return;
     this.clearListeners(); // Ensure no duplicate listeners
+    // New session/listeners: make pending waiters block until this session's
+    // first users snapshot lands rather than resolving on stale data.
+    this.usersLoaded = false;
 
     const userId = auth.currentUser?.uid;
     if (!userId) return;
 
-    // Users
+    // Determine the viewer's privilege before opening sensitive listeners so
+    // rank-and-file employees do not stream every user's assessments/evidence.
+    const profile = await this.resolveViewerProfile(userId);
+    // Auth state can change while the profile lookup is in flight (e.g. a
+    // quick sign-out). Bail rather than attach listeners for a stale session.
+    if (auth.currentUser?.uid !== userId) return;
+
+    const isPrivileged =
+      isBootstrapAdminEmail(auth.currentUser?.email) ||
+      profile?.role === Role.ADMIN ||
+      profile?.role === Role.CEO;
+
+    // Non-privileged viewers (rank-and-file employees AND department /
+    // section managers) only need their own Direct Department / Section
+    // roster — not the whole-org directory. A blank/unresolved
+    // departmentId means we cannot safely scope, so fall back to the
+    // broad (still capped) listener rather than leave the viewer with an
+    // empty directory during a transient sign-up / migration state.
+    const rawDeptId = (profile?.departmentId ?? '').trim();
+    const viewerDepartmentId = !isPrivileged && rawDeptId !== '' ? rawDeptId : null;
+
+    // If the profile could not be resolved at all (transient sign-up /
+    // migration state) fall back to broad listeners so a legitimate
+    // admin/manager session is never broken — Firestore rules remain the
+    // real security boundary. Otherwise classify non-privileged viewers.
+    let scopeToSelf = false;
+    if (!isPrivileged && profile) {
+      const managerialLevels: OrgLevel[] = ['CEO', 'GM', 'AGM', 'DM', 'SH'];
+      const isManagerialLevel = profile.orgLevel ? managerialLevels.includes(profile.orgLevel) : false;
+      let hasSubordinates = false;
+      try {
+        const subSnap = await getDocs(
+          query(collection(db, 'users'), where('managerId', '==', profile.id), limit(1))
+        );
+        if (auth.currentUser?.uid !== userId) return;
+        hasSubordinates = !subSnap.empty;
+      } catch (err) {
+        // On a scoped-probe failure, keep the safer (broader) behaviour.
+        console.error('setupListeners: subordinate probe failed', err);
+        hasSubordinates = true;
+      }
+      // TODO (V2.0): department-scope assessments/evidences/nominations.
+      // QA #12 scoped the `users` directory by Direct Department /
+      // Section (a single equality filter), but these activity
+      // collections carry no `departmentId`, so they cannot be
+      // department-scoped without denormalizing `departmentId` onto each
+      // doc (write paths) plus a one-time backfill migration. Likewise a
+      // manager's full RECURSIVE subtree needs a denormalized
+      // ancestor-path field (e.g. 'managementChain: string[]', queried
+      // via array-contains). Relates to QA #31 (deferred).
+      //
+      // Until then: pure employees (no reports) stay self-scoped on
+      // assessments/evidences/nominations — tighter than department
+      // scope and correct least-privilege. Managers keep the broad
+      // (now MAX_LISTENER_DOCS-capped) collection so subordinate review
+      // workflows are not broken.
+      scopeToSelf = !hasSubordinates && !isManagerialLevel;
+    } else if (!profile) {
+      console.warn('setupListeners: viewer profile unresolved — using broad listeners as a fallback');
+    }
+
+    // Users — non-privileged viewers are scoped to their own Direct
+    // Department / Section via a single equality filter (no composite
+    // index required; Firestore rules already permit a filtered read).
+    // Privileged viewers (admin / CEO) keep org-wide access. The cap is
+    // a defensive runaway guard layered on top in every case.
+    // NOTE: cross-department references will not be in the scoped set. Two
+    // narrow exceptions are fetched by the extra listeners below and merged:
+    // (1) the viewer's own explicit direct reports — so a manager sees
+    // subordinates assigned via "Direct Manager" across sections; and
+    // (2) the viewer's own Direct Manager — so the employee's "Direct
+    // Manager" resolves even when the manager sits in a parent / different
+    // Direct Department / Section. Both widen visibility by a bounded,
+    // self-relevant set, so the dept-scoping invariant otherwise holds.
+    this.usersScopedDocs = [];
+    this.usersDirectReportDocs = [];
+    this.usersManagerDocs = [];
+    const usersQuery = viewerDepartmentId
+      ? query(
+          collection(db, 'users'),
+          where('departmentId', '==', viewerDepartmentId),
+          limit(MAX_LISTENER_DOCS)
+        )
+      : query(collection(db, 'users'), limit(MAX_LISTENER_DOCS));
     this.unsubscribers.push(
-      onSnapshot(collection(db, 'users'), (snapshot) => {
-        this.users = snapshot.docs.map(doc => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            ...data,
-            certificates: data.certificates ? (typeof data.certificates === 'string' ? JSON.parse(data.certificates) : data.certificates) : [],
-            careerHistory: data.careerHistory ? (typeof data.careerHistory === 'string' ? JSON.parse(data.careerHistory) : data.careerHistory) : []
-          } as User;
-        });
-        this.checkCertificationExpiries();
+      onSnapshot(usersQuery, (snapshot) => {
+        this.usersScopedDocs = snapshot.docs.map(d => this.mapUserDoc(d));
+        this.rebuildUsers();
+        this.resolveUsersSnapshot();
       }, this.handleError('users'))
     );
 
+    // A dept/section manager's explicit direct reports (`User.managerId ==
+    // viewer`) can sit in a *different* Direct Department / Section than the
+    // manager — so the dept-scoped roster above would omit them and the
+    // Manager Dashboard (getSubordinates) would never list them. Add a
+    // narrow second listener for just those reports and merge. This widens
+    // visibility by exactly the viewer's own direct reports (not the whole
+    // org), so the Direct-Department/Section scoping invariant still holds.
+    // `viewerId` is the canonical `id` *field* (what subordinates store in
+    // `managerId`), not the doc-path id or auth uid — see
+    // resolveViewerProfile. Skipped for privileged/broad viewers — their
+    // roster already includes everyone.
+    if (viewerDepartmentId && profile) {
+      const viewerId = profile.id;
+      this.unsubscribers.push(
+        onSnapshot(
+          query(
+            collection(db, 'users'),
+            where('managerId', '==', viewerId),
+            limit(MAX_LISTENER_DOCS)
+          ),
+          (snapshot) => {
+            this.usersDirectReportDocs = snapshot.docs.map(d => this.mapUserDoc(d));
+            this.rebuildUsers();
+          },
+          this.handleError('users:directReports')
+        )
+      );
+
+      // The viewer's own Direct Manager (`User.managerId` on the viewer's
+      // profile) frequently sits in a parent / different Direct Department
+      // / Section, so the dept-scoped roster omits them and the UI shows
+      // "Direct Manager: N/A". Fetch exactly that one record by its
+      // canonical `id` field (NOT the doc path — they differ post-migration,
+      // and `managerId` stores the `id` field value) and merge it in.
+      const viewerManagerId = (profile.managerId ?? '').trim();
+      if (viewerManagerId !== '') {
+        this.unsubscribers.push(
+          onSnapshot(
+            query(
+              collection(db, 'users'),
+              where('id', '==', viewerManagerId),
+              limit(1)
+            ),
+            (snapshot) => {
+              this.usersManagerDocs = snapshot.docs.map(d => this.mapUserDoc(d));
+              this.rebuildUsers();
+            },
+            this.handleError('users:directManager')
+          )
+        );
+      }
+    }
+
     // Jobs
     this.unsubscribers.push(
-      onSnapshot(collection(db, 'jobProfiles'), (snapshot) => {
+      onSnapshot(query(collection(db, 'jobProfiles'), limit(MAX_LISTENER_DOCS)), (snapshot) => {
         this.jobs = snapshot.docs.map(doc => {
           const data = doc.data();
           let requirements = {};
@@ -205,12 +582,13 @@ class DataService {
           }
           return job;
         });
+        this.scheduleNotify();
       }, this.handleError('jobProfiles'))
     );
 
     // Skills
     this.unsubscribers.push(
-      onSnapshot(collection(db, 'skills'), (snapshot) => {
+      onSnapshot(query(collection(db, 'skills'), limit(MAX_LISTENER_DOCS)), (snapshot) => {
         this.skills = snapshot.docs.map(doc => {
           const data = doc.data();
           const skill = {
@@ -227,79 +605,151 @@ class DataService {
           }
           return skill;
         });
+        this.scheduleNotify();
       }, this.handleError('skills'))
     );
 
     // Departments
     this.unsubscribers.push(
-      onSnapshot(collection(db, 'departments'), (snapshot) => {
+      onSnapshot(query(collection(db, 'departments'), limit(MAX_LISTENER_DOCS)), (snapshot) => {
         this.departments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Department));
+        this.scheduleNotify();
       }, this.handleError('departments'))
     );
 
     // Projects
     this.unsubscribers.push(
-      onSnapshot(collection(db, 'projects'), (snapshot) => {
+      onSnapshot(query(collection(db, 'projects'), limit(MAX_LISTENER_DOCS)), (snapshot) => {
         this.projects = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project));
+        this.scheduleNotify();
       }, this.handleError('projects'))
     );
 
 
-    // Assessments
-    this.unsubscribers.push(
-      onSnapshot(collection(db, 'assessments'), (snapshot) => {
-        this.assessments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Assessment));
+    // `userId` is the Firebase Auth uid. Activity docs (assessments,
+    // evidences, notifications, nominations) key their owner/subject/rater
+    // fields by the viewer's canonical `id` *field*, which differs from the
+    // auth uid post-migration — exactly as `managerId` does (see the
+    // direct-report / direct-manager listeners above). Scope these by that
+    // canonical id; an unresolved profile (`selfId` undefined) falls back to
+    // the broad (capped) collection, mirroring the users fallback above.
+    const selfId = profile?.id;
+
+    // Assessments — a pure employee only needs records where they are the
+    // subject (their scores) or the rater (self/peer ratings they gave).
+    // A native `or()` query returns that union deduped in a single listener;
+    // privileged users / managers keep the full collection.
+    if (scopeToSelf && selfId) {
+      this.unsubscribers.push(
+        onSnapshot(
+          query(
+            collection(db, 'assessments'),
+            or(where('subjectId', '==', selfId), where('raterId', '==', selfId)),
+            limit(MAX_LISTENER_DOCS)
+          ),
+          (snapshot) => {
+            this.assessments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Assessment));
+            this.scheduleNotify();
       }, this.handleError('assessments'))
-    );
+      );
+    } else {
+      this.unsubscribers.push(
+        onSnapshot(query(collection(db, 'assessments'), limit(MAX_LISTENER_DOCS)), (snapshot) => {
+          this.assessments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Assessment));
+          this.scheduleNotify();
+      }, this.handleError('assessments'))
+      );
+    }
 
     // Logs
     this.unsubscribers.push(
       onSnapshot(query(collection(db, 'activityLogs'), orderBy('timestamp', 'desc'), limit(50)), (snapshot) => {
         this.logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ActivityLog));
+        this.scheduleNotify();
       }, this.handleError('activityLogs'))
     );
 
-    // Evidences
+    // Evidences — pure employees only need their own submissions; managers
+    // and admins keep the full collection (rule-permitted, needed for review).
     this.unsubscribers.push(
-      onSnapshot(collection(db, 'evidences'), (snapshot) => {
-        this.evidences = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Evidence));
+      onSnapshot(
+        scopeToSelf && selfId
+          ? query(collection(db, 'evidences'), where('userId', '==', selfId), limit(MAX_LISTENER_DOCS))
+          : query(collection(db, 'evidences'), limit(MAX_LISTENER_DOCS)),
+        (snapshot) => {
+          this.evidences = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Evidence));
+          this.scheduleNotify();
       }, this.handleError('evidences'))
     );
 
     // Training Courses
     this.unsubscribers.push(
-      onSnapshot(collection(db, 'trainingCourses'), (snapshot) => {
+      onSnapshot(query(collection(db, 'trainingCourses'), limit(MAX_LISTENER_DOCS)), (snapshot) => {
         this.trainingCourses = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TrainingCourse));
+        this.scheduleNotify();
       }, this.handleError('trainingCourses'))
     );
 
     // Scheduled Assessments
     this.unsubscribers.push(
-      onSnapshot(collection(db, 'scheduledAssessments'), (snapshot) => {
+      onSnapshot(query(collection(db, 'scheduledAssessments'), limit(MAX_LISTENER_DOCS)), (snapshot) => {
         this.scheduledAssessments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ScheduledAssessment));
+        this.scheduleNotify();
       }, this.handleError('scheduledAssessments'))
     );
 
-    // Notifications
+    // Notifications — always self-scoped (even admins/managers only see
+    // their own), keyed by the recipient's canonical `id` field (what
+    // notification docs store in `userId`), not the auth uid. An unresolved
+    // profile falls back to the broad (capped) listener so a transient
+    // sign-up state still surfaces alerts; rules remain the real boundary.
     this.unsubscribers.push(
-      onSnapshot(query(collection(db, 'notifications'), where('userId', '==', userId)), (snapshot) => {
-        this.notifications = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification));
-      }, this.handleError('notifications'))
+      onSnapshot(
+        selfId
+          ? query(collection(db, 'notifications'), where('userId', '==', selfId), limit(MAX_LISTENER_DOCS))
+          : query(collection(db, 'notifications'), limit(MAX_LISTENER_DOCS)),
+        (snapshot) => {
+          this.notifications = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification));
+          this.scheduleNotify();
+        }, this.handleError('notifications'))
     );
 
     // Cycles
     this.unsubscribers.push(
-      onSnapshot(collection(db, 'assessmentCycles'), (snapshot) => {
+      onSnapshot(query(collection(db, 'assessmentCycles'), limit(MAX_LISTENER_DOCS)), (snapshot) => {
         this.cycles = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AssessmentCycle));
+        this.scheduleNotify();
       }, this.handleError('assessmentCycles'))
     );
 
-    // Nominations
-    this.unsubscribers.push(
-      onSnapshot(collection(db, 'nominations'), (snapshot) => {
-        this.nominations = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Nomination));
+    // Nominations — a pure employee can be the nominator, the subject, or
+    // the rater; a native `or()` query returns that union deduped in a
+    // single listener. Managers/admins keep the full collection.
+    if (scopeToSelf && selfId) {
+      this.unsubscribers.push(
+        onSnapshot(
+          query(
+            collection(db, 'nominations'),
+            or(
+              where('nominatorId', '==', selfId),
+              where('subjectId', '==', selfId),
+              where('raterId', '==', selfId)
+            ),
+            limit(MAX_LISTENER_DOCS)
+          ),
+          (snapshot) => {
+            this.nominations = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Nomination));
+            this.scheduleNotify();
       }, this.handleError('nominations'))
-    );
+      );
+    } else {
+      this.unsubscribers.push(
+        onSnapshot(query(collection(db, 'nominations'), limit(MAX_LISTENER_DOCS)), (snapshot) => {
+          this.nominations = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Nomination));
+          this.scheduleNotify();
+      }, this.handleError('nominations'))
+      );
+    }
   }
 
   // --- Evidences ---
@@ -449,12 +899,15 @@ class DataService {
   // --- AUTHENTICATION ---
 
   async signUp(email: string, password: string, userData: Partial<User>) {
+    const trimmedEmail = email.trim().toLowerCase();
+    const isBootstrapAdmin = isBootstrapAdminEmail(trimmedEmail);
+    // A non-bootstrap account is created PENDING and signed out again below,
+    // so suppress the listener fleet for that throwaway auto-session. The
+    // bootstrap admin stays signed in and needs listeners as usual.
+    this.signUpInProgress = !isBootstrapAdmin;
     try {
-      const trimmedEmail = email.trim().toLowerCase();
       const userCredential = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
       const user = userCredential.user;
-
-      const isBootstrapAdmin = trimmedEmail.toLowerCase() === 'tarekmoh123@gmail.com';
       
       // Check if a profile already exists for this email (e.g. from bulk upload)
       const existingProfile = this.users.find(u => u.email.toLowerCase() === trimmedEmail.toLowerCase());
@@ -494,6 +947,8 @@ class DataService {
       return { user: newUserProfile };
     } catch (error: any) {
       return { error: error.message };
+    } finally {
+      this.signUpInProgress = false;
     }
   }
 
@@ -503,9 +958,10 @@ class DataService {
       const userCredential = await signInWithEmailAndPassword(auth, trimmedEmail, password);
       const user = userCredential.user;
 
-      // Wait a moment for the snapshot listener to populate data
-      // In a real app, you might want a more robust way to wait for the specific user doc
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Wait for the users listener's first snapshot rather than a fixed
+      // delay: login proceeds as soon as the data is actually available
+      // (usually well under a second) and never races a slow network.
+      await this.waitForUsersSnapshot();
 
       const userProfile = this.users.find(u => u.id === user.uid);
       
@@ -544,7 +1000,7 @@ class DataService {
               }
            }
 
-           const isBootstrapAdmin = trimmedEmail.toLowerCase() === 'tarekmoh123@gmail.com';
+           const isBootstrapAdmin = isBootstrapAdminEmail(trimmedEmail);
            if (isBootstrapAdmin) {
               // Auto-create profile for bootstrap admin if missing
               const adminProfile: User = {
@@ -574,10 +1030,14 @@ class DataService {
           careerHistory: data.careerHistory ? JSON.parse(data.careerHistory) : []
         } as User;
         
-        const isBootstrapAdmin = trimmedEmail.toLowerCase() === 'tarekmoh123@gmail.com';
+        const isBootstrapAdmin = isBootstrapAdminEmail(trimmedEmail);
         if (profile.status === 'PENDING' && !isBootstrapAdmin) {
+           // Still drop the session (pending users get no live Firestore
+           // access), but signal PENDING distinctly so the UI can route to a
+           // dedicated "Waiting for Approval" screen instead of flashing a
+           // dashboard then bouncing back to login with a terse error.
            await signOut(auth);
-           return { error: 'Account is pending administrator approval. Please wait.' };
+           return { pending: true as const };
         }
         if (profile.status === 'REJECTED' && !isBootstrapAdmin) {
            await signOut(auth);
@@ -588,7 +1048,7 @@ class DataService {
       
       if (userProfile.status === 'PENDING') {
           await signOut(auth);
-          return { error: 'Account is pending administrator approval. Please wait.' };
+          return { pending: true as const };
       }
       if (userProfile.status === 'REJECTED') {
           await signOut(auth);
@@ -618,7 +1078,7 @@ class DataService {
     if (!auth.currentUser) return null;
 
     const user = auth.currentUser;
-    const isBootstrapAdmin = user.email?.toLowerCase() === 'tarekmoh123@gmail.com';
+    const isBootstrapAdmin = isBootstrapAdminEmail(user.email);
 
     let profile = this.users.find(u => u.id === user.uid);
 
@@ -711,7 +1171,8 @@ class DataService {
 
   private async deleteItem(collectionName: string, id: string) {
     try {
-      await deleteDoc(doc(db, collectionName, id));
+      const docId = collectionName === 'users' ? await this.resolveUserDocPath(id) : id;
+      await deleteDoc(doc(db, collectionName, docId));
     } catch (e) {
       this.handleFirestoreError(e, OperationType.DELETE, `${collectionName}/${id}`);
       throw e;
@@ -722,7 +1183,8 @@ class DataService {
     try {
       const payload = this.preparePayload(collectionName, item);
       const { id, ...data } = payload;
-      await updateDoc(doc(db, collectionName, id), data);
+      const docId = collectionName === 'users' ? await this.resolveUserDocPath(id) : id;
+      await updateDoc(doc(db, collectionName, docId), data);
     } catch (e) {
       this.handleFirestoreError(e, OperationType.WRITE, `${collectionName}/${item.id}`);
       throw e;
@@ -811,58 +1273,70 @@ class DataService {
   }
 
   // Objective 1: Certification Expiry & Compliance Workflows
+  // Scoped to the signed-in user's OWN certificates only. A non-privileged
+  // viewer can only write their own `users` doc (Firestore rules), and this
+  // runs on every rebuildUsers() roster fan-in — iterating the whole roster
+  // produced permission-denied write storms and clobbered other users' docs.
   async checkCertificationExpiries() {
+    const authUser = auth.currentUser;
+    if (!authUser) return;
+
+    // Resolve the viewer's own roster entry the same way getCurrentUser does:
+    // canonical `id` field first, e-mail fallback for post-migration UID drift.
+    const email = authUser.email?.toLowerCase();
+    const self = this.users.find(
+      u => u.id === authUser.uid || (!!email && u.email?.toLowerCase() === email)
+    );
+    if (!self || !self.certificates || self.certificates.length === 0) return;
+
     const today = new Date();
-    
-    for (const user of this.users) {
-      if (!user.certificates || user.certificates.length === 0) continue;
-      
-      let userUpdated = false;
-      const updatedCerts = [...user.certificates];
+    let userUpdated = false;
+    const updatedCerts = [...self.certificates];
 
-      for (let i = 0; i < updatedCerts.length; i++) {
-        const cert = updatedCerts[i];
-        if (!cert.expiryDate) continue;
-        
-        const expiry = new Date(cert.expiryDate);
-        const diffDays = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-        
-        let newStatus: 'VALID' | 'EXPIRING_SOON' | 'EXPIRED' = 'VALID';
-        if (diffDays <= 0) newStatus = 'EXPIRED';
-        else if (diffDays <= 90) newStatus = 'EXPIRING_SOON';
+    for (let i = 0; i < updatedCerts.length; i++) {
+      const cert = updatedCerts[i];
+      if (!cert.expiryDate) continue;
 
-        if (cert.renewalStatus !== newStatus) {
-          updatedCerts[i] = { ...cert, renewalStatus: newStatus };
-          userUpdated = true;
+      const expiry = new Date(cert.expiryDate);
+      const diffDays = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
-          if ([90, 60, 30].includes(diffDays) || diffDays <= 0) {
-            const message = diffDays <= 0 
-              ? `CRITICAL: Your certification "${cert.name}" has EXPIRED.` 
-              : `Warning: Your certification "${cert.name}" expires in ${diffDays} days.`;
+      let newStatus: 'VALID' | 'EXPIRING_SOON' | 'EXPIRED' = 'VALID';
+      if (diffDays <= 0) newStatus = 'EXPIRED';
+      else if (diffDays <= 90) newStatus = 'EXPIRING_SOON';
 
+      if (cert.renewalStatus !== newStatus) {
+        updatedCerts[i] = { ...cert, renewalStatus: newStatus };
+        userUpdated = true;
+
+        if ([90, 60, 30].includes(diffDays) || diffDays <= 0) {
+          const message = diffDays <= 0
+            ? `CRITICAL: Your certification "${cert.name}" has EXPIRED.`
+            : `Warning: Your certification "${cert.name}" expires in ${diffDays} days.`;
+
+          await this.addNotification({
+            userId: self.id,
+            title: 'Certification Renewal Alert',
+            message,
+            type: diffDays <= 0 ? 'ERROR' : 'WARNING'
+          });
+
+          if (self.managerId) {
             await this.addNotification({
-              userId: user.id,
-              title: 'Certification Renewal Alert',
-              message,
-              type: diffDays <= 0 ? 'ERROR' : 'WARNING'
+              userId: self.managerId,
+              title: `Compliance Alert: ${self.name}`,
+              message: `Subordinate ${self.name} has a certification requirement: ${message}`,
+              type: 'INFO'
             });
-
-            if (user.managerId) {
-              await this.addNotification({
-                userId: user.managerId,
-                title: `Compliance Alert: ${user.name}`,
-                message: `Subordinate ${user.name} has a certification requirement: ${message}`,
-                type: 'INFO'
-              });
-            }
           }
         }
       }
+    }
 
-      if (userUpdated) {
-        const userRef = doc(db, 'users', user.id);
-        await updateDoc(userRef, { certificates: JSON.stringify(updatedCerts) });
-      }
+    if (userUpdated) {
+      // Route through updateItem so the write resolves the real Firestore
+      // doc-path id via resolveUserDocPath() (canonical `id` != doc id
+      // post-migration) and certificates get serialized by preparePayload.
+      await this.updateItem('users', { ...self, certificates: updatedCerts });
     }
   }
 
@@ -1147,7 +1621,23 @@ class DataService {
   }
 
   getSubordinates(managerId: string) {
-    return this.users.filter(u => u.managerId === managerId);
+    // A user reports to this person if EITHER their explicit Direct Manager
+    // (User.managerId) is set to them, OR they belong to a Direct Department /
+    // Section this person manages (Department.managerId). Restricted to
+    // DEPARTMENT / SECTION so a GENERAL-dept owner (e.g. a GM) does not pull a
+    // whole org branch in as direct reports.
+    const managedDeptIds = new Set(
+      this.departments
+        .filter(d => d.managerId === managerId && (d.type === 'DEPARTMENT' || d.type === 'SECTION'))
+        .map(d => d.id)
+    );
+
+    return this.users.filter(u =>
+      u.id !== managerId && (
+        u.managerId === managerId ||
+        managedDeptIds.has(u.departmentId)
+      )
+    );
   }
 
   getPeers(userId: string) {

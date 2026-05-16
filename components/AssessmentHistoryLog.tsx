@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { User, Role } from '../types';
 import { dataService } from '../services/store';
-import { 
+import { useStoreData } from '../hooks/useStoreData';
+import {
   History, 
   Search, 
   Filter, 
@@ -36,9 +37,11 @@ export const AssessmentHistoryLog: React.FC<AssessmentHistoryLogProps> = ({ curr
     }
   }, [initialSearchTerm]);
 
+  const storeVersion = useStoreData();
+
   const history = useMemo(() => {
     return dataService.getAssessmentHistory(currentUser, targetUserId);
-  }, [currentUser, targetUserId]);
+  }, [currentUser, targetUserId, storeVersion]);
 
   const filteredHistory = useMemo(() => {
     return history.filter(item => {
@@ -51,7 +54,7 @@ export const AssessmentHistoryLog: React.FC<AssessmentHistoryLogProps> = ({ curr
 
       return matchesSearch && matchesMethod;
     });
-  }, [history, searchTerm, methodFilter]);
+  }, [history, searchTerm, methodFilter, storeVersion]);
 
   const methods = ['ALL', 'WRITTEN_EXAM', 'PRACTICAL_DEMO', 'INTERVIEW', 'OJT_OBSERVATION', 'WORK_RECORD_REVIEW'];
 

@@ -157,9 +157,11 @@ Routing is tab-based state in `App.tsx` (no React Router). `activeTab` drives wh
 | Firestore DB | `(default)` |
 | Auth domain | `eprom-cms.firebaseapp.com` |
 | Config | `VITE_FIREBASE_*` env vars (`.env.local` dev / `.env.production` build) |
-| Rules file | `firestore.rules` |
+| Rules file | `firestore.rules` (generated — see below) |
 
 `firebase.ts` reads config from `import.meta.env.VITE_FIREBASE_*`; env files are gitignored. Copy `.env.example` to `.env.local` / `.env.production` and fill in values from Firebase Console. `getFirestore(app)` is used — no custom database ID needed.
+
+`firestore.rules` is **generated** from `firestore.rules.template` by `npm run rules:build`, which bakes in `VITE_BOOTSTRAP_ADMIN_EMAIL` (Firestore rules can't read env vars at runtime). Edit the template, not the generated file; run `npm run rules:build` before `firebase deploy --only firestore:rules`. The generated `firestore.rules` is gitignored.
 
 ### Migration notes
 - All Firestore collections migrated with original document IDs preserved.
@@ -169,4 +171,4 @@ Routing is tab-based state in `App.tsx` (no React Router). `activeTab` drives wh
 
 ### Auth setup
 - Provider: Email/Password (enabled manually in Firebase Console).
-- Admin email hardcoded in `firestore.rules` → `isAdmin()`: `tarekmoh123@gmail.com`.
+- Bootstrap admin email is driven by the `VITE_BOOTSTRAP_ADMIN_EMAIL` env var: consumed by the frontend (`isBootstrapAdminEmail` in `services/store.ts`) and substituted into `isAdmin()` in the generated `firestore.rules`. It is a first-run / recovery fallback only — normal admin access is role-driven (`users` doc `role == 'ADMIN'`).

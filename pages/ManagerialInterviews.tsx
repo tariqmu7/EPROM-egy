@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { User, Skill, Role } from '../types';
 import { dataService } from '../services/store';
-import { 
+import { useStoreData } from '../hooks/useStoreData';
+import {
   Users, 
   MessageSquare, 
   CheckCircle, 
@@ -27,8 +28,10 @@ export const ManagerialInterviews: React.FC<ManagerialInterviewsProps> = ({ curr
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
 
-  const isManager = useMemo(() => dataService.isManager(currentUser), [currentUser]);
-  const subordinates = useMemo(() => dataService.getSubordinates(currentUser.id), [currentUser.id]);
+  const storeVersion = useStoreData();
+
+  const isManager = useMemo(() => dataService.isManager(currentUser), [currentUser, storeVersion]);
+  const subordinates = useMemo(() => dataService.getSubordinates(currentUser.id), [currentUser.id, storeVersion]);
   
   const selectedSubordinate = useMemo(() => 
     subordinates.find(s => s.id === selectedSubordinateId), 
@@ -47,10 +50,10 @@ export const ManagerialInterviews: React.FC<ManagerialInterviewsProps> = ({ curr
       .filter((s): s is Skill => !!s && (s.assessmentMethod === 'INTERVIEW' || s.assessmentMethod === 'PRACTICAL_DEMO'));
   };
 
-  const myInterviewSkills = useMemo(() => getInterviewSkills(currentUser), [currentUser]);
-  const subordinateInterviewSkills = useMemo(() => 
-    selectedSubordinate ? getInterviewSkills(selectedSubordinate) : [], 
-    [selectedSubordinate]
+  const myInterviewSkills = useMemo(() => getInterviewSkills(currentUser), [currentUser, storeVersion]);
+  const subordinateInterviewSkills = useMemo(() =>
+    selectedSubordinate ? getInterviewSkills(selectedSubordinate) : [],
+    [selectedSubordinate, storeVersion]
   );
 
   const getSkillStatus = (userId: string, skillId: string) => {

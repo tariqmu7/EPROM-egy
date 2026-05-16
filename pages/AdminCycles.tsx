@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { PlayCircle, ShieldAlert, Archive, CheckCircle, RefreshCw, Calendar, Users, Briefcase, Activity } from 'lucide-react';
 import { dataService } from '../services/store';
+import { useStoreData } from '../hooks/useStoreData';
 
 export const AdminCycles: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState('');
@@ -15,11 +16,13 @@ export const AdminCycles: React.FC = () => {
   const [appraisalStartDate, setAppraisalStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [appraisalEndDate, setAppraisalEndDate] = useState(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
 
-  const departments = useMemo(() => dataService.getAllDepartments(), []);
-  const jobs = useMemo(() => dataService.getAllJobs().filter(j => selectedDept === 'ALL' ? true : j.departmentId === selectedDept), [selectedDept]);
-  const skills = useMemo(() => dataService.getAllSkills(), []);
+  const storeVersion = useStoreData();
 
-  const activeCycle = useMemo(() => dataService.getActiveCycle(), []);
+  const departments = useMemo(() => dataService.getAllDepartments(), [storeVersion]);
+  const jobs = useMemo(() => dataService.getAllJobs().filter(j => selectedDept === 'ALL' ? true : j.departmentId === selectedDept), [selectedDept, storeVersion]);
+  const skills = useMemo(() => dataService.getAllSkills(), [storeVersion]);
+
+  const activeCycle = useMemo(() => dataService.getActiveCycle(), [storeVersion]);
   // Use length of all cycles purely for logging purposes
   const allCyclesCount = dataService.getAllCycles().length;
 

@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { User, Role, Department, Skill, JobProfile, ORG_LEVEL_LABELS, OrgLevel } from '../types';
 import { dataService } from '../services/store';
+import { useStoreData } from '../hooks/useStoreData';
 import { Search, Users, ShieldCheck, Briefcase, Award, ChevronRight, Activity, Filter, LayoutGrid, List, FileSpreadsheet, UserCircle, MapPin, Building2 } from 'lucide-react';
 
 interface CEOPanelProps {
@@ -11,7 +12,11 @@ interface CEOPanelProps {
 export const CEOPanel: React.FC<CEOPanelProps> = ({ currentUser, onViewProfile }) => {
   const [searchTerm, setSearchTerm] = useState('');
   // All other filters are now unified into searchTerm for maximum scalability
-  
+
+  // Re-render when Firestore listeners deliver data; the reads below run
+  // every render and return fresh arrays once the snapshots land.
+  useStoreData();
+
   const users = dataService.getAllUsers();
   const depts = dataService.getAllDepartments();
   const skills = dataService.getAllSkills();

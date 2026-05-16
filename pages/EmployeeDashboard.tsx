@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { User, Role, JobProfile, Skill, IndividualTrainingPlan, ORG_HIERARCHY_ORDER, ORG_LEVEL_LABELS, ScheduledAssessment, Certificate } from '../types';
 import { dataService } from '../services/store';
+import { useStoreData } from '../hooks/useStoreData';
 import { AssessmentHistoryLog } from '../components/AssessmentHistoryLog';
 import { 
   AlertCircle, 
@@ -125,9 +126,14 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
     window.print();
   };
 
-  const jobProfile = useMemo(() => user.jobProfileId ? dataService.getJobProfile(user.jobProfileId) : null, [user.jobProfileId]);
-  const depts = useMemo(() => dataService.getAllDepartments(), []);
-  const manager = useMemo(() => user.managerId ? dataService.getUserById(user.managerId) : null, [user.managerId]);
+  // Re-render when Firestore listeners deliver data; storeVersion is fed
+  // into every store-derived useMemo below so they recompute on arrival
+  // instead of caching the empty first-render result.
+  const storeVersion = useStoreData();
+
+  const jobProfile = useMemo(() => user.jobProfileId ? dataService.getJobProfile(user.jobProfileId) : null, [user.jobProfileId, storeVersion]);
+  const depts = useMemo(() => dataService.getAllDepartments(), [storeVersion]);
+  const manager = useMemo(() => user.managerId ? dataService.getUserById(user.managerId) : null, [user.managerId, storeVersion]);
 
   const skillAnalysis = useMemo(() => {
     const requirements = jobProfile && user.orgLevel ? (jobProfile.requirements[user.orgLevel] || []) : [];
@@ -141,20 +147,20 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
         gap: Math.max(0, req.requiredLevel - currentScore)
       };
     });
-  }, [jobProfile, user.id, user.orgLevel]);
+  }, [jobProfile, user.id, user.orgLevel, storeVersion]);
 
   const gaps = useMemo(() => skillAnalysis.filter(s => s.gap > 0), [skillAnalysis]);
   const compliant = useMemo(() => skillAnalysis.filter(s => s.gap <= 0), [skillAnalysis]);
 
   const annualAppraisals = useMemo(() => {
     return dataService.getAssessments({ subjectId: user.id, skillId: 'annual-appraisal' });
-  }, [user.id]);
+  }, [user.id, storeVersion]);
   const latestAppraisal = annualAppraisals[0];
 
   const annualCycle = useMemo(() => {
     if (!latestAppraisal?.cycleId) return null;
     return dataService.getAllCycles().find(c => c.id === latestAppraisal.cycleId);
-  }, [latestAppraisal]);
+  }, [latestAppraisal, storeVersion]);
 
   const careerSkillMap = useMemo(() => {
     const assessments = dataService.getAssessments({ subjectId: user.id });
@@ -214,7 +220,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
     });
 
     return Object.values(skillMap).sort((a, b) => a.skill.name.localeCompare(b.skill.name));
-  }, [user.id]);
+  }, [user.id, storeVersion]);
 
   const CERT_STATUS: Record<string, { label: string; cls: string }> = {
     PENDING:  { label: 'Waiting for Approval', cls: 'bg-amber-100 text-amber-700 border-amber-200' },

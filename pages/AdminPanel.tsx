@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { dataService } from '../services/store';
+import { useStoreData } from '../hooks/useStoreData';
 import { User, Role, JobProfile, Skill, JobProfileSkill, OrgLevel, ORG_LEVEL_LABELS, Department, DepartmentType, ORG_HIERARCHY_ORDER, PROFICIENCY_LABELS, Project, EvaluationQuestion } from '../types';
 import { PROFICIENCY_DEFINITIONS } from '../constants';
 import { Plus, Users, Briefcase, ChevronRight, CheckCircle, Shield, ShieldCheck, X, Save, Trash2, ArrowLeft, UserPlus, Building2, Search, Edit2, UserCheck, AlertCircle, Layers, BookOpen, MoreHorizontal, LayoutGrid, Activity, Eye, AlertTriangle, FileSpreadsheet, MapPin, TrendingUp } from 'lucide-react';
@@ -2262,15 +2263,21 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
   };
 
 
+  // Recompute these lists both on manual edits (refreshKey) and whenever a
+  // Firestore listener delivers fresh data (storeVersion) — without the
+  // latter the roster froze at the empty first-render result until an edit
+  // or tab switch happened to bump refreshKey.
+  const storeVersion = useStoreData();
+
   const users = useMemo(() => {
     if (!currentUser) return [];
     return currentUser.role === Role.CEO ? dataService.getAllUsers() : dataService.getPublicUsers();
-  }, [refreshKey, currentUser]);
-  const jobs = useMemo(() => dataService.getAllJobs(), [refreshKey]);
-  const skills = useMemo(() => dataService.getAllSkills(), [refreshKey]);
-  const depts = useMemo(() => dataService.getAllDepartments(), [refreshKey]);
-  const projects = useMemo(() => dataService.getAllProjects(), [refreshKey]);
-  const logs = useMemo(() => dataService.getSystemLogs(), [refreshKey]);
+  }, [refreshKey, currentUser, storeVersion]);
+  const jobs = useMemo(() => dataService.getAllJobs(), [refreshKey, storeVersion]);
+  const skills = useMemo(() => dataService.getAllSkills(), [refreshKey, storeVersion]);
+  const depts = useMemo(() => dataService.getAllDepartments(), [refreshKey, storeVersion]);
+  const projects = useMemo(() => dataService.getAllProjects(), [refreshKey, storeVersion]);
+  const logs = useMemo(() => dataService.getSystemLogs(), [refreshKey, storeVersion]);
 
   const hqProjectId = useMemo(() => {
     return projects.find(p => p.name.toUpperCase() === 'HQ')?.id;
@@ -3022,8 +3029,9 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
        </div>
        {viewSkill && <SkillDetailsModal skill={viewSkill} onClose={() => setViewSkill(null)} />}
        {showBulkUpload && (
-         <BulkUpload 
-           type={bulkType} 
+         <BulkUpload
+           type={bulkType}
+           user={currentUser}
            onComplete={() => {
              setShowBulkUpload(false);
              setRefreshKey(k => k + 1);

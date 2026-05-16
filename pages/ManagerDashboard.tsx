@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { User, Role, JobProfile, OrgLevel } from '../types';
 import { dataService } from '../services/store';
+import { useStoreData } from '../hooks/useStoreData';
 import { EmployeeDashboard } from './EmployeeDashboard';
 import { CompetencyMatrix } from './CompetencyMatrix';
 import { SupervisorApproval } from './SupervisorApproval';
@@ -16,7 +17,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
   const [activeView, setActiveView] = useState<'TEAM' | 'JOBS' | 'TALENT_SEARCH' | 'MATRIX' | 'APPROVALS'>('TEAM');
   const [searchQuery, setSearchQuery] = useState('');
   
-  const subordinates = useMemo(() => dataService.getSubordinates(user.id), [user.id]);
+  const storeVersion = useStoreData();
+
+  const subordinates = useMemo(() => dataService.getSubordinates(user.id), [user.id, storeVersion]);
   
   // Check if user has access to Talent Search (SH and above)
   const canSearchTalent = useMemo(() => {
@@ -26,7 +29,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
 
   // Get jobs managed by this manager (based on department)
   // In a real app, we might have a more direct link, but here we use departmentId
-  const managedJobs = useMemo(() => dataService.getAllJobs().filter(job => job.departmentId === user.departmentId), [user.departmentId]);
+  const managedJobs = useMemo(() => dataService.getAllJobs().filter(job => job.departmentId === user.departmentId), [user.departmentId, storeVersion]);
 
   const getMemberStats = useCallback((member: User) => {
     const jobProfile = member.jobProfileId ? dataService.getJobProfile(member.jobProfileId) : null;

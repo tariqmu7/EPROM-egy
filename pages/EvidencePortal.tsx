@@ -1,7 +1,16 @@
 import React, { useState, useMemo } from 'react';
 import { dataService } from '../services/store';
+import { useStoreData } from '../hooks/useStoreData';
 import { User, JobProfile, Skill, Evidence } from '../types';
 import { Upload, FileText, CheckCircle, Clock, AlertCircle, ExternalLink, Pencil, Trash2, XCircle, RefreshCw } from 'lucide-react';
+
+const readFileAsDataURL = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error ?? new Error('Failed to read file'));
+    reader.readAsDataURL(file);
+  });
 
 export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser }) => {
   const [selectedSkillId, setSelectedSkillId] = useState<string>('');
@@ -11,6 +20,7 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
   const [expiryDate, setExpiryDate] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
 
   // Edit / delete state
   const [editEvidence, setEditEvidence] = useState<Evidence | null>(null);
@@ -19,9 +29,11 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
   const [deleteTarget, setDeleteTarget] = useState<Evidence | null>(null);
   const [isActioning, setIsActioning] = useState(false);
 
-  const jobs = useMemo(() => dataService.getAllJobs(), []);
-  const skills = useMemo(() => dataService.getAllSkills(), []);
-  const myEvidences = useMemo(() => dataService.getEvidences({ userId: currentUser.id }), [currentUser.id]);
+  const storeVersion = useStoreData();
+
+  const jobs = useMemo(() => dataService.getAllJobs(), [storeVersion]);
+  const skills = useMemo(() => dataService.getAllSkills(), [storeVersion]);
+  const myEvidences = useMemo(() => dataService.getEvidences({ userId: currentUser.id }), [currentUser.id, storeVersion]);
   const selectedSkill = useMemo(() => skills.find(s => s.id === selectedSkillId), [skills, selectedSkillId]);
 
   const myJobProfile = useMemo(() => {
@@ -50,21 +62,22 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!selectedSkillId || !file) return;
     if (selectedSkillId === 'NEW_SKILL' && !newSkillName.trim()) return;
 
     setIsSubmitting(true);
+    setErrorMessage('');
 
-    // Simulate file upload by reading as data URL
-    const reader = new FileReader();
-    reader.onloadend = async () => {
-      const base64String = reader.result as string;
-      
+    try {
+      // Simulate file upload by reading as data URL
+      const base64String = await readFileAsDataURL(file);
+
       let finalSkillId = selectedSkillId;
-      
+
       if (selectedSkillId === 'NEW_SKILL') {
         const existingSkill = skills.find(s => s.name.toLowerCase() === newSkillName.trim().toLowerCase());
-        
+
         if (existingSkill) {
           finalSkillId = existingSkill.id;
         } else {
@@ -101,11 +114,15 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
       setNewSkillName('');
       setNotes('');
       setFile(null);
-      setIsSubmitting(false);
 
       setTimeout(() => setSuccessMessage(''), 3000);
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Failed to submit evidence:', err);
+      setErrorMessage('Could not submit evidence. Please check your file and try again.');
+      setTimeout(() => setErrorMessage(''), 5000);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const openEdit = (ev: Evidence) => {
@@ -245,6 +262,13 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
         <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 rounded-sm flex items-center gap-3">
           <CheckCircle size={20} className="text-emerald-500" />
           <p className="font-medium">{successMessage}</p>
+        </div>
+      )}
+
+      {errorMessage && (
+        <div className="bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 rounded-sm flex items-center gap-3" role="alert">
+          <XCircle size={20} className="text-rose-500" />
+          <p className="font-medium">{errorMessage}</p>
         </div>
       )}
 
