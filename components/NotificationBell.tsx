@@ -9,6 +9,15 @@ interface NotificationBellProps {
   onNavigate: (tab: string) => void;
 }
 
+// The reactive useStoreData() refetch (below) delivers every *persisted*
+// notification the instant its Firestore snapshot lands, which makes this
+// poll redundant for almost everything. Its only remaining job is recomputing
+// the synthesized dyn-* notifications in store.ts whose visibility depends on
+// a rolling time window (e.g. dyn-mgr-assessments' "last 7 days" filter): no
+// snapshot fires when an item simply ages out of that window, so a slow timer
+// is what eventually drops it. 5 min is ample granularity for a 7-day window.
+const DYNAMIC_NOTIF_POLL_MS = 5 * 60 * 1000;
+
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
@@ -34,8 +43,9 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ user, onNavi
     setNotifications(notifs);
   }, [user.id]);
 
-  // Refetch the moment the notifications listener delivers a snapshot, so
-  // alerts appear instantly instead of waiting for the 30s poll below.
+  // Primary path: refetch the moment any Firestore listener delivers a
+  // snapshot, so persisted notifications appear instantly instead of waiting
+  // for the slow time-window poll below.
   useEffect(() => {
     fetchNotifications();
   }, [storeVersion, fetchNotifications]);
@@ -45,7 +55,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ user, onNavi
 
     const startPolling = () => {
       if (intervalRef.current) return;
-      intervalRef.current = setInterval(fetchNotifications, 30000);
+      intervalRef.current = setInterval(fetchNotifications, DYNAMIC_NOTIF_POLL_MS);
     };
     const stopPolling = () => {
       if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }

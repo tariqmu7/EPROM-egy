@@ -160,7 +160,13 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
                     if (Array.isArray(parsedAnswers) && parsedAnswers.length === 10) {
                         answers = parsedAnswers;
                     }
-                } catch (e) {}
+                } catch (e) {
+                    console.warn(
+                        `[BehavioralAssessment] Malformed APPRAISAL_DATA for appraisal ${existingAppraisal.id} — ` +
+                        `falling back to default answers.`,
+                        e
+                    );
+                }
                 parsedFeedback = parsedFeedback.substring(endIdx + 1).trim();
             }
         } else {
@@ -188,10 +194,18 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
       const isManagerOfSubject = subordinates.some(sub => sub.id === selectedSubjectId);
       const isPeerOfSubject = peers.some(p => p.id === selectedSubjectId);
 
-      // Relationship-based type assignment
-      // If not self, not subordinate (manager role), and not peer, it is an 'OTHER' or 'MANAGER'
-      // evaluation from a subordinate perspective. We'll label as PEER only if they are true peers.
-      const typeAssignment = isSelf ? 'SELF' : (isManagerOfSubject ? 'MANAGER' : (isPeerOfSubject ? 'PEER' : 'PEER'));
+      // Relationship-based type assignment. The subject picker offers four
+      // categories (self, direct reports, peers, supervisor), so the final
+      // fallback is a genuine upward evaluation of the rater's own
+      // supervisor — labelled UPWARD, not silently folded into PEER (which
+      // would distort the supervisor's peer-weighted 360 score).
+      const typeAssignment = isSelf
+        ? 'SELF'
+        : isManagerOfSubject
+          ? 'MANAGER'
+          : isPeerOfSubject
+            ? 'PEER'
+            : 'UPWARD';
 
       if (evalType === 'ANNUAL_APPRAISAL') {
         const score = appraisalAnswers.filter(a => a).length;
@@ -372,7 +386,7 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
                   {selectedSkillId && (
                     <div className="bg-slate-50 p-4 rounded-sm border border-slate-300">
                       <p className="text-sm text-slate-800 font-medium italic">
-                        "{availableSkills.find(s => s.id === selectedSkillId)?.assessmentQuestion}"
+                        "{dataService.getSkillAssessmentQuestion(selectedSkillId)}"
                       </p>
                     </div>
                   )}

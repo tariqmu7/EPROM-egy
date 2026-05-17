@@ -7,7 +7,8 @@ import { Plus, Users, Briefcase, ChevronRight, CheckCircle, Shield, ShieldCheck,
 import { SearchableSelect, Option } from '../components/SearchableSelect';
 import { BulkUpload } from '../components/BulkUpload';
 import { AdminAnalytics } from './AdminAnalytics';
-import { AdminCycles } from './AdminCycles';
+import { AssessmentManagement } from './AssessmentManagement';
+import { AssessmentInstructionManagement } from './AssessmentInstructionManagement';
 
 // --- Reusable Form Wrapper ---
 const FormPage: React.FC<{ title: string; onBack: () => void; children: React.ReactNode }> = ({ title, onBack, children }) => {
@@ -91,63 +92,78 @@ const SkillDetailsModal: React.FC<{ skill: Skill; onClose: () => void }> = ({ sk
                         <h4 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
                             <Activity size={14} /> Assessment Methodology
                         </h4>
-                        <div className="bg-slate-50 p-6 border border-slate-200 space-y-6">
-                            <div className="flex justify-between items-center pb-4 border-b border-slate-200/60">
-                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Method</span>
-                                <span className="text-xs font-black text-blue-700 uppercase tracking-widest bg-blue-50 px-2 py-1 border border-blue-100">{skill.assessmentMethod?.replace(/_/g, ' ') || 'OJT OBSERVATION'}</span>
+                        {(() => {
+                          const instructions = dataService.getSkillInstructions(skill.id);
+                          if (instructions.length === 0) {
+                            return (
+                              <div className="bg-slate-50 p-6 border border-slate-200 text-sm text-slate-500 italic">
+                                No assessment instruction assigned — scored as 360° / OJT by default.
+                              </div>
+                            );
+                          }
+                          return instructions.map(instr => (
+                            <div key={instr.id} className="bg-slate-50 p-6 border border-slate-200 space-y-6">
+                                <div className="flex justify-between items-start gap-4 pb-4 border-b border-slate-200/60">
+                                    <div>
+                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">{instr.name}</span>
+                                        {instr.assessmentQuestion && <span className="text-xs text-slate-600 italic">{instr.assessmentQuestion}</span>}
+                                    </div>
+                                    <span className="text-xs font-black text-blue-700 uppercase tracking-widest bg-blue-50 px-2 py-1 border border-blue-100 whitespace-nowrap">{instr.method.replace(/_/g, ' ')}</span>
+                                </div>
+
+                                {instr.assessmentLink && (
+                                    <div className="flex justify-between items-center pb-4 border-b border-slate-200/60">
+                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Resource Link</span>
+                                        <a href={instr.assessmentLink} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-700 hover:underline flex items-center gap-1">
+                                            Open Resource <ChevronRight size={12} />
+                                        </a>
+                                    </div>
+                                )}
+
+                                {instr.evaluationQuestions && instr.evaluationQuestions.length > 0 && (
+                                    <div className="space-y-3">
+                                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Examination Questions</p>
+                                        <div className="space-y-3">
+                                            {instr.evaluationQuestions.map((q, i) => (
+                                                <div key={q.id} className="text-sm bg-white p-4 border border-slate-200">
+                                                    <p className="font-bold text-slate-900 mb-2">{i+1}. {q.text}</p>
+                                                    {q.expectedCriteria && <p className="text-[10px] text-slate-500 uppercase font-bold bg-slate-50 p-2 border-l-2 border-slate-300">Guide: {q.expectedCriteria}</p>}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {instr.interviewQuestions && instr.interviewQuestions.length > 0 && (
+                                    <div className="space-y-3">
+                                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Interview Panel Questions</p>
+                                        <div className="space-y-3">
+                                            {instr.interviewQuestions.map((q, i) => (
+                                                <div key={q.id} className="text-sm bg-white p-4 border border-slate-200">
+                                                    <p className="font-bold text-slate-900 mb-2">{i+1}. {q.text}</p>
+                                                    {q.expectedCriteria && <p className="text-[10px] text-slate-500 uppercase font-bold bg-slate-50 p-2 border-l-2 border-slate-300">Criteria: {q.expectedCriteria}</p>}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {instr.threeSixtyQuestions && instr.threeSixtyQuestions.length > 0 && (
+                                    <div className="space-y-3">
+                                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">360° Evaluation Points</p>
+                                        <div className="space-y-3">
+                                            {instr.threeSixtyQuestions.map((q, i) => (
+                                                <div key={q.id} className="text-sm bg-white p-4 border border-slate-200">
+                                                    <p className="font-bold text-slate-900 mb-2">{i+1}. {q.text}</p>
+                                                    {q.expectedCriteria && <p className="text-[10px] text-slate-500 uppercase font-bold bg-slate-50 p-2 border-l-2 border-slate-300">Focus: {q.expectedCriteria}</p>}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
-                            
-                            {skill.assessmentLink && (
-                                <div className="flex justify-between items-center pb-4 border-b border-slate-200/60">
-                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Resource Link</span>
-                                    <a href={skill.assessmentLink} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-700 hover:underline flex items-center gap-1">
-                                        Open Resource <ChevronRight size={12} />
-                                    </a>
-                                </div>
-                            )}
-
-                            {skill.evaluationQuestions && skill.evaluationQuestions.length > 0 && (
-                                <div className="space-y-3">
-                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Examination Questions</p>
-                                    <div className="space-y-3">
-                                        {skill.evaluationQuestions.map((q, i) => (
-                                            <div key={q.id} className="text-sm bg-white p-4 border border-slate-200">
-                                                <p className="font-bold text-slate-900 mb-2">{i+1}. {q.text}</p>
-                                                {q.expectedCriteria && <p className="text-[10px] text-slate-500 uppercase font-bold bg-slate-50 p-2 border-l-2 border-slate-300">Guide: {q.expectedCriteria}</p>}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {skill.interviewQuestions && skill.interviewQuestions.length > 0 && (
-                                <div className="space-y-3">
-                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Interview Panel Questions</p>
-                                    <div className="space-y-3">
-                                        {skill.interviewQuestions.map((q, i) => (
-                                            <div key={q.id} className="text-sm bg-white p-4 border border-slate-200">
-                                                <p className="font-bold text-slate-900 mb-2">{i+1}. {q.text}</p>
-                                                {q.expectedCriteria && <p className="text-[10px] text-slate-500 uppercase font-bold bg-slate-50 p-2 border-l-2 border-slate-300">Criteria: {q.expectedCriteria}</p>}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {skill.threeSixtyQuestions && skill.threeSixtyQuestions.length > 0 && (
-                                <div className="space-y-3">
-                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">360° Evaluation Points</p>
-                                    <div className="space-y-3">
-                                        {skill.threeSixtyQuestions.map((q, i) => (
-                                            <div key={q.id} className="text-sm bg-white p-4 border border-slate-200">
-                                                <p className="font-bold text-slate-900 mb-2">{i+1}. {q.text}</p>
-                                                {q.expectedCriteria && <p className="text-[10px] text-slate-500 uppercase font-bold bg-slate-50 p-2 border-l-2 border-slate-300">Focus: {q.expectedCriteria}</p>}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
+                          ));
+                        })()}
                     </div>
                 </div>
             </div>
@@ -978,24 +994,32 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
   const [formData, setFormData] = useState<Partial<Skill>>(initialData || { levels: defaultLevels });
   const [activeTab, setActiveTab] = useState(1);
 
+  const activeInstructions = dataService.getAllAssessmentInstructions().filter(i => i.status === 'ACTIVE');
+  const selectedInstructionIds = formData.assessmentInstructionIds || [];
+  const toggleInstruction = (id: string) => {
+    setFormData(prev => {
+      const cur = prev.assessmentInstructionIds || [];
+      return {
+        ...prev,
+        assessmentInstructionIds: cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id]
+      };
+    });
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.category) return;
     onSave({
+       ...(initialData || {}),
        id: initialData?.id || Math.random().toString(36).substr(2, 9),
        name: formData.name,
        category: formData.category,
        subcategory: formData.subcategory,
-       assessmentQuestion: formData.assessmentQuestion,
        levels: formData.levels as any,
        status: 'APPROVED',
-       assessmentMethod: formData.assessmentMethod || 'OJT_OBSERVATION',
-       assessmentLink: formData.assessmentMethod === 'WRITTEN_EXAM' ? formData.assessmentLink : undefined,
-       evaluationQuestions: formData.assessmentMethod === 'WRITTEN_EXAM' ? formData.evaluationQuestions : [],
-       interviewQuestions: formData.assessmentMethod === 'INTERVIEW' ? formData.interviewQuestions : [],
-       threeSixtyQuestions: formData.assessmentMethod === 'THREE_SIXTY_EVALUATION' ? formData.threeSixtyQuestions : [],
-       assessmentFrequency: formData.assessmentFrequency || 'ONE_TIME',
-       periodicInterval: formData.assessmentFrequency === 'PERIODIC' ? formData.periodicInterval || 'ANNUALLY' : undefined
+       // Method & questions live on reusable Assessment Instructions; scheduling
+       // lives on Assessment Plans. The Skill form only links instructions.
+       assessmentInstructionIds: formData.assessmentInstructionIds || []
     } as Skill);
   };
 
@@ -1066,97 +1090,52 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
             />
          </div>
           <div className="md:col-span-2">
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Assessment Question</label>
-            <input className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none"
-               placeholder="e.g. How effectively does the employee..."
-               value={formData.assessmentQuestion || ''} onChange={e => setFormData({...formData, assessmentQuestion: e.target.value})} />
-         </div>
-         
-         <div className="md:col-span-1">
-            <SearchableSelect 
-              label="Assessment Method"
-              options={[
-                { value: 'OJT_OBSERVATION', label: 'OJT Observation (On-the-Job — Manager 80% / Self 20%)' },
-                { value: 'WRITTEN_EXAM', label: 'Written Examination (External / Online Test)' },
-                { value: 'PRACTICAL_DEMO', label: 'Practical Demonstration / Simulation' },
-                { value: 'INTERVIEW', label: 'Interview & Technical Discussion' },
-                { value: 'WORK_RECORD_REVIEW', label: 'Work Record / Case Study Review' },
-                { value: 'THREE_SIXTY_EVALUATION', label: '360° Multi-Rater Evaluation' }
-              ]}
-              value={formData.assessmentMethod || 'OJT_OBSERVATION'}
-              onChange={val => setFormData({...formData, assessmentMethod: val as any})}
-            />
-         </div>
-
-         <div className="md:col-span-1">
-            <SearchableSelect 
-              label="Assessment Frequency"
-              options={[
-                { value: 'ONE_TIME', label: 'One Time (Never expires)' },
-                { value: 'PERIODIC', label: 'Periodic (Requires renewal)' },
-                { value: 'CERTIFICATE_BASED', label: 'Certificate Based (Expires with certificate)' }
-              ]}
-              value={formData.assessmentFrequency || 'ONE_TIME'}
-              onChange={val => setFormData({...formData, assessmentFrequency: val as any})}
-            />
-         </div>
-
-         {formData.assessmentFrequency === 'PERIODIC' && (
-           <div className="md:col-span-1">
-             <SearchableSelect 
-               label="Renewal Interval"
-               options={[
-                 { value: 'MONTHLY', label: 'Monthly' },
-                 { value: 'QUARTERLY', label: 'Quarterly' },
-                 { value: 'ANNUALLY', label: 'Annually' }
-               ]}
-               value={formData.periodicInterval || 'ANNUALLY'}
-               onChange={val => setFormData({...formData, periodicInterval: val as any})}
-             />
-           </div>
-         )}
-
-         {formData.assessmentMethod === 'WRITTEN_EXAM' && (
-           <div className="md:col-span-2 space-y-6 bg-slate-50 p-6 border border-slate-200 rounded-sm">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 flex justify-between items-center">
-                  <span>Online Assessment Link (Optional)</span>
-                  <span className="text-slate-400 text-[10px] lowercase">Google Form, Microsoft Forms, etc.</span>
-                </label>
-                <input type="url" className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none"
-                   placeholder="https://docs.google.com/forms/..."
-                   value={formData.assessmentLink || ''} onChange={e => setFormData({...formData, assessmentLink: e.target.value})} />
-              </div>
-              <QuestionManager 
-                title="Internal Online Test Questions"
-                questions={formData.evaluationQuestions || []}
-                onChange={qs => setFormData({...formData, evaluationQuestions: qs})}
-                placeholder="Enter test question..."
-              />
-           </div>
-         )}
-
-         {formData.assessmentMethod === 'INTERVIEW' && (
-            <div className="md:col-span-2 bg-slate-50 p-6 border border-slate-200 rounded-sm">
-              <QuestionManager 
-                title="Standardized Interview Questions"
-                questions={formData.interviewQuestions || []}
-                onChange={qs => setFormData({...formData, interviewQuestions: qs})}
-                placeholder="Enter technical interview question..."
-              />
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center justify-between">
+              <span>Assessment Instructions</span>
+              <span className="text-slate-400 font-medium normal-case">{selectedInstructionIds.length} selected — a skill may use several methods</span>
+            </label>
+            <p className="text-xs text-slate-500 mb-3 leading-relaxed">
+              Method, prompt and question banks are defined as reusable <span className="font-bold text-slate-800">Assessment Instructions</span>. Pick one or more to assess this skill. Skills with none are scored as 360° / OJT by default.
+            </p>
+            <div className="border border-slate-300 rounded-sm bg-white max-h-60 overflow-y-auto custom-scrollbar">
+              {activeInstructions.length === 0 ? (
+                <div className="p-6 text-center text-sm text-slate-500 italic">
+                  No active assessment instructions yet. Create them under the <span className="font-bold text-slate-700">Instructions</span> tab.
+                </div>
+              ) : activeInstructions.map(instr => {
+                const checked = selectedInstructionIds.includes(instr.id);
+                return (
+                  <label
+                    key={instr.id}
+                    className={`flex items-start gap-3 px-4 py-3 text-sm cursor-pointer border-l-2 transition-colors ${
+                      checked ? 'bg-blue-50 border-blue-600' : 'border-transparent hover:bg-slate-50'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="mt-1 accent-blue-700"
+                      checked={checked}
+                      onChange={() => toggleInstruction(instr.id)}
+                    />
+                    <div>
+                      <div className="font-bold text-slate-900">{instr.name}</div>
+                      <div className="text-xs text-slate-500 mt-0.5">
+                        {instr.method.replace(/_/g, ' ')}
+                        {instr.assessmentQuestion ? ` — ${instr.assessmentQuestion}` : ''}
+                      </div>
+                    </div>
+                  </label>
+                );
+              })}
             </div>
-         )}
+         </div>
 
-         {formData.assessmentMethod === 'THREE_SIXTY_EVALUATION' && (
-            <div className="md:col-span-2 bg-slate-50 p-6 border border-slate-200 rounded-sm">
-              <QuestionManager 
-                title="360° Feedback Questions"
-                questions={formData.threeSixtyQuestions || []}
-                onChange={qs => setFormData({...formData, threeSixtyQuestions: qs})}
-                placeholder="Enter feedback question for colleagues..."
-              />
+         <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-slate-700 mb-1">Assessment Scheduling</label>
+            <div className="w-full px-3 py-2 border border-slate-200 bg-slate-50 rounded-sm text-xs text-slate-600 leading-relaxed">
+              Frequency &amp; recurrence are configured in <span className="font-bold text-slate-800">Assessment Management</span> by attaching this skill to a plan.
             </div>
-         )}
+         </div>
        </div>
 
        <div className="border-t border-slate-300 pt-6">
@@ -1308,7 +1287,7 @@ const DepartmentForm: React.FC<{ initialData?: Department | null, onSave: (d: De
                             />
                             <div>
                                 <div className="font-bold text-slate-900 text-sm">{skill.name}</div>
-                                <div className="text-xs text-slate-500 mt-1 line-clamp-2">{skill.assessmentQuestion}</div>
+                                <div className="text-xs text-slate-500 mt-1 line-clamp-2">{dataService.getSkillAssessmentQuestion(skill.id)}</div>
                             </div>
                         </label>
                     ))}
@@ -2323,7 +2302,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
         skill.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (skill.code || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         skill.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (skill.assessmentQuestion || '').toLowerCase().includes(searchTerm.toLowerCase());
+        (dataService.getSkillAssessmentQuestion(skill.id) || '').toLowerCase().includes(searchTerm.toLowerCase());
       
       const matchesTab = activeTab === 'ALL' || skill.category.toUpperCase() === activeTab;
       
@@ -2711,9 +2690,14 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
       return <AdminAnalytics />;
   }
 
-  // --- CYCLES VIEW ---
-  if (view === 'CYCLES') {
-      return <AdminCycles />;
+  // --- ASSESSMENT MANAGEMENT VIEW ---
+  if (view === 'PLANS') {
+      return <AssessmentManagement />;
+  }
+
+  // --- ASSESSMENT INSTRUCTIONS VIEW ---
+  if (view === 'INSTRUCTIONS') {
+      return <AssessmentInstructionManagement />;
   }
 
   // --- TABLE VIEW (Data View) ---
@@ -2953,7 +2937,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                                    <td className="p-4">
                                        <span className="px-2 py-1 bg-slate-50 text-slate-900 border border-slate-300 rounded-none text-[10px] font-bold uppercase tracking-wide">{skill.category}</span>
                                    </td>
-                                   <td className="p-4 text-slate-700 truncate max-w-xs text-xs">{skill.assessmentQuestion || '-'}</td>
+                                   <td className="p-4 text-slate-700 truncate max-w-xs text-xs">{dataService.getSkillAssessmentQuestion(skill.id) || '-'}</td>
                                    <td className="p-4">
                                        {skill.status === 'PENDING' ? (
                                            <span className="px-2 py-1 bg-slate-50 text-slate-700 border border-slate-100 rounded-none text-[10px] font-bold uppercase tracking-wide">Pending</span>

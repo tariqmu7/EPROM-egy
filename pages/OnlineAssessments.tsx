@@ -30,7 +30,7 @@ export const OnlineAssessments: React.FC<OnlineAssessmentsProps> = ({ currentUse
     const levelRequirements = jobProfile.requirements[currentUser.orgLevel] || [];
     return levelRequirements
       .map(req => dataService.getSkill(req.skillId))
-      .filter((s): s is Skill => !!s && s.assessmentMethod === 'WRITTEN_EXAM');
+      .filter((s): s is Skill => !!s && dataService.skillHasMethod(s.id, 'WRITTEN_EXAM'));
   }, [currentUser, storeVersion]);
 
   const assessments = useMemo(() => {
@@ -76,6 +76,7 @@ export const OnlineAssessments: React.FC<OnlineAssessmentsProps> = ({ currentUse
             const isExpired = nextDate ? new Date() >= nextDate : false;
             const isCompleted = !!result && !isExpired;
             const isRenewalDue = !!result && isExpired;
+            const assessmentLink = dataService.getSkillAssessmentLink(skill.id);
 
             return (
               <div key={skill.id} className={`bg-white border ${isRenewalDue ? 'border-amber-300' : 'border-slate-300'} overflow-hidden flex flex-col md:flex-row shadow-sm hover:border-slate-400 transition-all`}>
@@ -106,7 +107,7 @@ export const OnlineAssessments: React.FC<OnlineAssessmentsProps> = ({ currentUse
                     <h3 className="text-xl font-bold text-slate-900 mb-1">{skill.name}</h3>
                     <p className="text-slate-600 text-sm max-w-2xl">{skill.description || 'Professional written examination for ' + skill.name + ' competency.'}</p>
                     
-                    {skill.assessmentLink && (
+                    {assessmentLink && (
                        <div className="mt-4 flex items-center gap-2 text-xs text-slate-500 font-medium">
                           <AlertCircle size={14} className="text-amber-500" />
                           <span>Examinations take place on an external platform (e.g. Google Forms).</span>
@@ -149,16 +150,16 @@ export const OnlineAssessments: React.FC<OnlineAssessmentsProps> = ({ currentUse
                     )}
 
                     <a
-                      href={skill.assessmentLink || '#'}
+                      href={assessmentLink || '#'}
                       target="_blank"
                       rel="noopener noreferrer"
                       className={`w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold uppercase tracking-wider transition-all border ${
-                        skill.assessmentLink 
-                        ? 'bg-slate-900 text-white hover:bg-black border-black' 
+                        assessmentLink
+                        ? 'bg-slate-900 text-white hover:bg-black border-black'
                         : 'bg-slate-100 text-slate-400 cursor-not-allowed border-slate-200'
                       }`}
                     >
-                      {skill.assessmentLink ? 'Begin Examination' : 'No Link Provided'}
+                      {assessmentLink ? 'Begin Examination' : 'No Link Provided'}
                       <ExternalLink size={16} />
                     </a>
                   </div>

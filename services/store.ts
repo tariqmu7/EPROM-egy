@@ -1,4 +1,4 @@
-import { User, Role, JobProfile, Skill, Project, Department, Assessment, ActivityLog, ORG_HIERARCHY_ORDER, ORG_LEVEL_NUMBERS, Notification, AssessmentCycle, Nomination, IndividualTrainingPlan, TrainingRecommendation, OrgLevel, Evidence, PromotionRequirement, CareerProgressionPlan, CareerLevelProgress, TrainingCourse, ScheduledAssessment, AssessmentMethod, UserStatus } from '../types';
+import { User, Role, JobProfile, Skill, Project, Department, Assessment, ActivityLog, ORG_HIERARCHY_ORDER, ORG_LEVEL_NUMBERS, Notification, AssessmentCycle, Nomination, IndividualTrainingPlan, TrainingRecommendation, OrgLevel, Evidence, PromotionRequirement, CareerProgressionPlan, CareerLevelProgress, TrainingCourse, ScheduledAssessment, AssessmentMethod, UserStatus, Certificate, CareerHistoryEntry, SkillLevel, EvaluationQuestion, AssessmentPlan, AssessmentInstruction } from '../types';
 import { db, auth } from '../firebase';
 import { 
   collection, 
@@ -77,6 +77,34 @@ export const isBootstrapAdminEmail = (email?: string | null): boolean =>
 const MAX_LISTENER_DOCS = 10000;
 
 // ==========================================
+// 🧯 SAFE JSON FIELD PARSING
+// ==========================================
+// Several Firestore fields (user certificates / careerHistory, skill
+// levels & question banks) are persisted as JSON strings. These are read
+// inside `snapshot.docs.map(...)` in real-time listeners — so a single
+// malformed string would throw out of the map and take the ENTIRE
+// collection offline, silently (the throw is swallowed by handleError).
+// Parse defensively per-field: pass through already-parsed values, skip
+// just the one bad field, log a scoped warning naming the document, and
+// fall back to a safe default so the rest of the collection still loads.
+function safeJsonField<T>(raw: unknown, fallback: T, context: string): T {
+  if (raw === null || raw === undefined || raw === '') return fallback;
+  // Already-parsed (object/array) value — pass through unchanged.
+  if (typeof raw !== 'string') return raw as T;
+  try {
+    return JSON.parse(raw) as T;
+  } catch (e) {
+    console.warn(
+      `[store] Malformed JSON in "${context}" — skipping this field for the ` +
+      `affected document and using a safe default. Raw value:`,
+      raw,
+      e
+    );
+    return fallback;
+  }
+}
+
+// ==========================================
 // 🚀 DATA SERVICE
 // ==========================================
 
@@ -121,6 +149,8 @@ class DataService {
   private evidences: Evidence[] = [];
   private trainingCourses: TrainingCourse[] = [];
   private scheduledAssessments: ScheduledAssessment[] = [];
+  private assessmentPlans: AssessmentPlan[] = [];
+  private assessmentInstructions: AssessmentInstruction[] = [];
   private projects: Project[] = [];
 
   
@@ -273,6 +303,8 @@ class DataService {
     this.evidences = [];
     this.trainingCourses = [];
     this.scheduledAssessments = [];
+    this.assessmentPlans = [];
+    this.assessmentInstructions = [];
     this.projects = [];
     this.usersLoaded = false;
     this.scheduleNotify();
@@ -323,8 +355,8 @@ class DataService {
     return {
       ...data,
       id: canonicalId,
-      certificates: data.certificates ? (typeof data.certificates === 'string' ? JSON.parse(data.certificates) : data.certificates) : [],
-      careerHistory: data.careerHistory ? (typeof data.careerHistory === 'string' ? JSON.parse(data.careerHistory) : data.careerHistory) : []
+      certificates: safeJsonField<Certificate[]>(data.certificates, [], `users.certificates (${canonicalId})`),
+      careerHistory: safeJsonField<CareerHistoryEntry[]>(data.careerHistory, [], `users.careerHistory (${canonicalId})`)
     } as User;
   }
 
@@ -594,10 +626,10 @@ class DataService {
           const skill = {
             id: doc.id,
             ...data,
-            levels: data.levels ? JSON.parse(data.levels) : {},
-            evaluationQuestions: data.evaluationQuestions ? JSON.parse(data.evaluationQuestions) : [],
-            interviewQuestions: data.interviewQuestions ? JSON.parse(data.interviewQuestions) : [],
-            threeSixtyQuestions: data.threeSixtyQuestions ? JSON.parse(data.threeSixtyQuestions) : []
+            levels: safeJsonField<Record<number, SkillLevel>>(data.levels, {}, `skills.levels (${doc.id})`),
+            evaluationQuestions: safeJsonField<EvaluationQuestion[]>(data.evaluationQuestions, [], `skills.evaluationQuestions (${doc.id})`),
+            interviewQuestions: safeJsonField<EvaluationQuestion[]>(data.interviewQuestions, [], `skills.interviewQuestions (${doc.id})`),
+            threeSixtyQuestions: safeJsonField<EvaluationQuestion[]>(data.threeSixtyQuestions, [], `skills.threeSixtyQuestions (${doc.id})`)
           } as Skill;
 
           if (!skill.code) {
@@ -696,6 +728,31 @@ class DataService {
         this.scheduledAssessments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ScheduledAssessment));
         this.scheduleNotify();
       }, this.handleError('scheduledAssessments'))
+    );
+
+    // Assessment Plans (Assessment Management) — recurrence/audience rules
+    this.unsubscribers.push(
+      onSnapshot(query(collection(db, 'assessmentPlans'), limit(MAX_LISTENER_DOCS)), (snapshot) => {
+        this.assessmentPlans = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AssessmentPlan));
+        this.scheduleNotify();
+      }, this.handleError('assessmentPlans'))
+    );
+
+    // Assessment Instructions — reusable method + question banks per skill
+    this.unsubscribers.push(
+      onSnapshot(query(collection(db, 'assessmentInstructions'), limit(MAX_LISTENER_DOCS)), (snapshot) => {
+        this.assessmentInstructions = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+            evaluationQuestions: safeJsonField<EvaluationQuestion[]>(data.evaluationQuestions, [], `assessmentInstructions.evaluationQuestions (${doc.id})`),
+            interviewQuestions: safeJsonField<EvaluationQuestion[]>(data.interviewQuestions, [], `assessmentInstructions.interviewQuestions (${doc.id})`),
+            threeSixtyQuestions: safeJsonField<EvaluationQuestion[]>(data.threeSixtyQuestions, [], `assessmentInstructions.threeSixtyQuestions (${doc.id})`)
+          } as AssessmentInstruction;
+        });
+        this.scheduleNotify();
+      }, this.handleError('assessmentInstructions'))
     );
 
     // Notifications — always self-scoped (even admins/managers only see
@@ -1026,8 +1083,8 @@ class DataService {
         const profile = {
           id: docSnap.id,
           ...data,
-          certificates: data.certificates ? JSON.parse(data.certificates) : [],
-          careerHistory: data.careerHistory ? JSON.parse(data.careerHistory) : []
+          certificates: safeJsonField<Certificate[]>(data.certificates, [], `users.certificates (${docSnap.id})`),
+          careerHistory: safeJsonField<CareerHistoryEntry[]>(data.careerHistory, [], `users.careerHistory (${docSnap.id})`)
         } as User;
         
         const isBootstrapAdmin = isBootstrapAdminEmail(trimmedEmail);
@@ -1090,8 +1147,8 @@ class DataService {
            profile = {
              id: docSnap.id,
              ...data,
-             certificates: data.certificates ? JSON.parse(data.certificates) : [],
-             careerHistory: data.careerHistory ? JSON.parse(data.careerHistory) : []
+             certificates: safeJsonField<Certificate[]>(data.certificates, [], `users.certificates (${docSnap.id})`),
+             careerHistory: safeJsonField<CareerHistoryEntry[]>(data.careerHistory, [], `users.careerHistory (${docSnap.id})`)
            } as User;
         } else if (user.email) {
           // UID mismatch (post-migration): fall back to email query
@@ -1102,8 +1159,8 @@ class DataService {
             profile = {
               id: emailSnap.docs[0].id,
               ...data,
-              certificates: data.certificates ? JSON.parse(data.certificates) : [],
-              careerHistory: data.careerHistory ? JSON.parse(data.careerHistory) : []
+              certificates: safeJsonField<Certificate[]>(data.certificates, [], `users.certificates (${emailSnap.docs[0].id})`),
+              careerHistory: safeJsonField<CareerHistoryEntry[]>(data.careerHistory, [], `users.careerHistory (${emailSnap.docs[0].id})`)
             } as User;
           }
         }
@@ -1144,6 +1201,11 @@ class DataService {
     }
     if (collectionName === 'skills') {
       if (item.levels) payload.levels = JSON.stringify(item.levels);
+      if (item.evaluationQuestions) payload.evaluationQuestions = JSON.stringify(item.evaluationQuestions);
+      if (item.interviewQuestions) payload.interviewQuestions = JSON.stringify(item.interviewQuestions);
+      if (item.threeSixtyQuestions) payload.threeSixtyQuestions = JSON.stringify(item.threeSixtyQuestions);
+    }
+    if (collectionName === 'assessmentInstructions') {
       if (item.evaluationQuestions) payload.evaluationQuestions = JSON.stringify(item.evaluationQuestions);
       if (item.interviewQuestions) payload.interviewQuestions = JSON.stringify(item.interviewQuestions);
       if (item.threeSixtyQuestions) payload.threeSixtyQuestions = JSON.stringify(item.threeSixtyQuestions);
@@ -1257,19 +1319,36 @@ class DataService {
     if (currentUser.role === Role.ADMIN || currentUser.role === Role.CEO) {
       return this.users;
     }
-    
-    // Managers can see their subordinates and indirect subordinates
-    const subordinates = this.getSubordinatesRecursive(currentUser.id);
+
+    // Managers can see their subordinates and indirect subordinates.
+    // De-dupe defensively: the dept-managed edge can pull the same user in
+    // via multiple paths, and a malformed cycle could re-list currentUser.
+    const subordinates = this.getSubordinatesRecursive(currentUser.id)
+      .filter(u => u.id !== currentUser.id);
     return [currentUser, ...subordinates];
   }
 
-  private getSubordinatesRecursive(managerId: string): User[] {
-    const direct = this.users.filter(u => u.managerId === managerId);
-    let all: User[] = [...direct];
+  private getSubordinatesRecursive(managerId: string, visited: Set<string> = new Set()): User[] {
+    // Guard against cycles. Pure managerId chains were acyclic by data shape,
+    // but resolving reports through Department.managerId (see getSubordinates)
+    // can introduce cycles, so a visited set is now required.
+    if (visited.has(managerId)) return [];
+    visited.add(managerId);
+
+    // Single source of truth for "who reports to this person": explicit
+    // Direct Manager OR membership in a Direct Department / Section they
+    // manage. Reusing getSubordinates() keeps subordinate resolution
+    // consistent with the Manager Dashboard everywhere.
+    const direct = this.getSubordinates(managerId);
+
+    const byId = new Map<string, User>();
     for (const d of direct) {
-      all = [...all, ...this.getSubordinatesRecursive(d.id)];
+      if (!byId.has(d.id)) byId.set(d.id, d);
+      for (const sub of this.getSubordinatesRecursive(d.id, visited)) {
+        if (!byId.has(sub.id)) byId.set(sub.id, sub);
+      }
     }
-    return all;
+    return [...byId.values()];
   }
 
   // Objective 1: Certification Expiry & Compliance Workflows
@@ -1475,7 +1554,7 @@ class DataService {
         if (skill.requiresCertificate) {
           workRecords.push(item);
         } else {
-          switch (skill.assessmentMethod) {
+          switch (this.getSkillPrimaryMethod(skill.id)) {
             case 'WRITTEN_EXAM':
               writtenExams.push(item);
               break;
@@ -1497,30 +1576,109 @@ class DataService {
     return { writtenExams, managerialInterviews, evaluations360, workRecords };
   }
 
-  getNextAssessmentDate(userId: string, skillId: string): Date | null {
-    const skill = this.getSkill(skillId);
-    if (!skill) return null;
-
-    if (skill.assessmentFrequency === 'PERIODIC' && skill.periodicInterval) {
-      const userAssessments = this.assessments.filter(a => a.subjectId === userId && a.skillId === skillId && !a.isArchived);
-      if (userAssessments.length > 0) {
-        const latest = userAssessments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
-        const nextDate = new Date(latest.date);
-        if (skill.periodicInterval === 'MONTHLY') nextDate.setMonth(nextDate.getMonth() + 1);
-        else if (skill.periodicInterval === 'QUARTERLY') nextDate.setMonth(nextDate.getMonth() + 3);
-        else if (skill.periodicInterval === 'ANNUALLY') nextDate.setFullYear(nextDate.getFullYear() + 1);
-        return nextDate;
-      }
-      return new Date(); // Overdue if never assessed but periodic
-    } else if (skill.assessmentFrequency === 'CERTIFICATE_BASED') {
-      const userEvidences = this.evidences.filter(e => e.userId === userId && e.skillId === skillId && e.status === 'APPROVED' && e.expiryDate);
-      if (userEvidences.length > 0) {
-        const latest = userEvidences.sort((a, b) => new Date(b.expiryDate!).getTime() - new Date(a.expiryDate!).getTime())[0];
-        return new Date(latest.expiryDate!);
-      }
+  // Does an Assessment Plan's audience include this user?
+  isUserInPlanAudience(userId: string, plan: AssessmentPlan): boolean {
+    const user = this.getUserById(userId);
+    if (!user) return false;
+    switch (plan.audience) {
+      case 'ALL':
+        return true;
+      case 'FRESH_ONLY':
+        return user.orgLevel === 'FR';
+      case 'MANAGERS_ONLY':
+        return this.isManager(user);
+      case 'ORG_LEVELS':
+        return !!user.orgLevel && (plan.audienceOrgLevels || []).includes(user.orgLevel);
+      case 'DEPARTMENTS':
+        return (plan.audienceDepartmentIds || []).includes(user.departmentId);
+      default:
+        return false;
     }
-    
-    return null;
+  }
+
+  // Active plans that cover a skill and apply to the given user.
+  getApplicablePlansForUserSkill(userId: string, skillId: string): AssessmentPlan[] {
+    return this.assessmentPlans.filter(p =>
+      p.status === 'ACTIVE' &&
+      p.skillIds.includes(skillId) &&
+      this.isUserInPlanAudience(userId, p)
+    );
+  }
+
+  // All active plans referencing a skill (audience-agnostic; used for admin display).
+  getAssessmentPlansForSkill(skillId: string): AssessmentPlan[] {
+    return this.assessmentPlans.filter(p => p.skillIds.includes(skillId));
+  }
+
+  // True when an active plan applicable to this user schedules the skill
+  // as certificate-based (evidence carries an expiry date).
+  isSkillCertificateBasedForUser(userId: string, skillId: string): boolean {
+    return this.getApplicablePlansForUserSkill(userId, skillId)
+      .some(p => p.frequency === 'CERTIFICATE_BASED');
+  }
+
+  // Next due date for one plan/user/skill, or null if it never recurs.
+  private computePlanNextDueDate(plan: AssessmentPlan, userId: string, skillId: string): Date | null {
+    if (plan.frequency === 'ONE_TIME') return null;
+
+    const now = new Date();
+
+    if (plan.frequency === 'CERTIFICATE_BASED') {
+      const userEvidences = this.evidences.filter(e =>
+        e.userId === userId && e.skillId === skillId && e.status === 'APPROVED' && e.expiryDate);
+      if (userEvidences.length === 0) return now; // due until a valid certificate exists
+      const latest = userEvidences.sort((a, b) =>
+        new Date(b.expiryDate!).getTime() - new Date(a.expiryDate!).getTime())[0];
+      return new Date(latest.expiryDate!);
+    }
+
+    const userAssessments = this.assessments
+      .filter(a => a.subjectId === userId && a.skillId === skillId && !a.isArchived)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const lastDate = userAssessments.length > 0 ? new Date(userAssessments[0].date) : null;
+
+    if (plan.frequency === 'ANNUAL_FIXED_DATE') {
+      const month = (plan.fixedMonth ?? 1) - 1; // JS months are 0-based
+      const day = plan.fixedDay ?? 1;
+      // Most recent occurrence of the fixed date on/before today.
+      let lastDue = new Date(now.getFullYear(), month, day);
+      if (lastDue > now) lastDue = new Date(now.getFullYear() - 1, month, day);
+      // Overdue if it has never been assessed since the latest fixed date.
+      if (!lastDate || lastDate < lastDue) return now;
+      // Otherwise the next occurrence after today.
+      const next = new Date(now.getFullYear(), month, day);
+      if (next <= now) next.setFullYear(next.getFullYear() + 1);
+      return next;
+    }
+
+    if (plan.frequency === 'ANYTIME_ANNUAL') {
+      if (!lastDate || lastDate.getFullYear() < now.getFullYear()) return now;
+      return new Date(now.getFullYear() + 1, 0, 1); // due again at the start of next year
+    }
+
+    // Rolling intervals: WEEKLY / MONTHLY / QUARTERLY
+    if (!lastDate) return now; // never assessed → due now
+    const next = new Date(lastDate);
+    if (plan.frequency === 'WEEKLY') next.setDate(next.getDate() + 7);
+    else if (plan.frequency === 'MONTHLY') next.setMonth(next.getMonth() + 1);
+    else if (plan.frequency === 'QUARTERLY') next.setMonth(next.getMonth() + 3);
+    return next;
+  }
+
+  // Earliest (most urgent) next-due date across every plan that applies to
+  // this user+skill. Returns null when no active plan schedules the skill —
+  // a skill with no plan is treated as one-time and never becomes due again.
+  getNextAssessmentDate(userId: string, skillId: string): Date | null {
+    const plans = this.getApplicablePlansForUserSkill(userId, skillId);
+    if (plans.length === 0) return null;
+
+    let earliest: Date | null = null;
+    for (const plan of plans) {
+      const due = this.computePlanNextDueDate(plan, userId, skillId);
+      if (!due) continue;
+      if (!earliest || due < earliest) earliest = due;
+    }
+    return earliest;
   }
 
   generateCareerPath(userId: string): CareerProgressionPlan | null {
@@ -1660,7 +1818,7 @@ class DataService {
     if (!skill) return 0;
 
     // Behavioral (360) Logic
-    if (skill.assessmentMethod === 'OJT_OBSERVATION' || !skill.assessmentMethod) {
+    if (this.getSkillPrimaryMethod(skillId) === 'OJT_OBSERVATION') {
       let userAssessments = this.assessments.filter(a => a.subjectId === userId && a.skillId === skillId);
       if (!includeArchived) {
         userAssessments = userAssessments.filter(a => !a.isArchived);
@@ -1728,74 +1886,209 @@ class DataService {
     return this.cycles.find(c => c.status === 'ACTIVE');
   }
 
-  async addCycle(cycle: Omit<AssessmentCycle, 'id'>) {
-    const id = doc(collection(db, 'assessmentCycles')).id;
-    const newCycle: AssessmentCycle = {
-      ...cycle,
-      id
-    };
-    await this.persistItem('assessmentCycles', newCycle);
-    await this.logActivity('Created Assessment Cycle', newCycle.name);
+  // NOTE: The legacy "Assessment Engine" write logic (addCycle / updateCycle /
+  // archiveAssessments) was removed when the Cycles admin page was replaced by
+  // Assessment Management. Cycle reads (getAllCycles/getActiveCycle) remain for
+  // historical appraisal display. Scheduling now lives in Assessment Plans.
 
-    // Notify all users about the new cycle
-    for (const u of this.users) {
-      await this.addNotification({
-        userId: u.id,
-        title: 'New Assessment Cycle',
-        message: `The ${newCycle.name} assessment cycle is now active. Due date: ${new Date(newCycle.dueDate).toLocaleDateString()}`,
-        type: 'INFO',
-        actionLink: 'emp-assessment'
+  // --- ASSESSMENT PLANS (Assessment Management) ---
+  getAllAssessmentPlans() {
+    return [...this.assessmentPlans].sort((a, b) =>
+      new Date(b.updatedAt || b.createdAt || 0).getTime() -
+      new Date(a.updatedAt || a.createdAt || 0).getTime());
+  }
+
+  getAssessmentPlan(id: string) {
+    return this.assessmentPlans.find(p => p.id === id);
+  }
+
+  async addAssessmentPlan(plan: Omit<AssessmentPlan, 'id' | 'createdAt' | 'updatedAt'>) {
+    const id = doc(collection(db, 'assessmentPlans')).id;
+    const now = new Date().toISOString();
+    const newPlan: AssessmentPlan = { ...plan, id, createdAt: now, updatedAt: now };
+    await this.persistItem('assessmentPlans', newPlan);
+    await this.logActivity('Created Assessment Plan', newPlan.name);
+    return newPlan;
+  }
+
+  async updateAssessmentPlan(plan: AssessmentPlan) {
+    const updated: AssessmentPlan = { ...plan, updatedAt: new Date().toISOString() };
+    await this.updateItem('assessmentPlans', updated);
+    await this.logActivity('Updated Assessment Plan', updated.name);
+  }
+
+  async deleteAssessmentPlan(id: string) {
+    const plan = this.getAssessmentPlan(id);
+    await this.deleteItem('assessmentPlans', id);
+    await this.logActivity('Deleted Assessment Plan', plan?.name || id);
+  }
+
+  // --- ASSESSMENT INSTRUCTIONS ---
+  // Reusable "how to assess" definitions. Skills reference them via
+  // Skill.assessmentInstructionIds; a skill may reference several.
+
+  getAllAssessmentInstructions() {
+    return [...this.assessmentInstructions].sort((a, b) =>
+      new Date(b.updatedAt || b.createdAt || 0).getTime() -
+      new Date(a.updatedAt || a.createdAt || 0).getTime());
+  }
+
+  getAssessmentInstruction(id: string) {
+    return this.assessmentInstructions.find(i => i.id === id);
+  }
+
+  async addAssessmentInstruction(instruction: Omit<AssessmentInstruction, 'id' | 'createdAt' | 'updatedAt'>) {
+    const id = doc(collection(db, 'assessmentInstructions')).id;
+    const now = new Date().toISOString();
+    const newInstruction: AssessmentInstruction = { ...instruction, id, createdAt: now, updatedAt: now };
+    await this.persistItem('assessmentInstructions', newInstruction);
+    await this.logActivity('Created Assessment Instruction', newInstruction.name);
+    return newInstruction;
+  }
+
+  async updateAssessmentInstruction(instruction: AssessmentInstruction) {
+    const updated: AssessmentInstruction = { ...instruction, updatedAt: new Date().toISOString() };
+    await this.updateItem('assessmentInstructions', updated);
+    await this.logActivity('Updated Assessment Instruction', updated.name);
+  }
+
+  async deleteAssessmentInstruction(id: string) {
+    const instruction = this.getAssessmentInstruction(id);
+    // Detach from any skills that referenced it so nothing dangles.
+    const affected = this.skills.filter(s => (s.assessmentInstructionIds || []).includes(id));
+    await this.deleteItem('assessmentInstructions', id);
+    for (const skill of affected) {
+      await this.updateItem('skills', {
+        ...skill,
+        assessmentInstructionIds: (skill.assessmentInstructionIds || []).filter(x => x !== id)
       });
     }
+    await this.logActivity('Deleted Assessment Instruction', instruction?.name || id);
   }
 
-  async updateCycle(cycle: AssessmentCycle) {
-    await this.updateItem('assessmentCycles', cycle);
-    await this.logActivity('Updated Assessment Cycle', cycle.name);
-  }
+  // --- ASSESSMENT RESOLUTION (instruction-aware, legacy-safe) ---
 
-  async archiveAssessments(filters: { departmentId?: string, jobProfileId?: string, skillId?: string }) {
-    let affectedCount = 0;
-    
-    // Find all users that match the profile filters
-    const matchedUsers = this.users.filter(u => {
-      if (filters.departmentId && u.departmentId !== filters.departmentId) return false;
-      if (filters.jobProfileId && u.jobProfileId !== filters.jobProfileId) return false;
-      return true;
-    });
+  // Active instructions a skill is assessed by. Falls back to a synthesized
+  // instruction from the deprecated per-skill fields when none are linked
+  // (covers any not-yet-migrated docs).
+  getSkillInstructions(skillId: string): AssessmentInstruction[] {
+    const skill = this.getSkill(skillId);
+    if (!skill) return [];
+    const ids = skill.assessmentInstructionIds || [];
+    const resolved = ids
+      .map(id => this.assessmentInstructions.find(i => i.id === id))
+      .filter((i): i is AssessmentInstruction => !!i && i.status === 'ACTIVE');
+    if (resolved.length > 0) return resolved;
 
-    const matchedUserIds = matchedUsers.map(u => u.id);
-
-    // Find all active assessments that belong to these users and match the skill filter
-    const activeAssessments = this.assessments.filter(a => 
-      !a.isArchived && 
-      matchedUserIds.includes(a.subjectId) &&
-      (filters.skillId ? a.skillId === filters.skillId : true)
-    );
-
-    // Archive them
-    for (const assessment of activeAssessments) {
-      const archived = { ...assessment, isArchived: true };
-      await this.persistItem('assessments', archived);
-      affectedCount++;
+    if (skill.assessmentMethod || skill.assessmentQuestion || skill.assessmentLink) {
+      return [{
+        id: `legacy:${skill.id}`,
+        name: `${skill.name} (legacy)`,
+        method: skill.assessmentMethod || 'OJT_OBSERVATION',
+        assessmentQuestion: skill.assessmentQuestion,
+        assessmentLink: skill.assessmentLink,
+        evaluationQuestions: skill.evaluationQuestions || [],
+        interviewQuestions: skill.interviewQuestions || [],
+        threeSixtyQuestions: skill.threeSixtyQuestions || [],
+        status: 'ACTIVE',
+        createdAt: '',
+        updatedAt: ''
+      }];
     }
+    return [];
+  }
 
-    // Send notification to affected users
-    if (affectedCount > 0) {
-      const uniqueAffectedUserIds = Array.from(new Set(activeAssessments.map(a => a.subjectId)));
-      for (const uid of uniqueAffectedUserIds) {
-        await this.addNotification({
-          userId: uid,
-          title: 'Skill Matrix Reset',
-          message: 'Your previous assessments for certain skills have been archived. A new evaluation is required to ensure compliance.',
-          type: 'WARNING',
-          actionLink: 'emp-assessment'
-        });
+  getSkillMethods(skillId: string): AssessmentMethod[] {
+    return Array.from(new Set(this.getSkillInstructions(skillId).map(i => i.method)));
+  }
+
+  skillHasMethod(skillId: string, method: AssessmentMethod): boolean {
+    return this.getSkillMethods(skillId).includes(method);
+  }
+
+  // The method that drives single-method consumers (scoring, queue bucket).
+  // Defaults to OJT_OBSERVATION so an unconfigured skill still routes to 360.
+  getSkillPrimaryMethod(skillId: string): AssessmentMethod {
+    return this.getSkillInstructions(skillId)[0]?.method || 'OJT_OBSERVATION';
+  }
+
+  getSkillAssessmentLink(skillId: string): string | undefined {
+    const exam = this.getSkillInstructions(skillId).find(i => i.method === 'WRITTEN_EXAM' && i.assessmentLink);
+    return exam?.assessmentLink || this.getSkillInstructions(skillId).find(i => i.assessmentLink)?.assessmentLink;
+  }
+
+  getSkillAssessmentQuestion(skillId: string): string | undefined {
+    return this.getSkillInstructions(skillId).find(i => i.assessmentQuestion)?.assessmentQuestion;
+  }
+
+  // One-time, idempotent migration of the deprecated per-skill assessment
+  // fields into reusable AssessmentInstruction docs. Identical configs are
+  // de-duplicated into one shared instruction. Admin-only screens call this
+  // (skills + instructions are admin-write); safe to invoke repeatedly.
+  private instructionMigrationRan = false;
+  async migrateSkillsToInstructions(): Promise<void> {
+    if (this.instructionMigrationRan) return;
+    this.instructionMigrationRan = true;
+
+    const signature = (cfg: {
+      method: AssessmentMethod; assessmentQuestion?: string; assessmentLink?: string;
+      evaluationQuestions?: EvaluationQuestion[]; interviewQuestions?: EvaluationQuestion[]; threeSixtyQuestions?: EvaluationQuestion[];
+    }) => JSON.stringify([
+      cfg.method,
+      cfg.assessmentQuestion || '',
+      cfg.assessmentLink || '',
+      cfg.evaluationQuestions || [],
+      cfg.interviewQuestions || [],
+      cfg.threeSixtyQuestions || []
+    ]);
+
+    // Index existing instructions by signature so re-runs reuse them.
+    const bySignature = new Map<string, AssessmentInstruction>();
+    this.assessmentInstructions.forEach(i => bySignature.set(signature(i), i));
+
+    const pending = this.skills.filter(s =>
+      (s.assessmentInstructionIds || []).length === 0 &&
+      (s.assessmentMethod || s.assessmentQuestion || s.assessmentLink ||
+       (s.evaluationQuestions || []).length || (s.interviewQuestions || []).length ||
+       (s.threeSixtyQuestions || []).length));
+
+    if (pending.length === 0) return;
+
+    try {
+      for (const skill of pending) {
+        const cfg = {
+          method: skill.assessmentMethod || 'OJT_OBSERVATION' as AssessmentMethod,
+          assessmentQuestion: skill.assessmentQuestion,
+          assessmentLink: skill.assessmentLink,
+          evaluationQuestions: skill.evaluationQuestions || [],
+          interviewQuestions: skill.interviewQuestions || [],
+          threeSixtyQuestions: skill.threeSixtyQuestions || []
+        };
+        const sig = signature(cfg);
+        let instruction = bySignature.get(sig);
+        if (!instruction) {
+          const methodLabel = cfg.method.replace(/_/g, ' ');
+          instruction = await this.addAssessmentInstruction({
+            name: `${methodLabel} — ${skill.category || 'General'}`,
+            description: 'Auto-migrated from legacy per-skill assessment settings.',
+            method: cfg.method,
+            assessmentQuestion: cfg.assessmentQuestion,
+            assessmentLink: cfg.assessmentLink,
+            evaluationQuestions: cfg.evaluationQuestions,
+            interviewQuestions: cfg.interviewQuestions,
+            threeSixtyQuestions: cfg.threeSixtyQuestions,
+            status: 'ACTIVE'
+          });
+          bySignature.set(sig, instruction);
+        }
+        await this.updateItem('skills', { ...skill, assessmentInstructionIds: [instruction.id] });
       }
-      await this.logActivity('Archived Assessments', `Archived ${affectedCount} assessments due to admin reset.`);
+      await this.logActivity('Migrated Skills to Assessment Instructions', `${pending.length} skill(s)`);
+    } catch (e) {
+      // Non-admin or transient failure — allow a later admin session to retry.
+      this.instructionMigrationRan = false;
+      console.error('migrateSkillsToInstructions failed', e);
     }
-
-    return affectedCount;
   }
 
   // --- NOTIFICATIONS ---

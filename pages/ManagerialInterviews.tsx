@@ -47,7 +47,7 @@ export const ManagerialInterviews: React.FC<ManagerialInterviewsProps> = ({ curr
     const levelRequirements = jobProfile.requirements[user.orgLevel] || [];
     return levelRequirements
       .map(req => dataService.getSkill(req.skillId))
-      .filter((s): s is Skill => !!s && (s.assessmentMethod === 'INTERVIEW' || s.assessmentMethod === 'PRACTICAL_DEMO'));
+      .filter((s): s is Skill => !!s && (dataService.skillHasMethod(s.id, 'INTERVIEW') || dataService.skillHasMethod(s.id, 'PRACTICAL_DEMO')));
   };
 
   const myInterviewSkills = useMemo(() => getInterviewSkills(currentUser), [currentUser, storeVersion]);

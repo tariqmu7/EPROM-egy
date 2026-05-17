@@ -520,7 +520,8 @@ const App: React.FC = () => {
         // Admin Views - Mapped to sidebar IDs
         case 'admin-dashboard': return <AdminPanel view="OVERVIEW" onNavigate={setActiveTab} />;
         case 'admin-analytics': return <AdminPanel view="ANALYTICS" onNavigate={setActiveTab} />;
-        case 'admin-cycles': return <AdminPanel view="CYCLES" onNavigate={setActiveTab} />;
+        case 'admin-assessments': return <AdminPanel view="PLANS" onNavigate={setActiveTab} />;
+        case 'admin-instructions': return <AdminPanel view="INSTRUCTIONS" onNavigate={setActiveTab} />;
         case 'admin-users': return <AdminPanel view="USERS" onNavigate={setActiveTab} />;
         case 'admin-jobs': return <AdminPanel view="JOBS" onNavigate={setActiveTab} />;
         case 'admin-skills': return <AdminPanel view="SKILLS" onNavigate={setActiveTab} />;

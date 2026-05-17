@@ -40,6 +40,7 @@ EPROM-egy/
 │   ├── BehavioralAssessment.tsx  # 360° self/peer/manager
 │   ├── EvidencePortal.tsx
 │   ├── CompetencyMatrix.tsx
+│   ├── AssessmentManagement.tsx  # Admin: Assessment Plans (method/frequency/audience → skills)
 │   └── SupervisorApproval.tsx
 └── components/
     ├── Layout.tsx        # Sidebar nav + header
@@ -62,7 +63,8 @@ EPROM-egy/
 | `jobProfiles` | Role definitions: maps OrgLevel → required skills & required level |
 | `assessments` | Score records per user/skill/cycle (Self, Peer, Manager, Exam, Interview, etc.) |
 | `evidences` | Work records submitted by employees, approved by managers |
-| `assessmentCycles` | Time-bound evaluation periods (ACTIVE / CLOSED) |
+| `assessmentCycles` | Time-bound evaluation periods (ACTIVE / CLOSED). Read-only now — historical appraisal labelling only; no admin UI writes cycles since the Assessment Engine was removed |
+| `assessmentPlans` | **Assessment Management** — defines how/when a set of skills is assessed: method, frequency (one-time / annual-fixed-date / anytime-annual / quarterly / monthly / weekly / certificate-based) and target audience (all / fresh / managers / org-levels / departments). Single source of truth for assessment scheduling |
 | `departments` | Org units with hierarchy (General → Department → Section) |
 | `notifications` | In-app alerts per user |
 | `trainingCourses` | Courses linked to skills for ITP recommendations |
@@ -99,6 +101,9 @@ Auto-generates training recommendations from skill gaps, linked to courses in `t
 ### TNA (`generateDepartmentalTNA`)
 Aggregates skill gaps across a whole department for L&D planning.
 
+### Assessment Scheduling (`getNextAssessmentDate`)
+Plan-driven (Assessment Engine removed). For a user+skill it finds every **ACTIVE** `assessmentPlan` whose `skillIds` includes the skill and whose `audience` matches the user (`isUserInPlanAudience`), computes each plan's next-due date from its `frequency`, and returns the **earliest** (most urgent) one. No applicable plan ⇒ `null` ⇒ skill is treated as one-time and never becomes due again. Feeds `getEmployeeAssessmentQueue` and the OnlineAssessments / ManagerialInterviews / EvidencePortal due-date displays. `CERTIFICATE_BASED` plans drive evidence expiry via `isSkillCertificateBasedForUser`. The legacy per-skill `assessmentFrequency`/`periodicInterval` fields are deprecated (kept optional for legacy doc parsing, no longer written or read).
+
 ---
 
 ## Assessment Methods
@@ -119,7 +124,7 @@ Aggregates skill gaps across a whole department for L&D planning.
 2. **Employee** takes assessments (online/360°/interview) and submits evidence → scores recorded
 3. **Manager** reviews evidence, conducts interviews, rates subordinates in 360° evaluations
 4. **System** calculates skill gaps → generates ITP and career path
-5. **Admin** manages assessment cycles; archiving closes a cycle and resets for the next
+5. **Admin** defines **Assessment Plans** (Assessment Management): attaches one or many skills to a plan with a method, recurrence frequency, and target audience. Plans drive when each employee's skills become due for re-assessment
 
 ---
 
@@ -132,7 +137,7 @@ Routing is tab-based state in `App.tsx` (no React Router). `activeTab` drives wh
 | `emp-dashboard` | EmployeeDashboard | Employee |
 | `evaluations` | EvaluationsHub | Employee |
 | `manager-dashboard` | ManagerDashboard | Manager |
-| `admin-dashboard/users/jobs/skills/depts/cycles/analytics` | AdminPanel | Admin |
+| `admin-dashboard/users/jobs/skills/depts/assessments/analytics` | AdminPanel | Admin |
 | `ceo-dashboard` | CEOPanel | CEO |
 
 ---

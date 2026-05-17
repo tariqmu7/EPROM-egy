@@ -138,6 +138,16 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /assessmentPlans/{planId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /assessmentInstructions/{instructionId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
     match /trainingCourses/{courseId} {
       allow read: if isAuthenticated();
       allow write: if isAdmin();

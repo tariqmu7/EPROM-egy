@@ -46,7 +46,7 @@ Work through these one at a time, top to bottom. Check the box when done.
 
 - [x] **#32** Fix login flow for `PENDING` users — currently the app authenticates them, detects pending status, then calls `signOut(auth)`, causing a jarring dashboard flash; route them directly to a dedicated "Waiting for Approval" screen before any dashboard renders
 
-- [ ] **#33** Wrap `JSON.parse(data.certificates)` and `JSON.parse(data.careerHistory)` calls inside Firestore snapshot listeners in `store.ts` with `try/catch` blocks — a single malformed string in the database currently crashes the entire real-time listener silently
+- [x] **#33** Wrap `JSON.parse(data.certificates)` and `JSON.parse(data.careerHistory)` calls inside Firestore snapshot listeners in `store.ts` with `try/catch` blocks — a single malformed string in the database currently crashes the entire real-time listener silently
 
 - [x] **#9** Fix BehavioralAssessment double-submit race condition in `pages/BehavioralAssessment.tsx:182-226` — remove `setTimeout` wrapper; use `try/finally` to set `isSubmitting = false` after the `await` resolves
 

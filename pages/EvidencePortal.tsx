@@ -46,7 +46,7 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
     return reqs.map(req => {
       const skill = skills.find(s => s.id === req.skillId);
       return { ...req, skill };
-    }).filter(r => r.skill !== undefined && (r.skill.assessmentMethod === 'WORK_RECORD_REVIEW' || r.skill.requiresCertificate)) as { skillId: string, requiredLevel: number, skill: Skill }[];
+    }).filter(r => r.skill !== undefined && (dataService.skillHasMethod(r.skill.id, 'WORK_RECORD_REVIEW') || r.skill.requiresCertificate)) as { skillId: string, requiredLevel: number, skill: Skill }[];
   }, [myJobProfile, currentUser.orgLevel, skills]);
 
   const otherSkills = useMemo(() => {
@@ -106,7 +106,7 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
         fileUrl: base64String,
         fileName: file.name,
         notes: notes,
-        ...(selectedSkill?.assessmentFrequency === 'CERTIFICATE_BASED' && expiryDate ? { expiryDate } : {})
+        ...(dataService.isSkillCertificateBasedForUser(currentUser.id, finalSkillId) && expiryDate ? { expiryDate } : {})
       });
 
       setSuccessMessage('Evidence submitted successfully for review.');
@@ -372,13 +372,13 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
                 </div>
               )}
 
-              {selectedSkill?.assessmentMethod === 'WRITTEN_EXAM' && selectedSkill.assessmentLink && (
+              {selectedSkill && dataService.skillHasMethod(selectedSkill.id, 'WRITTEN_EXAM') && dataService.getSkillAssessmentLink(selectedSkill.id) && (
                  <div className="bg-blue-50 border border-blue-200 p-4 rounded-sm flex flex-col gap-3">
                     <p className="text-sm text-blue-800 font-medium flex items-center gap-2">
                        <AlertCircle size={16} /> This competency requires an online assessment!
                     </p>
                     <p className="text-xs text-blue-700">Please click the link below to complete the assessment. Once finished, take a screenshot or download your certificate and upload it below as your evidence.</p>
-                    <a href={selectedSkill.assessmentLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-sm font-bold text-white bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded-none self-start transition-colors">
+                    <a href={dataService.getSkillAssessmentLink(selectedSkill.id)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-sm font-bold text-white bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded-none self-start transition-colors">
                       <ExternalLink size={16} /> Go to Online Assessment Portal
                     </a>
                  </div>
@@ -399,7 +399,7 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
                 {file && <p className="mt-2 text-sm text-slate-800 font-medium flex items-center gap-2"><CheckCircle size={16}/> Selected: {file.name}</p>}
               </div>
 
-              {selectedSkill?.assessmentFrequency === 'CERTIFICATE_BASED' && (
+              {selectedSkill && dataService.isSkillCertificateBasedForUser(currentUser.id, selectedSkill.id) && (
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Certificate Expiry Date</label>
                   <input 

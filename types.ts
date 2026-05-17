@@ -53,19 +53,33 @@ export interface Skill {
   id: string;
   name: string;
   category: string;
-  assessmentQuestion?: string;
-  levels: Record<number, SkillLevel>; 
+  levels: Record<number, SkillLevel>;
   status?: 'APPROVED' | 'PENDING';
-  assessmentMethod: 'OJT_OBSERVATION' | 'WRITTEN_EXAM' | 'PRACTICAL_DEMO' | 'INTERVIEW' | 'WORK_RECORD_REVIEW' | 'THREE_SIXTY_EVALUATION';
+  // How this skill is assessed now lives on reusable AssessmentInstruction
+  // entities. A skill may carry several (multi-method assessment).
+  assessmentInstructionIds?: string[];
+  // @deprecated Moved to AssessmentInstruction. Kept optional so legacy
+  // Firestore docs still parse and feed the one-time auto-migration; no
+  // longer written by the Skill form.
+  assessmentQuestion?: string;
+  // @deprecated superseded by AssessmentInstruction.method
+  assessmentMethod?: 'OJT_OBSERVATION' | 'WRITTEN_EXAM' | 'PRACTICAL_DEMO' | 'INTERVIEW' | 'WORK_RECORD_REVIEW' | 'THREE_SIXTY_EVALUATION';
+  // @deprecated superseded by AssessmentInstruction.assessmentLink
   assessmentLink?: string; // Used specifically for WRITTEN_EXAM to link to external forms
+  // @deprecated superseded by AssessmentInstruction.evaluationQuestions
   evaluationQuestions?: EvaluationQuestion[]; // For written exams/online tests
+  // @deprecated superseded by AssessmentInstruction.interviewQuestions
   interviewQuestions?: EvaluationQuestion[]; // For interviews
+  // @deprecated superseded by AssessmentInstruction.threeSixtyQuestions
   threeSixtyQuestions?: EvaluationQuestion[]; // For 360 evaluations
   description?: string; // Optional detailed description of the skill or assessment
   code?: string; // Automatically generated professional identifier
   subcategory?: string; // Related field e.g., Maintenance, Operation, IT
   requiresCertificate?: boolean; // True if the skill needs external validation
+  // @deprecated Scheduling now lives on AssessmentPlan (see AssessmentPlan).
+  // Kept optional so legacy Firestore docs still parse; no longer written or read.
   assessmentFrequency?: 'ONE_TIME' | 'PERIODIC' | 'CERTIFICATE_BASED';
+  // @deprecated superseded by AssessmentPlan.frequency
   periodicInterval?: 'MONTHLY' | 'QUARTERLY' | 'ANNUALLY';
 }
 
@@ -88,6 +102,91 @@ export interface ScheduledAssessment {
   status: 'UPCOMING' | 'OVERDUE' | 'COMPLETED';
   assessorId?: string;
 }
+
+// --- Assessment Management (Assessment Plans) ---
+// Recurrence rule for an AssessmentPlan. Replaces the per-skill
+// assessmentFrequency/periodicInterval fields as the single source of truth.
+export type AssessmentFrequency =
+  | 'ONE_TIME'           // Assess once; never becomes due again
+  | 'ANNUAL_FIXED_DATE'  // Every year on a specific month/day (fixedMonth/fixedDay)
+  | 'ANYTIME_ANNUAL'     // Due once per calendar year, any time within the year
+  | 'QUARTERLY'          // Every 3 months
+  | 'MONTHLY'            // Every month
+  | 'WEEKLY'             // Every 7 days
+  | 'CERTIFICATE_BASED'; // Next due = expiry date of the latest approved evidence
+
+export const ASSESSMENT_FREQUENCY_LABELS: Record<AssessmentFrequency, string> = {
+  ONE_TIME: 'One Time (never recurs)',
+  ANNUAL_FIXED_DATE: 'Annually on a fixed date',
+  ANYTIME_ANNUAL: 'Any time within the year',
+  QUARTERLY: 'Quarterly',
+  MONTHLY: 'Monthly',
+  WEEKLY: 'Weekly',
+  CERTIFICATE_BASED: 'Certificate-based (expires with certificate)'
+};
+
+// Which employees a plan applies to.
+export type AssessmentAudience =
+  | 'ALL'            // Every employee assigned the skill
+  | 'FRESH_ONLY'     // Only OrgLevel === 'FR'
+  | 'MANAGERS_ONLY'  // Only users flagged as managers
+  | 'ORG_LEVELS'     // Specific org levels (audienceOrgLevels)
+  | 'DEPARTMENTS';   // Specific departments (audienceDepartmentIds)
+
+export const ASSESSMENT_AUDIENCE_LABELS: Record<AssessmentAudience, string> = {
+  ALL: 'All employees',
+  FRESH_ONLY: 'Fresh hires only',
+  MANAGERS_ONLY: 'Managers only',
+  ORG_LEVELS: 'Specific org levels',
+  DEPARTMENTS: 'Specific departments'
+};
+
+export interface AssessmentPlan {
+  id: string;
+  name: string;
+  description?: string;
+  skillIds: string[];          // One or many skills covered by this plan
+  method: AssessmentMethod;    // Assessment type used for these skills
+  frequency: AssessmentFrequency;
+  fixedMonth?: number;         // 1-12, when frequency === 'ANNUAL_FIXED_DATE'
+  fixedDay?: number;           // 1-31, when frequency === 'ANNUAL_FIXED_DATE'
+  audience: AssessmentAudience;
+  audienceOrgLevels?: OrgLevel[];     // when audience === 'ORG_LEVELS'
+  audienceDepartmentIds?: string[];   // when audience === 'DEPARTMENTS'
+  status: 'ACTIVE' | 'INACTIVE';
+  createdAt: string;
+  updatedAt: string;
+}
+
+// --- Assessment Instruction ---
+// Reusable "how to assess" definition: a single assessment method plus its
+// prompt / external link / question banks. Skills reference one or many
+// instructions via Skill.assessmentInstructionIds (a skill may be assessed by
+// several methods). Replaces the per-skill assessmentMethod / assessmentQuestion
+// / assessmentLink / *Questions fields.
+export interface AssessmentInstruction {
+  id: string;
+  name: string;
+  description?: string;
+  method: AssessmentMethod;
+  assessmentQuestion?: string;                  // Observation / evaluation prompt
+  assessmentLink?: string;                      // External form link (WRITTEN_EXAM)
+  evaluationQuestions?: EvaluationQuestion[];   // WRITTEN_EXAM internal test bank
+  interviewQuestions?: EvaluationQuestion[];    // INTERVIEW question bank
+  threeSixtyQuestions?: EvaluationQuestion[];   // 360° feedback bank
+  status: 'ACTIVE' | 'INACTIVE';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const ASSESSMENT_METHOD_LABELS: Record<AssessmentMethod, string> = {
+  OJT_OBSERVATION: 'OJT Observation (On-the-Job)',
+  WRITTEN_EXAM: 'Written Examination (External / Online)',
+  PRACTICAL_DEMO: 'Practical Demonstration / Simulation',
+  INTERVIEW: 'Interview & Technical Discussion',
+  WORK_RECORD_REVIEW: 'Work Record / Case Study Review',
+  THREE_SIXTY_EVALUATION: '360° Multi-Rater Evaluation'
+};
 
 export interface JobProfileSkill {
   skillId: string;
@@ -202,7 +301,11 @@ export interface Assessment {
   comment: string;
   date: string;
   method: AssessmentMethod;
-  type: 'SELF' | 'PEER' | 'MANAGER' | 'WRITTEN_EXAM' | 'PRACTICAL_DEMO' | 'INTERVIEW' | 'WORK_RECORD_REVIEW';
+  // UPWARD = subordinate evaluating their own supervisor. Stored for the
+  // record/display but intentionally excluded from the 360 weighted score
+  // (getUserSkillScore counts only SELF/PEER/MANAGER); there is no defined
+  // upward weight in the Self 10 / Peer 30 / Manager 60 model.
+  type: 'SELF' | 'PEER' | 'MANAGER' | 'UPWARD' | 'WRITTEN_EXAM' | 'PRACTICAL_DEMO' | 'INTERVIEW' | 'WORK_RECORD_REVIEW';
   cycleId?: string;
   isArchived?: boolean;
 }

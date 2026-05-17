@@ -2,7 +2,7 @@ import React, { memo } from 'react';
 import { User, Role, ORG_LEVEL_LABELS } from '../types';
 import { Logo } from './Logo';
 import { dataService } from '../services/store';
-import { LogOut, LayoutDashboard, ClipboardList, ShieldCheck, UserCircle, Users, Building2, Briefcase, Activity, Calendar, Grid, UploadCloud, CheckSquare, Star, Monitor, MessageSquare } from 'lucide-react';
+import { LogOut, LayoutDashboard, ClipboardList, ClipboardCheck, ShieldCheck, UserCircle, Users, Building2, Briefcase, Activity, Grid, UploadCloud, CheckSquare, Star, Monitor, MessageSquare } from 'lucide-react';
 import { NotificationBell } from './NotificationBell';
 
 interface LayoutProps {
@@ -58,7 +58,8 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
                 <>
                   <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="admin-dashboard" label="Overview" icon={LayoutDashboard} />
                   <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="admin-analytics" label="Analytics" icon={Activity} />
-                  <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="admin-cycles" label="Cycles" icon={Calendar} />
+                  <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="admin-assessments" label="Assessments" icon={ClipboardList} />
+                  <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="admin-instructions" label="Instructions" icon={ClipboardCheck} />
                 </>
               ) : user.role === Role.CEO ? (
                 <>

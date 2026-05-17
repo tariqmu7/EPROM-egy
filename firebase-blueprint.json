@@ -174,6 +174,46 @@
         "status": { "type": "string", "enum": ["PENDING_SCHEDULE", "SCHEDULED", "COMPLETED"] }
       },
       "required": ["userId", "skillId", "status"]
+    },
+    "AssessmentPlan": {
+      "title": "AssessmentPlan",
+      "description": "Assessment Management plan: defines the method, recurrence frequency and target audience for one or many skills. Single source of truth for assessment scheduling.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "skillIds": { "type": "array", "items": { "type": "string" } },
+        "method": { "type": "string", "enum": ["OJT_OBSERVATION", "WRITTEN_EXAM", "PRACTICAL_DEMO", "INTERVIEW", "WORK_RECORD_REVIEW", "THREE_SIXTY_EVALUATION"] },
+        "frequency": { "type": "string", "enum": ["ONE_TIME", "ANNUAL_FIXED_DATE", "ANYTIME_ANNUAL", "QUARTERLY", "MONTHLY", "WEEKLY", "CERTIFICATE_BASED"] },
+        "fixedMonth": { "type": "number" },
+        "fixedDay": { "type": "number" },
+        "audience": { "type": "string", "enum": ["ALL", "FRESH_ONLY", "MANAGERS_ONLY", "ORG_LEVELS", "DEPARTMENTS"] },
+        "audienceOrgLevels": { "type": "array", "items": { "type": "string" } },
+        "audienceDepartmentIds": { "type": "array", "items": { "type": "string" } },
+        "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "skillIds", "method", "frequency", "audience", "status"]
+    },
+    "AssessmentInstruction": {
+      "title": "AssessmentInstruction",
+      "description": "Reusable assessment definition: a method plus its prompt, external link and question banks. Skills reference one or many via Skill.assessmentInstructionIds.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "method": { "type": "string", "enum": ["OJT_OBSERVATION", "WRITTEN_EXAM", "PRACTICAL_DEMO", "INTERVIEW", "WORK_RECORD_REVIEW", "THREE_SIXTY_EVALUATION"] },
+        "assessmentQuestion": { "type": "string" },
+        "assessmentLink": { "type": "string" },
+        "evaluationQuestions": { "type": "string", "description": "JSON-serialized EvaluationQuestion[]" },
+        "interviewQuestions": { "type": "string", "description": "JSON-serialized EvaluationQuestion[]" },
+        "threeSixtyQuestions": { "type": "string", "description": "JSON-serialized EvaluationQuestion[]" },
+        "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "method", "status"]
     }
 
   },
@@ -229,6 +269,14 @@
     "/scheduledAssessments/{assessmentId}": {
       "schema": { "$ref": "#/entities/ScheduledAssessment" },
       "description": "Collection of all scheduled assessments."
+    },
+    "/assessmentPlans/{planId}": {
+      "schema": { "$ref": "#/entities/AssessmentPlan" },
+      "description": "Collection of all assessment plans (Assessment Management)."
+    },
+    "/assessmentInstructions/{instructionId}": {
+      "schema": { "$ref": "#/entities/AssessmentInstruction" },
+      "description": "Collection of all assessment instructions (reusable method + question banks)."
     }
 
   }

@@ -33,7 +33,7 @@ EPROM CMS is a **React + TypeScript + Firebase** single-page application that ma
 - **Evidence Submissions** — employees upload proof; managers review and assign scores.
 - **Individual Training Plans (ITP)** — auto-generated from skill gaps, linked to training courses.
 - **Career Progression Plans** — roadmap from current level up to GM, with readiness statuses.
-- **Assessment Cycles** — time-boxed periods that govern all evaluations.
+- **Assessment Management (Assessment Plans)** — admin defines how/when each skill is assessed: method, recurrence frequency, and target audience; the single source of truth for assessment scheduling.
 - **Bulk User Upload** — Excel/CSV import for mass employee onboarding.
 
 ---
@@ -80,7 +80,7 @@ EPROM-egy/
 │
 ├── pages/
 │   ├── AdminPanel.tsx        # Master admin panel (view prop switches sub-views)
-│   ├── AdminCycles.tsx       # Assessment cycle management
+│   ├── AssessmentManagement.tsx  # Assessment Plans: method/frequency/audience → skills
 │   ├── AdminAnalytics.tsx    # Org-wide analytics dashboard
 │   ├── EmployeeDashboard.tsx # Employee profile + skill matrix + career path
 │   ├── ManagerDashboard.tsx  # Manager's team overview + subordinate scores
@@ -160,7 +160,7 @@ Tier number used for hierarchy comparison via `ORG_LEVEL_NUMBERS`. `ORG_HIERARCH
 | `evidence-portal` | `EvidencePortal` |
 | `admin-dashboard` | `AdminPanel view="OVERVIEW"` |
 | `admin-analytics` | `AdminPanel view="ANALYTICS"` |
-| `admin-cycles` | `AdminPanel view="CYCLES"` |
+| `admin-assessments` | `AdminPanel view="PLANS"` |
 | `admin-users` | `AdminPanel view="USERS"` |
 | `admin-jobs` | `AdminPanel view="JOBS"` |
 | `admin-skills` | `AdminPanel view="SKILLS"` |
@@ -305,6 +305,8 @@ Tier number used for hierarchy comparison via `ORG_LEVEL_NUMBERS`. `ORG_HIERARCH
   dueDate: string;
   status: 'ACTIVE' | 'CLOSED';
 }
+// Read-only: the Assessment Engine (cycle create/update + targeted reset)
+// was removed. Retained for historical appraisal labelling only.
 ```
 
 ### `scheduledAssessments/{id}`
@@ -318,6 +320,31 @@ Tier number used for hierarchy comparison via `ORG_LEVEL_NUMBERS`. `ORG_HIERARCH
   status: 'UPCOMING' | 'OVERDUE' | 'COMPLETED';
   assessorId?: string;
 }
+```
+
+### `assessmentPlans/{planId}`
+```ts
+{
+  id: string;
+  name: string;
+  description?: string;
+  skillIds: string[];                 // one or many skills covered
+  method: AssessmentMethod;
+  frequency: 'ONE_TIME' | 'ANNUAL_FIXED_DATE' | 'ANYTIME_ANNUAL'
+           | 'QUARTERLY' | 'MONTHLY' | 'WEEKLY' | 'CERTIFICATE_BASED';
+  fixedMonth?: number;                // 1-12, when frequency = ANNUAL_FIXED_DATE
+  fixedDay?: number;                  // 1-31, when frequency = ANNUAL_FIXED_DATE
+  audience: 'ALL' | 'FRESH_ONLY' | 'MANAGERS_ONLY' | 'ORG_LEVELS' | 'DEPARTMENTS';
+  audienceOrgLevels?: OrgLevel[];     // when audience = ORG_LEVELS
+  audienceDepartmentIds?: string[];   // when audience = DEPARTMENTS
+  status: 'ACTIVE' | 'INACTIVE';
+  createdAt: string;
+  updatedAt: string;
+}
+// Single source of truth for assessment scheduling. getNextAssessmentDate()
+// resolves the earliest due date across every ACTIVE plan that covers the
+// skill and whose audience matches the user. Replaces the deprecated
+// per-skill assessmentFrequency / periodicInterval fields.
 ```
 
 ### `trainingCourses/{courseId}`
@@ -380,8 +407,13 @@ skills
   └── evidences (via skillId)
   └── trainingCourses (via linkedSkillIds)
   └── scheduledAssessments (via skillId)
+  └── assessmentPlans (via skillIds)
 
-assessmentCycles
+assessmentPlans
+  └── skills (via skillIds)
+  └── users (via audience: org level / department / manager flag)
+
+assessmentCycles  (read-only — historical)
   └── assessments (via cycleId)
 ```
 
@@ -515,8 +547,10 @@ Triggered on every `users` snapshot load. For each certificate with `expiryDate`
 ### 6. Assessment Archive / Reset
 Admin can bulk-archive assessments filtered by department/job profile/skill. Affected employees receive a `WARNING` notification to re-evaluate.
 
-### 7. Assessment Cycle Management
-Admin creates cycles with start/due dates. On creation, all users receive an `INFO` notification. Assessments can be tagged to a `cycleId`. Cycle status: `ACTIVE` or `CLOSED`.
+### 7. Assessment Management (Assessment Plans)
+Admin defines **Assessment Plans** in `AssessmentManagement.tsx` (admin tab `admin-assessments` → `AdminPanel view="PLANS"`). Each plan attaches one or many skills to a `method`, a recurrence `frequency`, and a target `audience`. `getNextAssessmentDate(userId, skillId)` returns the earliest due date across every **ACTIVE** plan that covers the skill and whose audience includes the user (`isUserInPlanAudience`); a skill with no applicable plan is treated as one-time and never becomes due again. `CERTIFICATE_BASED` plans gate evidence-expiry capture via `isSkillCertificateBasedForUser`.
+
+The previous **Assessment Engine** (annual cycle create/update + targeted reassessment reset) was removed. `assessmentCycles` reads remain only for historical appraisal labelling; the deprecated per-skill `assessmentFrequency`/`periodicInterval` fields are no longer written or read.
 
 ---
 
@@ -569,6 +603,7 @@ The service uses Firestore **real-time listeners** (`onSnapshot`) for all collec
 | `notifications` | Own `userId` only | Any auth creates; own `userId` updates/deletes |
 | `assessmentCycles` | Any authenticated | Admin only |
 | `scheduledAssessments` | Any authenticated | Admin only |
+| `assessmentPlans` | Any authenticated | Admin only |
 | `trainingCourses` | Any authenticated | Admin only |
 | `activityLogs` | Any authenticated | Any auth creates; Admin updates/deletes |
 
