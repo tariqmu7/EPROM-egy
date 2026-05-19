@@ -1,8 +1,8 @@
-import React, { memo } from 'react';
+import React, { memo, useState } from 'react';
 import { User, Role, ORG_LEVEL_LABELS } from '../types';
 import { Logo } from './Logo';
 import { dataService } from '../services/store';
-import { LogOut, LayoutDashboard, ClipboardList, ClipboardCheck, ShieldCheck, UserCircle, Users, Building2, Briefcase, Activity, Grid, UploadCloud, CheckSquare, Star, Monitor, MessageSquare } from 'lucide-react';
+import { LogOut, LayoutDashboard, ClipboardList, ClipboardCheck, ShieldCheck, UserCircle, Users, Building2, Briefcase, Activity, Grid, UploadCloud, CheckSquare, Star, Monitor, MessageSquare, Menu, X } from 'lucide-react';
 import { NotificationBell } from './NotificationBell';
 
 interface LayoutProps {
@@ -27,13 +27,19 @@ const NavItem = memo(({ id, label, icon: Icon, activeTab, onSwitchTab }: { id: s
       }`}
     >
       <Icon size={18} className={`${isActive ? 'text-blue-700' : 'text-slate-600 group-hover:text-blue-700'}`} />
-      <span className="hidden md:inline">{label}</span>
+      <span>{label}</span>
     </button>
   );
 });
 
 export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwitchTab, children }) => {
-  
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const handleMobileNav = (tab: string) => {
+    onSwitchTab(tab);
+    setMobileMenuOpen(false);
+  };
+
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans">
       {/* Top Navbar - Modern Style */}
@@ -48,7 +54,7 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
                </div>
                <div className="hidden lg:flex flex-col">
                  <span className="font-bold text-lg tracking-tight leading-none text-slate-900">EPROM CMS</span>
-                 <span className="text-[10px] text-slate-900 font-bold uppercase tracking-widest mt-1">EPROM Competency program</span>
+                 <span className="text-xs text-slate-900 font-bold uppercase tracking-widest mt-1">EPROM Competency program</span>
                </div>
             </div>
 
@@ -78,6 +84,15 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
               )}
             </nav>
 
+            {/* Mobile hamburger */}
+            <button
+              className="md:hidden p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-sm"
+              onClick={() => setMobileMenuOpen(v => !v)}
+              aria-label="Toggle menu"
+            >
+              {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
+            </button>
+
             {/* Right Side Actions */}
             <div className="flex items-center gap-4 lg:gap-6 flex-shrink-0">
               
@@ -87,25 +102,52 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
               <div className="flex items-center gap-3 pl-6 border-l border-slate-300">
                 <div className="text-right hidden sm:block">
                     <p className="text-sm font-bold text-slate-900 leading-none">{user.name}</p>
-                    <p className="text-[10px] text-slate-700 uppercase mt-1">
+                    <p className="text-xs text-slate-700 uppercase mt-1">
                         {user.role === Role.ADMIN ? 'Administrator' : (user.role === Role.CEO ? 'CEO' : (user.orgLevel ? ORG_LEVEL_LABELS[user.orgLevel] : 'Employee'))}
                     </p>
                 </div>
-                <div className="w-10 h-10 rounded-none bg-slate-100 border border-slate-300 flex items-center justify-center overflow-hidden  text-slate-700">
+                <div className="w-10 h-10 rounded-full bg-slate-100 border border-slate-300 flex items-center justify-center overflow-hidden text-slate-700">
                     {user.avatarUrl ? <img src={user.avatarUrl} alt="avatar" /> : <UserCircle size={24} />}
                 </div>
-                <button 
+                <button
                   onClick={onLogout}
-                  className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-200 rounded-none transition-colors"
-                  title="Sign Out"
+                  className="flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-sm transition-colors"
                 >
-                  <LogOut size={18} />
+                  <LogOut size={16} />
+                  <span className="hidden sm:inline">Sign Out</span>
                 </button>
               </div>
             </div>
 
           </div>
         </div>
+        {/* Mobile nav drawer */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-t border-slate-200 bg-white px-4 py-3 flex flex-col gap-1">
+            {user.role === Role.ADMIN ? (
+              <>
+                <NavItem activeTab={activeTab} onSwitchTab={handleMobileNav} id="admin-dashboard" label="Overview" icon={LayoutDashboard} />
+                <NavItem activeTab={activeTab} onSwitchTab={handleMobileNav} id="admin-analytics" label="Analytics" icon={Activity} />
+                <NavItem activeTab={activeTab} onSwitchTab={handleMobileNav} id="admin-assessments" label="Assessments" icon={ClipboardList} />
+                <NavItem activeTab={activeTab} onSwitchTab={handleMobileNav} id="admin-instructions" label="Instructions" icon={ClipboardCheck} />
+              </>
+            ) : user.role === Role.CEO ? (
+              <>
+                <NavItem activeTab={activeTab} onSwitchTab={handleMobileNav} id="ceo-dashboard" label="Organization" icon={LayoutDashboard} />
+                <NavItem activeTab={activeTab} onSwitchTab={handleMobileNav} id="admin-depts" label="Org Structure" icon={Building2} />
+                <NavItem activeTab={activeTab} onSwitchTab={handleMobileNav} id="emp-dashboard" label="My Profile" icon={UserCircle} />
+              </>
+            ) : (
+              <>
+                <NavItem activeTab={activeTab} onSwitchTab={handleMobileNav} id="emp-dashboard" label="My Profile" icon={LayoutDashboard} />
+                {dataService.isManager(user) && (
+                  <NavItem activeTab={activeTab} onSwitchTab={handleMobileNav} id="manager-dashboard" label="My Team" icon={Users} />
+                )}
+                <NavItem activeTab={activeTab} onSwitchTab={handleMobileNav} id="evaluations" label="Evaluations" icon={Star} />
+              </>
+            )}
+          </div>
+        )}
       </header>
 
       {/* Main Content Body */}
