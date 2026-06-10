@@ -1,22 +1,26 @@
 import { User, Role, JobProfile, Skill, Project, Department, Assessment, ActivityLog, ORG_HIERARCHY_ORDER, ORG_LEVEL_NUMBERS, Notification, AssessmentCycle, Nomination, IndividualTrainingPlan, TrainingRecommendation, OrgLevel, Evidence, PromotionRequirement, CareerProgressionPlan, CareerLevelProgress, TrainingCourse, ScheduledAssessment, AssessmentMethod, UserStatus, Certificate, CareerHistoryEntry, SkillLevel, EvaluationQuestion, AssessmentPlan, AssessmentInstruction } from '../types';
 import { db, auth } from '../firebase';
-import { 
-  collection, 
-  doc, 
-  getDocs, 
-  getDoc, 
-  setDoc, 
-  updateDoc, 
-  deleteDoc, 
+import {
+  collection,
+  doc,
+  getDocs,
+  getDoc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
   query,
   where,
   or,
   orderBy,
   limit,
+  startAfter,
   onSnapshot,
   Unsubscribe,
   serverTimestamp,
-  Timestamp
+  Timestamp,
+  writeBatch,
+  QueryDocumentSnapshot,
+  DocumentData
 } from 'firebase/firestore';
 import { 
   createUserWithEmailAndPassword, 
@@ -136,7 +140,7 @@ export interface FirestoreErrorInfo {
   }
 }
 
-class DataService {
+export class DataService {
   private users: User[] = [];
   private jobs: JobProfile[] = [];
   private skills: Skill[] = [];
@@ -153,9 +157,16 @@ class DataService {
   private assessmentInstructions: AssessmentInstruction[] = [];
   private projects: Project[] = [];
 
+  // A3.2: Per-pair cache for getUserSkillScore(). Keyed by "userId:skillId".
+  // Cleared whenever assessments or evidences snapshots arrive so stale scores
+  // are never served. Avoids rescanning the full arrays on every skill-gap/ITP
+  // call while remaining conservative about staleness.
+  private skillScoreCache = new Map<string, number>();
+
   
   public isInitialized = false;
   private unsubscribers: Unsubscribe[] = [];
+  private _certExpiriesChecked = false;
 
   // True for the brief window of a non-bootstrap sign-up.
   // `createUserWithEmailAndPassword` auto-signs the new user in, which would
@@ -185,7 +196,21 @@ class DataService {
   private usersManagerDocs: User[] = [];
   // Canonical `id` field → real Firestore doc-path id (they diverge for
   // users who re-signed up post-migration). Used to target user writes.
-  private userDocPathById = new Map<string, string>();
+  // A3.3: Seeded from sessionStorage on class construction; entries written
+  // through are also persisted so page refreshes within the same browser
+  // session avoid redundant N+1 Firestore reads during bulk operations.
+  private userDocPathById = new Map<string, string>(
+    (() => {
+      try {
+        const raw = sessionStorage.getItem('userDocPathById');
+        if (!raw) return [];
+        const { ts, entries } = JSON.parse(raw) as { ts: number; entries: [string, string][] };
+        // 30-minute TTL — stale enough that a UID remap would be live by then.
+        if (Date.now() - ts > 30 * 60 * 1000) return [];
+        return entries;
+      } catch { return []; }
+    })()
+  );
 
   // --- Reactive subscription (consumed by hooks/useStoreData) ---
   // Firestore onSnapshot listeners mutate the in-memory arrays above
@@ -250,6 +275,36 @@ class DataService {
     });
   }
 
+  // A5.5: True once the users snapshot has arrived for the current session.
+  // Components use this to show loading skeletons vs. empty state.
+  isDataLoaded = (): boolean => this.usersLoaded;
+
+  // A5.3: Last permission-denied error surfaced while a user is signed in.
+  // Cleared on sign-out/re-initialize so stale banners don't linger.
+  private _permissionError: string | null = null;
+  getPermissionError = (): string | null => this._permissionError;
+  clearPermissionError = (): void => {
+    if (this._permissionError !== null) {
+      this._permissionError = null;
+      this.scheduleNotify();
+    }
+  };
+
+  // A5.4: Retry helper for fire-and-forget writes (e.g. addNotification).
+  // Max 3 attempts with exponential backoff starting at 500 ms.
+  private async withRetry<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
+    let attempt = 0;
+    while (true) {
+      try {
+        return await fn();
+      } catch (err) {
+        attempt++;
+        if (attempt >= maxAttempts) throw err;
+        await new Promise(r => setTimeout(r, 500 * Math.pow(2, attempt - 1)));
+      }
+    }
+  }
+
   private handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
     const errInfo: FirestoreErrorInfo = {
       error: error instanceof Error ? error.message : String(error),
@@ -276,6 +331,13 @@ class DataService {
       console.debug('Firestore listener torn down after sign-out: ', JSON.stringify(errInfo));
     } else {
       console.error('Firestore Error: ', JSON.stringify(errInfo));
+      // A5.3: Surface permission-denied errors to the UI.
+      const isPermission = errInfo.error.toLowerCase().includes('permission') ||
+                           errInfo.error.toLowerCase().includes('insufficient');
+      if (isPermission) {
+        this._permissionError = 'Permission denied. You may not have access to this resource. Please contact your administrator.';
+        this.scheduleNotify();
+      }
     }
     return errInfo;
   }
@@ -292,6 +354,7 @@ class DataService {
     this.usersDirectReportDocs = [];
     this.usersManagerDocs = [];
     this.userDocPathById.clear();
+    try { sessionStorage.removeItem('userDocPathById'); } catch { /* non-fatal */ }
     this.jobs = [];
     this.skills = [];
     this.assessments = [];
@@ -307,12 +370,22 @@ class DataService {
     this.assessmentInstructions = [];
     this.projects = [];
     this.usersLoaded = false;
+    this._permissionError = null;
+    this.skillScoreCache.clear();
     this.scheduleNotify();
   }
 
+  // A5.6: Timeout guard — a hanging listener unsub never stalls sign-out.
   private clearListeners() {
-    this.unsubscribers.forEach(unsub => unsub());
+    const UNSUB_TIMEOUT_MS = 3000;
+    this.unsubscribers.forEach(unsub => {
+      const t = setTimeout(() => {
+        console.warn('store: listener unsub timed out, continuing cleanup');
+      }, UNSUB_TIMEOUT_MS);
+      try { unsub(); } catch { /* ignore */ } finally { clearTimeout(t); }
+    });
     this.unsubscribers = [];
+    this._certExpiriesChecked = false;
   }
 
   // Resolves once the `users` listener has delivered its first snapshot for
@@ -360,6 +433,18 @@ class DataService {
     } as User;
   }
 
+  // A3.3: Persist the in-memory userDocPathById map to sessionStorage so the
+  // next page load within the same browser session avoids N+1 Firestore reads.
+  // Called lazily after rebuildUsers (batch writes, not per-doc).
+  private flushUserDocPathCache(): void {
+    try {
+      sessionStorage.setItem('userDocPathById', JSON.stringify({
+        ts: Date.now(),
+        entries: Array.from(this.userDocPathById.entries())
+      }));
+    } catch { /* sessionStorage quota exceeded — non-fatal */ }
+  }
+
   // Resolve a user's canonical `id` field to its real Firestore doc-path id
   // for writes. Cache hit (any loaded user) → zero extra reads; miss → one
   // indexed lookup by the `id` field; last-resort → the id itself so
@@ -391,11 +476,15 @@ class DataService {
     for (const u of this.usersDirectReportDocs) byId.set(u.id, u);
     for (const u of this.usersScopedDocs) byId.set(u.id, u);
     this.users = Array.from(byId.values());
-    // Fire-and-forget: rebuildUsers() is a synchronous onSnapshot fan-in, so
-    // we can't await here — but the promise must not float unhandled.
-    void this.checkCertificationExpiries().catch(err =>
-      console.error('rebuildUsers: certification expiry check failed', err)
-    );
+    this.flushUserDocPathCache();
+    // A2.5: Run cert-expiry check once per login session only — running on
+    // every roster fan-in caused notification storms and redundant writes.
+    if (!this._certExpiriesChecked) {
+      this._certExpiriesChecked = true;
+      void this.checkCertificationExpiries().catch(err =>
+        console.error('rebuildUsers: certification expiry check failed', err)
+      );
+    }
     this.scheduleNotify();
   }
 
@@ -464,16 +553,28 @@ class DataService {
     // admin/manager session is never broken — Firestore rules remain the
     // real security boundary. Otherwise classify non-privileged viewers.
     let scopeToSelf = false;
+    // A3.7: IDs of direct reports (canonical `id` field) for scoping
+    // assessments/evidences listeners. Populated only for non-privileged
+    // managers with ≤30 direct reports (Firestore `in` limit). Managers with
+    // >30 direct reports fall back to the broad listener; privileged viewers
+    // always use the broad listener. Empty = no subtree scoping.
+    let directReportIds: string[] = [];
+
     if (!isPrivileged && profile) {
       const managerialLevels: OrgLevel[] = ['CEO', 'GM', 'AGM', 'DM', 'SH'];
       const isManagerialLevel = profile.orgLevel ? managerialLevels.includes(profile.orgLevel) : false;
       let hasSubordinates = false;
       try {
+        // A3.7: Fetch up to 31 direct reports so we know both (a) whether any
+        // exist and (b) whether we can scope with a single `in` query (≤30).
         const subSnap = await getDocs(
-          query(collection(db, 'users'), where('managerId', '==', profile.id), limit(1))
+          query(collection(db, 'users'), where('managerId', '==', profile.id), limit(31))
         );
         if (auth.currentUser?.uid !== userId) return;
         hasSubordinates = !subSnap.empty;
+        if (hasSubordinates && subSnap.docs.length <= 30) {
+          directReportIds = subSnap.docs.map(d => d.data().id ?? d.id);
+        }
       } catch (err) {
         // On a scoped-probe failure, keep the safer (broader) behaviour.
         console.error('setupListeners: subordinate probe failed', err);
@@ -667,10 +768,9 @@ class DataService {
     // the broad (capped) collection, mirroring the users fallback above.
     const selfId = profile?.id;
 
-    // Assessments — a pure employee only needs records where they are the
-    // subject (their scores) or the rater (self/peer ratings they gave).
-    // A native `or()` query returns that union deduped in a single listener;
-    // privileged users / managers keep the full collection.
+    // Assessments — pure employee: only own subject/rater records.
+    // A3.7 manager with ≤30 direct reports: scope to subtree (self + reports).
+    // Broader managers / privileged: full collection.
     if (scopeToSelf && selfId) {
       this.unsubscribers.push(
         onSnapshot(
@@ -681,15 +781,34 @@ class DataService {
           ),
           (snapshot) => {
             this.assessments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Assessment));
+            this.skillScoreCache.clear();
             this.scheduleNotify();
-      }, this.handleError('assessments'))
+          }, this.handleError('assessments'))
+      );
+    } else if (!isPrivileged && selfId && directReportIds.length > 0) {
+      // A3.7: Manager with a bounded direct-report set — scope to subtree.
+      // Include selfId so the manager's own assessments are not dropped.
+      const subtreeIds = [...new Set([selfId, ...directReportIds])];
+      this.unsubscribers.push(
+        onSnapshot(
+          query(
+            collection(db, 'assessments'),
+            where('subjectId', 'in', subtreeIds),
+            limit(MAX_LISTENER_DOCS)
+          ),
+          (snapshot) => {
+            this.assessments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Assessment));
+            this.skillScoreCache.clear();
+            this.scheduleNotify();
+          }, this.handleError('assessments'))
       );
     } else {
       this.unsubscribers.push(
         onSnapshot(query(collection(db, 'assessments'), limit(MAX_LISTENER_DOCS)), (snapshot) => {
           this.assessments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Assessment));
+          this.skillScoreCache.clear();
           this.scheduleNotify();
-      }, this.handleError('assessments'))
+        }, this.handleError('assessments'))
       );
     }
 
@@ -701,18 +820,27 @@ class DataService {
       }, this.handleError('activityLogs'))
     );
 
-    // Evidences — pure employees only need their own submissions; managers
-    // and admins keep the full collection (rule-permitted, needed for review).
-    this.unsubscribers.push(
-      onSnapshot(
-        scopeToSelf && selfId
-          ? query(collection(db, 'evidences'), where('userId', '==', selfId), limit(MAX_LISTENER_DOCS))
-          : query(collection(db, 'evidences'), limit(MAX_LISTENER_DOCS)),
-        (snapshot) => {
+    // Evidences — pure employee: own submissions only.
+    // A3.7 manager with ≤30 direct reports: scope to subtree (self + reports).
+    // Broader managers / privileged: full collection.
+    {
+      let evidencesQuery;
+      if (scopeToSelf && selfId) {
+        evidencesQuery = query(collection(db, 'evidences'), where('userId', '==', selfId), limit(MAX_LISTENER_DOCS));
+      } else if (!isPrivileged && selfId && directReportIds.length > 0) {
+        const subtreeIds = [...new Set([selfId, ...directReportIds])];
+        evidencesQuery = query(collection(db, 'evidences'), where('userId', 'in', subtreeIds), limit(MAX_LISTENER_DOCS));
+      } else {
+        evidencesQuery = query(collection(db, 'evidences'), limit(MAX_LISTENER_DOCS));
+      }
+      this.unsubscribers.push(
+        onSnapshot(evidencesQuery, (snapshot) => {
           this.evidences = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Evidence));
+          this.skillScoreCache.clear();
           this.scheduleNotify();
-      }, this.handleError('evidences'))
-    );
+        }, this.handleError('evidences'))
+      );
+    }
 
     // Training Courses
     this.unsubscribers.push(
@@ -826,17 +954,31 @@ class DataService {
       status: 'PENDING',
       submittedAt: new Date().toISOString()
     };
-    await this.persistItem('evidences', newEvidence);
-    
-    // Notify manager
+
+    // A2.1: Batch evidence + manager notification so neither is orphaned on failure.
+    const batch = writeBatch(db);
+    batch.set(doc(db, 'evidences', id), this.preparePayload('evidences', newEvidence));
+
     const user = this.users.find(u => u.id === evidence.userId);
     if (user && user.managerId) {
-      await this.addNotification({
+      const notifId = doc(collection(db, 'notifications')).id;
+      const notif = {
+        id: notifId,
         userId: user.managerId,
         title: 'New Evidence Submitted',
         message: `${user.name} submitted evidence for review.`,
-        type: 'INFO'
-      });
+        type: 'INFO',
+        createdAt: new Date().toISOString(),
+        isRead: false
+      };
+      batch.set(doc(db, 'notifications', notifId), notif);
+    }
+
+    try {
+      await batch.commit();
+    } catch (e) {
+      this.handleFirestoreError(e, OperationType.WRITE, `evidences/${id}`);
+      throw e;
     }
     return newEvidence;
   }
@@ -862,7 +1004,8 @@ class DataService {
         userId: user.managerId,
         title: 'Evidence Re-Submitted for Review',
         message: `${user.name} edited their evidence${wasActedOn ? ` (previously ${evidence.status.toLowerCase()})` : ''} and it requires re-approval.`,
-        type: 'WARNING'
+        type: 'WARNING',
+        actionLink: 'manager-approvals'
       });
     }
   }
@@ -878,7 +1021,8 @@ class DataService {
         userId: user.managerId,
         title: 'Evidence Withdrawn',
         message: `${user.name} deleted their evidence that was previously ${evidence.status.toLowerCase()}. No further action is needed.`,
-        type: 'INFO'
+        type: 'INFO',
+        actionLink: 'manager-approvals'
       });
     }
   }
@@ -901,7 +1045,8 @@ class DataService {
         userId: evidence.userId,
         title: `Evidence ${status}`,
         message: `Your evidence submission was ${status.toLowerCase()}.${comment ? ` Reviewer note: ${comment}` : ''}`,
-        type: status === 'APPROVED' ? 'SUCCESS' : 'ERROR'
+        type: status === 'APPROVED' ? 'SUCCESS' : 'ERROR',
+        actionLink: 'evidence-portal'
       });
     }
   }
@@ -930,7 +1075,8 @@ class DataService {
       userId: nomination.raterId,
       title: 'New Assessment Request',
       message: `You have been requested to assess ${this.getUserById(nomination.subjectId)?.name}.`,
-      type: 'INFO'
+      type: 'INFO',
+      actionLink: 'emp-assessment'
     });
 
     return newNomination;
@@ -1221,8 +1367,33 @@ class DataService {
     return payload;
   }
 
+  private validateEnums(collectionName: string, item: any) {
+    const VALID_ROLES: Role[] = [Role.ADMIN, Role.EMPLOYEE, Role.CEO];
+    const VALID_ORG_LEVELS: OrgLevel[] = ['CEO', 'GM', 'AGM', 'DM', 'SH', 'SP', 'JP', 'FR'];
+    const VALID_ASSESSMENT_METHODS: AssessmentMethod[] = ['WRITTEN_EXAM', 'PRACTICAL_DEMO', 'OJT_OBSERVATION', 'INTERVIEW', 'WORK_RECORD_REVIEW', 'THREE_SIXTY_EVALUATION'];
+    const VALID_ASSESSMENT_TYPES = ['SELF', 'PEER', 'MANAGER', 'UPWARD', 'WRITTEN_EXAM', 'PRACTICAL_DEMO', 'INTERVIEW', 'WORK_RECORD_REVIEW'];
+
+    if (collectionName === 'users') {
+      if (item.role !== undefined && !VALID_ROLES.includes(item.role)) {
+        throw new Error(`Invalid role value: "${item.role}"`);
+      }
+      if (item.orgLevel !== undefined && !VALID_ORG_LEVELS.includes(item.orgLevel)) {
+        throw new Error(`Invalid orgLevel value: "${item.orgLevel}"`);
+      }
+    }
+    if (collectionName === 'assessments') {
+      if (item.type !== undefined && !VALID_ASSESSMENT_TYPES.includes(item.type)) {
+        throw new Error(`Invalid assessment type value: "${item.type}"`);
+      }
+      if (item.method !== undefined && !VALID_ASSESSMENT_METHODS.includes(item.method)) {
+        throw new Error(`Invalid assessment method value: "${item.method}"`);
+      }
+    }
+  }
+
   private async persistItem(collectionName: string, item: any) {
     try {
+      this.validateEnums(collectionName, item);
       const payload = this.preparePayload(collectionName, item);
       await setDoc(doc(db, collectionName, item.id), payload);
     } catch (e) {
@@ -1396,7 +1567,8 @@ class DataService {
             userId: self.id,
             title: 'Certification Renewal Alert',
             message,
-            type: diffDays <= 0 ? 'ERROR' : 'WARNING'
+            type: diffDays <= 0 ? 'ERROR' : 'WARNING',
+            actionLink: 'evidence-portal'
           });
 
           if (self.managerId) {
@@ -1404,7 +1576,8 @@ class DataService {
               userId: self.managerId,
               title: `Compliance Alert: ${self.name}`,
               message: `Subordinate ${self.name} has a certification requirement: ${message}`,
-              type: 'INFO'
+              type: 'INFO',
+              actionLink: 'manager-approvals'
             });
           }
         }
@@ -1755,27 +1928,31 @@ class DataService {
     return this.users.find(u => u.email.toLowerCase() === email.toLowerCase());
   }
 
-  getUserById(id: string) { return this.users.find(u => u.id === id); }
-  getJobProfile(id: string) { return this.jobs.find(j => j.id === id); }
-  getAllSkills() { return this.skills; }
-  getAllJobs() { return this.jobs; }
-  getAllUsers() { return this.users; }
-  getPublicUsers() { 
-    return this.users.filter(u => u.role !== Role.CEO && u.orgLevel !== 'CEO'); 
+  getUserById(id: string) { return this.users.find(u => u.id === id && !u.isArchived); }
+  getJobProfile(id: string) { return this.jobs.find(j => j.id === id && !j.isArchived); }
+  // A2.4: Archived items are excluded from active queries; pass includeArchived for admin audit views.
+  getAllSkills(includeArchived = false) { return includeArchived ? this.skills : this.skills.filter(s => !s.isArchived); }
+  getAllJobs(includeArchived = false) { return includeArchived ? this.jobs : this.jobs.filter(j => !j.isArchived); }
+  getAllUsers(includeArchived = false) { return includeArchived ? this.users : this.users.filter(u => !u.isArchived); }
+  getPublicUsers() {
+    return this.users.filter(u => !u.isArchived && u.role !== Role.CEO && u.orgLevel !== 'CEO');
   }
   getAllDepartments() { return this.departments; }
-  getSkill(id: string) { return this.skills.find(s => s.id === id); }
+  getSkill(id: string) { return this.skills.find(s => s.id === id && !s.isArchived); }
   getSystemLogs() { return this.logs; }
   getAllProjects() { return this.projects; }
   getProjectById(id: string) { return this.projects.find(p => p.id === id); }
 
 
-  getGeneralDeptId(deptId: string | undefined): string | undefined {
+  getGeneralDeptId(deptId: string | undefined, _visited: Set<string> = new Set()): string | undefined {
     if (!deptId) return undefined;
+    // A2.3: Guard against circular parentId references causing infinite recursion.
+    if (_visited.has(deptId)) return undefined;
+    _visited.add(deptId);
     const dept = this.departments.find(d => d.id === deptId);
     if (!dept) return undefined;
     if (dept.type === 'GENERAL' || !dept.parentId) return dept.id;
-    return this.getGeneralDeptId(dept.parentId);
+    return this.getGeneralDeptId(dept.parentId, _visited);
   }
 
   getSubordinates(managerId: string) {
@@ -1814,8 +1991,18 @@ class DataService {
   }
 
   getUserSkillScore(userId: string, skillId: string, includeArchived: boolean = false): number {
+    // A3.2: Cache by userId:skillId (non-archived path only; archived is a rare
+    // historical query so we don't pollute the hot cache with it).
+    if (!includeArchived) {
+      const cacheKey = `${userId}:${skillId}`;
+      const cached = this.skillScoreCache.get(cacheKey);
+      if (cached !== undefined) return cached;
+    }
+
     const skill = this.getSkill(skillId);
     if (!skill) return 0;
+
+    let result: number;
 
     // Behavioral (360) Logic
     if (this.getSkillPrimaryMethod(skillId) === 'OJT_OBSERVATION') {
@@ -1823,48 +2010,48 @@ class DataService {
       if (!includeArchived) {
         userAssessments = userAssessments.filter(a => !a.isArchived);
       }
-      if (userAssessments.length === 0) return 0;
-      
-      const selfA = userAssessments.filter(a => a.type === 'SELF');
-      const peerA = userAssessments.filter(a => a.type === 'PEER');
-      const mgrA = userAssessments.filter(a => a.type === 'MANAGER');
+      if (userAssessments.length === 0) { result = 0; }
+      else {
+        const selfA = userAssessments.filter(a => a.type === 'SELF');
+        const peerA = userAssessments.filter(a => a.type === 'PEER');
+        const mgrA = userAssessments.filter(a => a.type === 'MANAGER');
 
-      const avgSelf = selfA.length > 0 ? selfA.reduce((s, a) => s + a.score, 0) / selfA.length : null;
-      const avgPeer = peerA.length > 0 ? peerA.reduce((s, a) => s + a.score, 0) / peerA.length : null;
-      const avgMgr = mgrA.length > 0 ? mgrA.reduce((s, a) => s + a.score, 0) / mgrA.length : null;
+        const avgSelf = selfA.length > 0 ? selfA.reduce((s, a) => s + a.score, 0) / selfA.length : null;
+        const avgPeer = peerA.length > 0 ? peerA.reduce((s, a) => s + a.score, 0) / peerA.length : null;
+        const avgMgr = mgrA.length > 0 ? mgrA.reduce((s, a) => s + a.score, 0) / mgrA.length : null;
 
-      let totalWeight = 0;
-      let weightedScore = 0;
+        let totalWeight = 0;
+        let weightedScore = 0;
 
-      if (avgSelf !== null) { weightedScore += avgSelf * 0.10; totalWeight += 0.10; } // 10% weight
-      if (avgPeer !== null) { weightedScore += avgPeer * 0.30; totalWeight += 0.30; } // 30% weight
-      if (avgMgr  !== null) { weightedScore += avgMgr  * 0.60; totalWeight += 0.60; } // 60% weight
+        if (avgSelf !== null) { weightedScore += avgSelf * 0.10; totalWeight += 0.10; }
+        if (avgPeer !== null) { weightedScore += avgPeer * 0.30; totalWeight += 0.30; }
+        if (avgMgr  !== null) { weightedScore += avgMgr  * 0.60; totalWeight += 0.60; }
 
-      if (totalWeight === 0) return 0;
-      
-      // Normalize to 100% based on available weights
-      return Math.round(weightedScore / totalWeight);
-    } 
-    // Evidence, Online Assessment, or Interview Logic
-    else {
-      // Check for direct Assessment results first (Online/Interview)
+        result = totalWeight === 0 ? 0 : Math.round(weightedScore / totalWeight);
+      }
+    } else {
+      // Evidence, Online Assessment, or Interview Logic
       let directAssessments = this.assessments.filter(a => a.subjectId === userId && a.skillId === skillId && (a.type === 'WRITTEN_EXAM' || a.type === 'INTERVIEW' || a.type === 'PRACTICAL_DEMO'));
       if (!includeArchived) {
         directAssessments = directAssessments.filter(a => !a.isArchived);
       }
-      
+
       if (directAssessments.length > 0) {
-        // Return the latest assessment score
-        return directAssessments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0].score;
+        result = directAssessments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0].score;
+      } else {
+        const relevantEvidence = this.evidences.filter(e => e.userId === userId && e.skillId === skillId && e.status === 'APPROVED' && e.assignedScore);
+        if (relevantEvidence.length === 0) { result = 0; }
+        else {
+          const maxScore = Math.max(...relevantEvidence.map(e => e.assignedScore || 0));
+          result = Math.min(Math.max(Math.round(maxScore), 1), 5);
+        }
       }
-
-      // Fallback: Find the highest assignedScore from approved evidence submissions for this skill.
-      const relevantEvidence = this.evidences.filter(e => e.userId === userId && e.skillId === skillId && e.status === 'APPROVED' && e.assignedScore);
-      if (relevantEvidence.length === 0) return 0;
-
-      const maxScore = Math.max(...relevantEvidence.map(e => e.assignedScore || 0));
-      return Math.min(Math.max(Math.round(maxScore), 1), 5); // Ensure it's between 1 and 5
     }
+
+    if (!includeArchived) {
+      this.skillScoreCache.set(`${userId}:${skillId}`, result);
+    }
+    return result;
   }
 
   getAssessments(filters: { raterId?: string, subjectId?: string, cycleId?: string, skillId?: string }) {
@@ -2157,6 +2344,8 @@ class DataService {
     }
   }
 
+  // A5.4: Retried up to 3× with exponential backoff so transient Firestore
+  // hiccups don't silently drop notification writes.
   async addNotification(notification: Omit<Notification, 'id' | 'createdAt' | 'isRead'>) {
     const id = doc(collection(db, 'notifications')).id;
     const newNotification: Notification = {
@@ -2165,7 +2354,7 @@ class DataService {
       createdAt: new Date().toISOString(),
       isRead: false
     };
-    await this.persistItem('notifications', newNotification);
+    await this.withRetry(() => this.persistItem('notifications', newNotification));
   }
 
   // --- ACTIONS (Async Write-Behind) ---
@@ -2195,7 +2384,8 @@ class DataService {
       userId: assessment.subjectId,
       title: 'New Evaluation Result',
       message: `A new ${assessment.method} evaluation has been registered for your profile.`,
-      type: 'INFO'
+      type: 'INFO',
+      actionLink: 'emp-dashboard'
     });
 
     const subject = this.users.find(u => u.id === assessment.subjectId)?.name || 'Employee';
@@ -2316,26 +2506,56 @@ class DataService {
 
   async removeUser(id: string) {
     const user = this.users.find(u => u.id === id);
-    if (user) {
-        await this.deleteItem('users', id);
-        await this.logActivity('Removed Employee', user.name);
+    if (!user) return;
+
+    // A2.2: Soft-delete the user and reassign all direct reports in a single
+    // batch so partial failures cannot leave orphaned subordinates.
+    const batch = writeBatch(db);
+    const userDocId = await this.resolveUserDocPath(id);
+    batch.update(doc(db, 'users', userDocId), { isArchived: true });
+
+    const subordinates = this.users.filter(u => u.managerId === id && !u.isArchived);
+    for (const sub of subordinates) {
+      const subDocId = await this.resolveUserDocPath(sub.id);
+      batch.update(doc(db, 'users', subDocId), { managerId: user.managerId ?? null });
     }
+
+    try {
+      await batch.commit();
+    } catch (e) {
+      this.handleFirestoreError(e, OperationType.DELETE, `users/${id}`);
+      throw e;
+    }
+    await this.logActivity('Removed Employee', user.name);
   }
 
   async removeJobProfile(id: string) {
     const job = this.jobs.find(j => j.id === id);
     if (job) {
-        await this.deleteItem('jobProfiles', id);
-        await this.logActivity('Removed Job Profile', job.title);
+      // A2.4: Soft-delete — preserve historical references in closed assessments.
+      await this.updateItem('jobProfiles', { ...job, isArchived: true });
+      await this.logActivity('Removed Job Profile', job.title);
     }
   }
 
   async removeSkill(id: string) {
     const skill = this.skills.find(s => s.id === id);
-    if (skill) {
-        await this.deleteItem('skills', id);
-        await this.logActivity('Removed Skill', skill.name);
+    if (!skill) return;
+    // A2.4: Soft-delete — preserve historical assessment records.
+    await this.updateItem('skills', { ...skill, isArchived: true });
+
+    // A2.7: Remove this skill from all assessment plans that reference it.
+    const affectedPlans = this.assessmentPlans.filter(p => p.skillIds.includes(id));
+    for (const plan of affectedPlans) {
+      const updatedSkillIds = plan.skillIds.filter(sid => sid !== id);
+      if (updatedSkillIds.length === 0) {
+        await this.deleteItem('assessmentPlans', plan.id);
+      } else {
+        await this.updateItem('assessmentPlans', { ...plan, skillIds: updatedSkillIds });
+      }
     }
+
+    await this.logActivity('Removed Skill', skill.name);
   }
 
   async removeDepartment(id: string) {
@@ -2393,9 +2613,37 @@ class DataService {
         source: 'EVIDENCE' as const
       }));
 
-    return [...pastAssessments, ...pastEvidences].sort((a, b) => 
+    return [...pastAssessments, ...pastEvidences].sort((a, b) =>
       new Date(b.date).getTime() - new Date(a.date).getTime()
     );
+  }
+
+  // A3.1: Cursor-based paginator for admin collection reads. Returns the
+  // current page of docs plus a cursor for the next page. Use this instead of
+  // the real-time listeners when you need to page through large admin
+  // collections (e.g. all users, all assessments) without holding 10K docs in
+  // memory. The live listeners remain authoritative for the active session;
+  // this is a supplementary read path for bulk admin views.
+  //
+  // Usage:
+  //   const page1 = await dataService.getPaginatedCollection('users', 50);
+  //   const page2 = await dataService.getPaginatedCollection('users', 50, page1.cursor);
+  async getPaginatedCollection<T>(
+    collectionName: string,
+    pageSize: number = 50,
+    cursor?: QueryDocumentSnapshot<DocumentData> | null,
+    orderField: string = 'id'
+  ): Promise<{ items: T[]; cursor: QueryDocumentSnapshot<DocumentData> | null; hasMore: boolean }> {
+    const constraints = cursor
+      ? [orderBy(orderField), startAfter(cursor), limit(pageSize + 1)]
+      : [orderBy(orderField), limit(pageSize + 1)];
+
+    const snap = await getDocs(query(collection(db, collectionName), ...constraints));
+    const hasMore = snap.docs.length > pageSize;
+    const docs = hasMore ? snap.docs.slice(0, pageSize) : snap.docs;
+    const items = docs.map(d => ({ id: d.id, ...d.data() } as T));
+    const nextCursor = docs.length > 0 ? docs[docs.length - 1] : null;
+    return { items, cursor: nextCursor, hasMore };
   }
 }
 

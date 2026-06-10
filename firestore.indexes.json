@@ -1,0 +1,81 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "assessments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "subjectId", "order": "ASCENDING" },
+        { "fieldPath": "skillId",   "order": "ASCENDING" },
+        { "fieldPath": "date",      "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "assessments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "subjectId", "order": "ASCENDING" },
+        { "fieldPath": "type",      "order": "ASCENDING" },
+        { "fieldPath": "date",      "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "assessments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "raterId",   "order": "ASCENDING" },
+        { "fieldPath": "skillId",   "order": "ASCENDING" },
+        { "fieldPath": "date",      "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "evidences",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId",      "order": "ASCENDING" },
+        { "fieldPath": "status",      "order": "ASCENDING" },
+        { "fieldPath": "submittedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "evidences",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId",  "order": "ASCENDING" },
+        { "fieldPath": "skillId", "order": "ASCENDING" },
+        { "fieldPath": "status",  "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "managerId",    "order": "ASCENDING" },
+        { "fieldPath": "departmentId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "departmentId", "order": "ASCENDING" },
+        { "fieldPath": "orgLevel",     "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "nominations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "subjectId", "order": "ASCENDING" },
+        { "fieldPath": "raterId",   "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "activityLogs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

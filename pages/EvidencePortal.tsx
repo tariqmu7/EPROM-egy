@@ -119,7 +119,6 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
     } catch (err) {
       console.error('Failed to submit evidence:', err);
       setErrorMessage('Could not submit evidence. Please check your file and try again.');
-      setTimeout(() => setErrorMessage(''), 5000);
     } finally {
       setIsSubmitting(false);
     }
@@ -266,9 +265,12 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
       )}
 
       {errorMessage && (
-        <div className="bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 rounded-sm flex items-center gap-3" role="alert">
-          <XCircle size={20} className="text-rose-500" />
-          <p className="font-medium">{errorMessage}</p>
+        <div className="bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 rounded-sm flex items-start justify-between gap-3" role="alert">
+          <div className="flex items-center gap-3">
+            <XCircle size={20} className="text-rose-500 shrink-0" />
+            <p className="font-medium">{errorMessage}</p>
+          </div>
+          <button onClick={() => setErrorMessage('')} className="shrink-0 text-rose-600 hover:text-rose-900" aria-label="Dismiss error">✕</button>
         </div>
       )}
 

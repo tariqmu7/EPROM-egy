@@ -102,14 +102,13 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ user, onNavi
     fetchNotifications();
   };
 
-  const handleNotificationClick = async (notification: Notification) => {
-    if (!notification.isRead) {
-      await dataService.markNotificationAsRead(notification.id);
-      fetchNotifications();
-    }
+  const handleNotificationClick = (notification: Notification) => {
     if (notification.actionLink) {
       onNavigate(notification.actionLink);
       setIsOpen(false);
+    }
+    if (!notification.isRead && !notification.id.startsWith('dyn-')) {
+      dataService.markNotificationAsRead(notification.id).then(() => fetchNotifications());
     }
   };
 

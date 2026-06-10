@@ -1,16 +1,18 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import { useStoreData } from './hooks/useStoreData';
 import { Layout } from './components/Layout';
-import { EmployeeDashboard } from './pages/EmployeeDashboard';
-import { OnlineAssessments } from './pages/OnlineAssessments';
-import { ManagerialInterviews } from './pages/ManagerialInterviews';
-import { ManagerDashboard } from './pages/ManagerDashboard';
-import { AdminPanel } from './pages/AdminPanel';
-import { CEOPanel } from './pages/CEOPanel';
-import { EvidencePortal } from './pages/EvidencePortal';
-import { BehavioralAssessment } from './pages/BehavioralAssessment';
-import { EvaluationsHub } from './pages/EvaluationsHub';
+
+// A3.5: Code-split heavy page bundles — each loads only when first visited.
+const EmployeeDashboard = lazy(() => import('./pages/EmployeeDashboard').then(m => ({ default: m.EmployeeDashboard })));
+const ManagerDashboard = lazy(() => import('./pages/ManagerDashboard').then(m => ({ default: m.ManagerDashboard })));
+const AdminPanel = lazy(() => import('./pages/AdminPanel').then(m => ({ default: m.AdminPanel })));
+const CEOPanel = lazy(() => import('./pages/CEOPanel').then(m => ({ default: m.CEOPanel })));
+const EvaluationsHub = lazy(() => import('./pages/EvaluationsHub').then(m => ({ default: m.EvaluationsHub })));
 import { Logo } from './components/Logo';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { dataService, CONFIG, isBootstrapAdminEmail } from './services/store';
+// Note: OnlineAssessments, ManagerialInterviews, EvidencePortal, BehavioralAssessment
+// are rendered via EvaluationsHub (lazy-loaded above) — no direct import needed.
 import { auth } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { User, Role } from './types';
@@ -30,9 +32,14 @@ const App: React.FC = () => {
   const [pendingApproval, setPendingApproval] = useState(false);
   
   const [activeTab, setActiveTab] = useState('emp-dashboard');
+  const [tabKey, setTabKey] = useState(0);
   const [error, setError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  // A5.3: Subscribe to store so permission errors surface in the UI.
+  useStoreData();
+  const permissionError = dataService.getPermissionError();
 
   // Initialize Data Service and listen for auth state changes
   useEffect(() => {
@@ -148,6 +155,8 @@ const App: React.FC = () => {
 
   const handleSwitchTab = useCallback((tab: string) => {
     setActiveTab(tab);
+    setTabKey(k => k + 1);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
   if (isLoading) {
@@ -457,7 +466,7 @@ const App: React.FC = () => {
       );
     }
 
-    if (activeTab === 'manager-dashboard' && !dataService.isManager(user)) {
+    if ((activeTab === 'manager-dashboard' || activeTab === 'manager-approvals') && !dataService.isManager(user)) {
       return (
         <div className="flex flex-col items-center justify-center h-[60vh] p-12 text-center animate-fade-in">
           <div className="bg-slate-50 text-slate-500 p-6 rounded-none mb-6">
@@ -511,6 +520,7 @@ const App: React.FC = () => {
                 </div>
             );
         case 'manager-dashboard': return <ManagerDashboard user={user} />;
+        case 'manager-approvals': return <ManagerDashboard user={user} initialView="APPROVALS" />;
         case 'evaluations': return <EvaluationsHub currentUser={user} />;
         // Legacy deep-link cases — open hub with correct sub-tab pre-selected
         case 'online-assessments': return <EvaluationsHub currentUser={user} initialTab="online" />;
@@ -531,13 +541,29 @@ const App: React.FC = () => {
   };
 
   return (
-    <Layout 
-      user={user} 
-      onLogout={handleLogout} 
-      activeTab={activeTab} 
+    <Layout
+      user={user}
+      onLogout={handleLogout}
+      activeTab={activeTab}
       onSwitchTab={handleSwitchTab}
     >
-      {renderContent()}
+      {permissionError && (
+        <div className="bg-rose-50 border-b border-rose-200 text-rose-800 px-4 py-3 flex items-start justify-between gap-3" role="alert">
+          <span><strong className="font-bold">Permission Denied: </strong>{permissionError}</span>
+          <button onClick={() => dataService.clearPermissionError()} className="shrink-0 text-rose-600 hover:text-rose-900" aria-label="Dismiss">✕</button>
+        </div>
+      )}
+      <ErrorBoundary>
+        <Suspense fallback={
+          <div className="flex items-center justify-center h-[60vh]">
+            <Loader2 className="animate-spin text-slate-400" size={36} />
+          </div>
+        }>
+          <div key={tabKey}>
+            {renderContent()}
+          </div>
+        </Suspense>
+      </ErrorBoundary>
     </Layout>
   );
 };

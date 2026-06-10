@@ -44,6 +44,11 @@ service cloud.firestore {
       return request.resource.data.keys().hasAll(fields);
     }
 
+    function isValidOrgLevel() {
+      return !('orgLevel' in request.resource.data) ||
+        request.resource.data.orgLevel in ['CEO', 'GM', 'AGM', 'DM', 'SH', 'SP', 'JP', 'FR'];
+    }
+
     // ===============================================================
     // Rules
     // ===============================================================
@@ -51,10 +56,10 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isAuthenticated();
       // Allow users to create their own profile, or admins to create any profile
-      allow create: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow create: if isAuthenticated() && (isOwner(userId) || isAdmin()) && isValidOrgLevel();
       // Allow users to update their own profile (but not role), admins to update any,
       // or managers to update their subordinates (but not role)
-      allow update: if isAuthenticated() && (
+      allow update: if isAuthenticated() && isValidOrgLevel() && (
         (isOwner(userId) && request.resource.data.role == resource.data.role) ||
         isAdmin() ||
         ((resource.data.managerId == request.auth.uid || isManagerLevel()) && request.resource.data.role == resource.data.role)
@@ -110,8 +115,8 @@ service cloud.firestore {
     match /notifications/{notificationId} {
       // Users can only read their own notifications
       allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      // System/Admins can create notifications for anyone
-      allow create: if isAuthenticated();
+      // Only admins or the notification's target user may create a notification
+      allow create: if isAdmin() || (isAuthenticated() && request.resource.data.userId == request.auth.uid);
       // Users can update their own notifications (e.g., mark as read)
       allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
       allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;

@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(node -e \"import\\('docx'\\).then\\(async m => { const { Document, Packer, Paragraph, TextRun, Footer, PageNumber } = m; const doc = new Document\\({ sections: [{ footers: { default: new Footer\\({ children: [new Paragraph\\({ children: [new TextRun\\({ children: [PageNumber.CURRENT] }\\)] }\\)] }\\) }, children: [new Paragraph\\({ children: [new TextRun\\('test'\\)] }\\)] }] }\\); const buf = await Packer.toBuffer\\(doc\\); require\\('fs'\\).writeFileSync\\('test.docx', buf\\); console.log\\('ok'\\) }\\)\")"
+    ]
+  }
+}

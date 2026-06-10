@@ -1,13 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import {
   Plus, Edit2, Trash2, X, Save, ClipboardList, ShieldAlert, CheckCircle,
-  Calendar, Layers, Users, Search, AlertTriangle
+  Calendar, Layers, Users, Search, AlertTriangle, GripVertical
 } from 'lucide-react';
 import { dataService } from '../services/store';
 import { useStoreData } from '../hooks/useStoreData';
 import { SearchableSelect } from '../components/SearchableSelect';
 import {
   AssessmentPlan, AssessmentMethod, AssessmentFrequency, AssessmentAudience,
+  EvaluationQuestion,
   ASSESSMENT_FREQUENCY_LABELS, ASSESSMENT_AUDIENCE_LABELS,
   ORG_HIERARCHY_ORDER, ORG_LEVEL_LABELS
 } from '../types';
@@ -18,7 +19,8 @@ const METHOD_OPTIONS: { value: AssessmentMethod; label: string }[] = [
   { value: 'PRACTICAL_DEMO', label: 'Practical Demonstration / Simulation' },
   { value: 'INTERVIEW', label: 'Interview & Technical Discussion' },
   { value: 'WORK_RECORD_REVIEW', label: 'Work Record / Case Study Review' },
-  { value: 'THREE_SIXTY_EVALUATION', label: '360° Multi-Rater Evaluation' }
+  { value: 'THREE_SIXTY_EVALUATION', label: '360° Multi-Rater Evaluation' },
+  { value: 'ANNUAL_APPRAISAL', label: 'Annual Appraisal (Weighted Checklist)' }
 ];
 
 const FREQUENCY_OPTIONS = (Object.keys(ASSESSMENT_FREQUENCY_LABELS) as AssessmentFrequency[])
@@ -43,7 +45,15 @@ const emptyDraft = (): PlanDraft => ({
   audience: 'ALL',
   audienceOrgLevels: [],
   audienceDepartmentIds: [],
+  annualAppraisalQuestions: [],
   status: 'ACTIVE'
+});
+
+const newAppraisalQuestion = (): EvaluationQuestion => ({
+  id: `q_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+  title: '',
+  text: '',
+  weight: 10
 });
 
 // --- Multi-select checkbox list with search ---
@@ -125,7 +135,8 @@ export const AssessmentManagement: React.FC = () => {
       ...emptyDraft(),
       ...rest,
       audienceOrgLevels: rest.audienceOrgLevels || [],
-      audienceDepartmentIds: rest.audienceDepartmentIds || []
+      audienceDepartmentIds: rest.audienceDepartmentIds || [],
+      annualAppraisalQuestions: rest.annualAppraisalQuestions || []
     });
     setEditingId(id);
     setFormError('');
@@ -144,7 +155,12 @@ export const AssessmentManagement: React.FC = () => {
 
   const handleSave = async () => {
     if (!draft.name.trim()) { setFormError('Plan name is required.'); return; }
-    if (draft.skillIds.length === 0) { setFormError('Select at least one skill for this plan.'); return; }
+    if (draft.method !== 'ANNUAL_APPRAISAL' && draft.skillIds.length === 0) {
+      setFormError('Select at least one skill for this plan.'); return;
+    }
+    if (draft.method === 'ANNUAL_APPRAISAL' && (draft.annualAppraisalQuestions || []).length === 0) {
+      setFormError('Add at least one question to the appraisal checklist.'); return;
+    }
     if (draft.audience === 'ORG_LEVELS' && (draft.audienceOrgLevels || []).length === 0) {
       setFormError('Select at least one org level for the audience.'); return;
     }
@@ -156,10 +172,13 @@ export const AssessmentManagement: React.FC = () => {
     const payload: PlanDraft = {
       ...draft,
       name: draft.name.trim(),
+      // Annual appraisal plans use a synthetic skill ID; regular plans need skillIds
+      skillIds: draft.method === 'ANNUAL_APPRAISAL' ? ['annual-appraisal'] : draft.skillIds,
       fixedMonth: draft.frequency === 'ANNUAL_FIXED_DATE' ? draft.fixedMonth || 1 : undefined,
       fixedDay: draft.frequency === 'ANNUAL_FIXED_DATE' ? draft.fixedDay || 1 : undefined,
       audienceOrgLevels: draft.audience === 'ORG_LEVELS' ? draft.audienceOrgLevels : [],
-      audienceDepartmentIds: draft.audience === 'DEPARTMENTS' ? draft.audienceDepartmentIds : []
+      audienceDepartmentIds: draft.audience === 'DEPARTMENTS' ? draft.audienceDepartmentIds : [],
+      annualAppraisalQuestions: draft.method === 'ANNUAL_APPRAISAL' ? draft.annualAppraisalQuestions : undefined
     };
 
     setIsProcessing(true);
@@ -341,18 +360,120 @@ export const AssessmentManagement: React.FC = () => {
             )}
           </div>
 
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-2">
-              <Layers size={14} /> Skills Covered by This Plan
-              <span className="text-slate-400 font-medium normal-case">({draft.skillIds.length} selected)</span>
-            </label>
-            <MultiCheckList
-              options={skills.map(s => ({ value: s.id, label: s.name, sub: s.category }))}
-              selected={draft.skillIds}
-              onToggle={v => toggleInArray('skillIds', v)}
-              emptyText="No skills defined yet"
-            />
-          </div>
+          {draft.method === 'ANNUAL_APPRAISAL' ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                  <ClipboardList size={14} /> Appraisal Questions
+                  <span className="text-slate-400 font-medium normal-case">({(draft.annualAppraisalQuestions || []).length} questions)</span>
+                </label>
+                <div className="flex items-center gap-3">
+                  {(() => {
+                    const qs = draft.annualAppraisalQuestions || [];
+                    const total = qs.reduce((s, q) => s + (q.weight ?? 0), 0);
+                    return (
+                      <span className={`text-xs font-bold px-2 py-1 border rounded-none ${
+                        total === 100 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'
+                      }`}>
+                        Total weight: {total}% {total !== 100 && '(should be 100%)'}
+                      </span>
+                    );
+                  })()}
+                  <button
+                    type="button"
+                    onClick={() => setDraft(prev => ({
+                      ...prev,
+                      annualAppraisalQuestions: [...(prev.annualAppraisalQuestions || []), newAppraisalQuestion()]
+                    }))}
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-blue-600 text-white border border-blue-700 hover:bg-blue-700 rounded-none"
+                  >
+                    <Plus size={12} /> Add Question
+                  </button>
+                </div>
+              </div>
+
+              {(draft.annualAppraisalQuestions || []).length === 0 ? (
+                <div className="border border-dashed border-slate-300 p-8 text-center text-sm text-slate-400">
+                  No questions yet. Click "Add Question" to begin.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {(draft.annualAppraisalQuestions || []).map((q, idx) => (
+                    <div key={q.id} className="border border-slate-200 bg-white p-4 rounded-none">
+                      <div className="flex items-start gap-3">
+                        <GripVertical size={16} className="text-slate-300 mt-2 shrink-0" />
+                        <div className="flex-1 space-y-2">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                            <input
+                              value={q.title || ''}
+                              onChange={e => setDraft(prev => ({
+                                ...prev,
+                                annualAppraisalQuestions: (prev.annualAppraisalQuestions || []).map((x, i) =>
+                                  i === idx ? { ...x, title: e.target.value } : x
+                                )
+                              }))}
+                              placeholder={`Question ${idx + 1} title`}
+                              className="px-3 py-1.5 text-sm bg-slate-50 border border-slate-300 rounded-none focus:outline-none focus:border-slate-900 font-medium"
+                            />
+                            <input
+                              value={q.text}
+                              onChange={e => setDraft(prev => ({
+                                ...prev,
+                                annualAppraisalQuestions: (prev.annualAppraisalQuestions || []).map((x, i) =>
+                                  i === idx ? { ...x, text: e.target.value } : x
+                                )
+                              }))}
+                              placeholder="Full question text (shown to evaluator)"
+                              className="md:col-span-1 px-3 py-1.5 text-sm bg-slate-50 border border-slate-300 rounded-none focus:outline-none focus:border-slate-900"
+                            />
+                            <div className="flex items-center gap-2">
+                              <label className="text-xs font-bold text-slate-500 uppercase tracking-wide whitespace-nowrap">Weight %</label>
+                              <input
+                                type="number"
+                                min={0}
+                                max={100}
+                                value={q.weight ?? 10}
+                                onChange={e => setDraft(prev => ({
+                                  ...prev,
+                                  annualAppraisalQuestions: (prev.annualAppraisalQuestions || []).map((x, i) =>
+                                    i === idx ? { ...x, weight: Math.min(100, Math.max(0, Number(e.target.value) || 0)) } : x
+                                  )
+                                }))}
+                                className="w-20 px-3 py-1.5 text-sm bg-slate-50 border border-slate-300 rounded-none focus:outline-none focus:border-slate-900 font-bold text-blue-700"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setDraft(prev => ({
+                            ...prev,
+                            annualAppraisalQuestions: (prev.annualAppraisalQuestions || []).filter((_, i) => i !== idx)
+                          }))}
+                          className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-none border border-transparent hover:border-red-200"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-2">
+                <Layers size={14} /> Skills Covered by This Plan
+                <span className="text-slate-400 font-medium normal-case">({draft.skillIds.length} selected)</span>
+              </label>
+              <MultiCheckList
+                options={skills.map(s => ({ value: s.id, label: s.name, sub: s.category }))}
+                selected={draft.skillIds}
+                onToggle={v => toggleInArray('skillIds', v)}
+                emptyText="No skills defined yet"
+              />
+            </div>
+          )}
         </div>
 
         <div className="flex justify-end gap-3">

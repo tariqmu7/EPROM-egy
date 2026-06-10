@@ -25,6 +25,7 @@ const emptyDraft = (): InstructionDraft => ({
   evaluationQuestions: [],
   interviewQuestions: [],
   threeSixtyQuestions: [],
+  annualAppraisalQuestions: [],
   status: 'ACTIVE'
 });
 
@@ -36,18 +37,27 @@ const QuestionManager: React.FC<{
   placeholder?: string;
 }> = ({ title, questions, onChange, placeholder }) => {
   const addQuestion = () =>
-    onChange([...questions, { id: Math.random().toString(36).substr(2, 9), text: '', expectedCriteria: '' }]);
+    onChange([...questions, { id: Math.random().toString(36).substr(2, 9), text: '', expectedCriteria: '', weight: 10 }]);
   const removeQuestion = (id: string) => onChange(questions.filter(q => q.id !== id));
   const updateQuestion = (id: string, field: keyof EvaluationQuestion, value: any) =>
     onChange(questions.map(q => q.id === id ? { ...q, [field]: value } : q));
+
+  const totalWeight = questions.reduce((s, q) => s + (q.weight ?? 0), 0);
 
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h5 className="text-xs font-bold text-slate-700 uppercase tracking-wider">{title}</h5>
-        <button type="button" onClick={addQuestion} className="flex items-center gap-1 text-blue-700 hover:text-blue-800 text-xs font-bold uppercase tracking-wide">
-          <Plus size={14} /> Add Question
-        </button>
+        <div className="flex items-center gap-3">
+          {questions.length > 0 && (
+            <span className={`text-xs font-bold px-2 py-1 rounded-sm border ${totalWeight === 100 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+              Total weight: {totalWeight}%
+            </span>
+          )}
+          <button type="button" onClick={addQuestion} className="flex items-center gap-1 text-blue-700 hover:text-blue-800 text-xs font-bold uppercase tracking-wide">
+            <Plus size={14} /> Add Question
+          </button>
+        </div>
       </div>
       <div className="grid grid-cols-1 gap-3">
         {questions.length === 0 ? (
@@ -60,15 +70,28 @@ const QuestionManager: React.FC<{
               <button type="button" onClick={() => removeQuestion(q.id)} className="absolute top-2 right-2 text-slate-400 hover:text-red-600 transition-colors">
                 <Trash2 size={14} />
               </button>
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Question {idx + 1}</label>
-                <input
-                  type="text"
-                  className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-sm focus:ring-1 focus:ring-slate-900 outline-none transition-all"
-                  value={q.text}
-                  onChange={e => updateQuestion(q.id, 'text', e.target.value)}
-                  placeholder={placeholder || 'Enter question text...'}
-                />
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <div className="md:col-span-3">
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Question {idx + 1}</label>
+                  <input
+                    type="text"
+                    className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-sm focus:ring-1 focus:ring-slate-900 outline-none transition-all"
+                    value={q.text}
+                    onChange={e => updateQuestion(q.id, 'text', e.target.value)}
+                    placeholder={placeholder || 'Enter question text...'}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Weight (%)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-sm focus:ring-1 focus:ring-slate-900 outline-none transition-all"
+                    value={q.weight ?? 10}
+                    onChange={e => updateQuestion(q.id, 'weight', Number(e.target.value))}
+                  />
+                </div>
               </div>
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Expected Criteria / Answer Key</label>
@@ -125,7 +148,8 @@ export const AssessmentInstructionManagement: React.FC = () => {
       ...rest,
       evaluationQuestions: rest.evaluationQuestions || [],
       interviewQuestions: rest.interviewQuestions || [],
-      threeSixtyQuestions: rest.threeSixtyQuestions || []
+      threeSixtyQuestions: rest.threeSixtyQuestions || [],
+      annualAppraisalQuestions: rest.annualAppraisalQuestions || []
     });
     setEditingId(id);
     setFormError('');
@@ -143,7 +167,8 @@ export const AssessmentInstructionManagement: React.FC = () => {
       assessmentLink: draft.method === 'WRITTEN_EXAM' ? (draft.assessmentLink || '') : '',
       evaluationQuestions: draft.method === 'WRITTEN_EXAM' ? (draft.evaluationQuestions || []) : [],
       interviewQuestions: draft.method === 'INTERVIEW' ? (draft.interviewQuestions || []) : [],
-      threeSixtyQuestions: draft.method === 'THREE_SIXTY_EVALUATION' ? (draft.threeSixtyQuestions || []) : []
+      threeSixtyQuestions: draft.method === 'THREE_SIXTY_EVALUATION' ? (draft.threeSixtyQuestions || []) : [],
+      annualAppraisalQuestions: draft.method === 'ANNUAL_APPRAISAL' ? (draft.annualAppraisalQuestions || []) : []
     };
 
     setIsProcessing(true);
@@ -300,6 +325,86 @@ export const AssessmentInstructionManagement: React.FC = () => {
                 onChange={qs => setDraft({ ...draft, threeSixtyQuestions: qs })}
                 placeholder="Enter feedback question for colleagues..."
               />
+            </div>
+          )}
+
+          {draft.method === 'ANNUAL_APPRAISAL' && (
+            <div className="space-y-4 bg-slate-50 p-6 border border-slate-200 rounded-sm">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h5 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Annual Appraisal Checklist Items</h5>
+                  <p className="text-[11px] text-slate-500 mt-0.5">Weights should sum to 100. Each item is a yes/no checkbox during appraisal.</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  {(() => {
+                    const total = (draft.annualAppraisalQuestions || []).reduce((s, q) => s + (q.weight ?? 10), 0);
+                    return (
+                      <span className={`text-xs font-bold px-2 py-1 rounded-sm border ${total === 100 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                        Total weight: {total}%
+                      </span>
+                    );
+                  })()}
+                  <button
+                    type="button"
+                    onClick={() => setDraft({ ...draft, annualAppraisalQuestions: [...(draft.annualAppraisalQuestions || []), { id: Math.random().toString(36).substr(2, 9), title: '', text: '', weight: 10 }] })}
+                    className="flex items-center gap-1 text-blue-700 hover:text-blue-800 text-xs font-bold uppercase tracking-wide"
+                  >
+                    <Plus size={14} /> Add Item
+                  </button>
+                </div>
+              </div>
+              {(draft.annualAppraisalQuestions || []).length === 0 ? (
+                <div className="text-xs text-slate-500 italic p-4 border border-dashed border-slate-300 rounded-sm bg-white text-center">
+                  No checklist items yet. Click "Add Item" to start.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3">
+                  {(draft.annualAppraisalQuestions || []).map((q, idx) => (
+                    <div key={q.id} className="p-4 bg-white border border-slate-300 rounded-sm space-y-3 relative group">
+                      <button
+                        type="button"
+                        onClick={() => setDraft({ ...draft, annualAppraisalQuestions: (draft.annualAppraisalQuestions || []).filter(x => x.id !== q.id) })}
+                        className="absolute top-2 right-2 text-slate-400 hover:text-red-600 transition-colors"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Label / Title</label>
+                          <input
+                            type="text"
+                            className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-sm focus:ring-1 focus:ring-slate-900 outline-none"
+                            value={q.title || ''}
+                            onChange={e => setDraft({ ...draft, annualAppraisalQuestions: (draft.annualAppraisalQuestions || []).map(x => x.id === q.id ? { ...x, title: e.target.value } : x) })}
+                            placeholder={`Item ${idx + 1}`}
+                          />
+                        </div>
+                        <div className="md:col-span-1">
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Checklist Statement</label>
+                          <input
+                            type="text"
+                            className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-sm focus:ring-1 focus:ring-slate-900 outline-none"
+                            value={q.text}
+                            onChange={e => setDraft({ ...draft, annualAppraisalQuestions: (draft.annualAppraisalQuestions || []).map(x => x.id === q.id ? { ...x, text: e.target.value } : x) })}
+                            placeholder="Employee demonstrates..."
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Weight (%)</label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={100}
+                            className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-sm focus:ring-1 focus:ring-slate-900 outline-none"
+                            value={q.weight ?? 10}
+                            onChange={e => setDraft({ ...draft, annualAppraisalQuestions: (draft.annualAppraisalQuestions || []).map(x => x.id === q.id ? { ...x, weight: Number(e.target.value) } : x) })}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

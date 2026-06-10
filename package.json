@@ -6,29 +6,47 @@
   "scripts": {
     "dev": "vite --host",
     "build": "tsc && vite build",
-    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "preview": "vite preview",
-    "rules:build": "node scripts/gen-firestore-rules.mjs"
+    "rules:build": "node scripts/gen-firestore-rules.mjs",
+    "seed:org": "node scripts/seed-org-hierarchy.mjs",
+    "check-env": "node scripts/check-env.mjs",
+    "pricing:build": "node reporting/training-pricing/generate-pricing-calculator.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.7",
+    "@types/react-window": "^1.8.8",
     "clsx": "^2.1.0",
     "firebase": "^12.11.0",
     "lucide-react": "^0.344.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-window": "^2.2.7",
     "recharts": "^2.12.2",
     "tailwind-merge": "^2.2.1",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.2.1",
+    "@vitest/coverage-v8": "^4.1.7",
     "autoprefixer": "^10.4.27",
+    "docx": "^9.6.1",
+    "eslint": "^10.4.0",
+    "exceljs": "^4.4.0",
+    "jsdom": "^29.1.1",
     "postcss": "^8.5.8",
     "tailwindcss": "^3.4.19",
     "typescript": "^5.2.2",
-    "vite": "^5.2.0"
+    "typescript-eslint": "^8.59.4",
+    "vite": "^5.2.0",
+    "vitest": "^4.1.7"
   }
 }

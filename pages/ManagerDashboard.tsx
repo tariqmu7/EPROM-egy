@@ -10,11 +10,12 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, Cart
 
 interface ManagerDashboardProps {
   user: User;
+  initialView?: 'TEAM' | 'JOBS' | 'TALENT_SEARCH' | 'MATRIX' | 'APPROVALS';
 }
 
-export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ user }) => {
+export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ user, initialView }) => {
   const [selectedMember, setSelectedMember] = useState<User | null>(null);
-  const [activeView, setActiveView] = useState<'TEAM' | 'JOBS' | 'TALENT_SEARCH' | 'MATRIX' | 'APPROVALS'>('TEAM');
+  const [activeView, setActiveView] = useState<'TEAM' | 'JOBS' | 'TALENT_SEARCH' | 'MATRIX' | 'APPROVALS'>(initialView ?? 'TEAM');
   const [searchQuery, setSearchQuery] = useState('');
   
   const storeVersion = useStoreData();

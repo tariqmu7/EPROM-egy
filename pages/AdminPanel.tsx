@@ -280,7 +280,7 @@ const PromotionModal: React.FC<{
 
 
 // --- User Form (Unchanged Logic, styling preserved) ---
-const UserForm: React.FC<{ initialData?: User | null, currentUser: User, onSave: (u: User) => void, onCancel: () => void }> = ({ initialData, currentUser, onSave, onCancel }) => {
+const UserForm: React.FC<{ initialData?: User | null, currentUser: User, onSave: (u: User) => void, onCancel: () => void, isSubmitting?: boolean }> = ({ initialData, currentUser, onSave, onCancel, isSubmitting }) => {
   const departments = dataService.getAllDepartments();
   const jobProfiles = dataService.getAllJobs();
   const potentialManagers = dataService.getAllUsers(); 
@@ -658,9 +658,9 @@ const UserForm: React.FC<{ initialData?: User | null, currentUser: User, onSave:
 
             <div className="pt-6 flex justify-end gap-3 border-t border-slate-100">
                 <button type="button" onClick={onCancel} className="px-6 py-2 text-slate-600 hover:bg-slate-100 rounded-sm transition-colors font-bold uppercase tracking-wide text-xs">Cancel</button>
-                <button type="submit" className={`px-6 py-2 text-white rounded-sm transition-all flex items-center gap-2 font-bold uppercase tracking-wide text-xs  hover: ${isPending ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-700 hover:bg-blue-800'}`}>
-                    {isPending ? <UserCheck size={16} /> : <Save size={16} />} 
-                    {isPending ? 'Approve & Activate' : 'Save Employee'}
+                <button type="submit" disabled={isSubmitting} className={`px-6 py-2 text-white rounded-sm transition-all flex items-center gap-2 font-bold uppercase tracking-wide text-xs hover: disabled:opacity-50 disabled:cursor-not-allowed ${isPending ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-700 hover:bg-blue-800'}`}>
+                    {isPending ? <UserCheck size={16} /> : <Save size={16} />}
+                    {isSubmitting ? 'Saving...' : isPending ? 'Approve & Activate' : 'Save Employee'}
                 </button>
             </div>
         </form>
@@ -670,7 +670,7 @@ const UserForm: React.FC<{ initialData?: User | null, currentUser: User, onSave:
 
 const SKILL_CATEGORIES = ['Technical', 'Behavioral', 'Safety', 'Management', 'Soft Skills'];
 
-const JobForm: React.FC<{ initialData?: JobProfile | null, onSave: (j: JobProfile) => void, onCancel: () => void }> = ({ initialData, onSave, onCancel }) => {
+const JobForm: React.FC<{ initialData?: JobProfile | null, onSave: (j: JobProfile) => void, onCancel: () => void, isSubmitting?: boolean }> = ({ initialData, onSave, onCancel, isSubmitting }) => {
   const [formData, setFormData] = useState<Partial<JobProfile>>(initialData || { requirements: {} });
   const [activeLevel, setActiveLevel] = useState<OrgLevel>('JP');
   const [skillCategoryFilter, setSkillCategoryFilter] = useState<string>('ALL');
@@ -902,8 +902,8 @@ const JobForm: React.FC<{ initialData?: JobProfile | null, onSave: (j: JobProfil
 
       <div className="pt-6 flex justify-end gap-3 border-t border-slate-100">
           <button type="button" onClick={onCancel} className="px-6 py-2 text-slate-600 hover:bg-slate-100 rounded-sm font-bold uppercase tracking-wide text-xs transition-colors">Cancel</button>
-          <button type="submit" className="px-6 py-2 bg-blue-700 text-white rounded-sm font-bold uppercase tracking-wide text-xs  hover:bg-blue-800 flex items-center gap-2 transition-all">
-             <Save size={16} /> Save Profile
+          <button type="submit" disabled={isSubmitting} className="px-6 py-2 bg-blue-700 text-white rounded-sm font-bold uppercase tracking-wide text-xs hover:bg-blue-800 flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+             <Save size={16} /> {isSubmitting ? 'Saving...' : 'Save Profile'}
           </button>
       </div>
     </form>
@@ -922,6 +922,7 @@ const QuestionManager: React.FC<{
       id: Math.random().toString(36).substr(2, 9),
       text: '',
       expectedCriteria: '',
+      weight: 10,
     };
     onChange([...questions, newQuestion]);
   };
@@ -934,13 +935,22 @@ const QuestionManager: React.FC<{
     onChange(questions.map(q => q.id === id ? { ...q, [field]: value } : q));
   };
 
+  const totalWeight = questions.reduce((s, q) => s + (q.weight ?? 0), 0);
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h5 className="text-xs font-bold text-slate-700 uppercase tracking-wider">{title}</h5>
-        <button type="button" onClick={addQuestion} className="flex items-center gap-1 text-blue-700 hover:text-blue-800 text-xs font-bold uppercase tracking-wide">
-          <Plus size={14} /> Add Question
-        </button>
+        <div className="flex items-center gap-3">
+          {questions.length > 0 && (
+            <span className={`text-xs font-bold px-2 py-1 rounded-sm border ${totalWeight === 100 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+              Total weight: {totalWeight}%
+            </span>
+          )}
+          <button type="button" onClick={addQuestion} className="flex items-center gap-1 text-blue-700 hover:text-blue-800 text-xs font-bold uppercase tracking-wide">
+            <Plus size={14} /> Add Question
+          </button>
+        </div>
       </div>
       <div className="grid grid-cols-1 gap-3">
         {questions.length === 0 ? (
@@ -953,19 +963,32 @@ const QuestionManager: React.FC<{
               <button type="button" onClick={() => removeQuestion(q.id)} className="absolute top-2 right-2 text-slate-400 hover:text-red-600 transition-colors">
                 <Trash2 size={14} />
               </button>
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Question {idx + 1}</label>
-                <input 
-                  type="text" 
-                  className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-sm focus:ring-1 focus:ring-slate-900 outline-none transition-all"
-                  value={q.text}
-                  onChange={e => updateQuestion(q.id, 'text', e.target.value)}
-                  placeholder={placeholder || "Enter question text..."}
-                />
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <div className="md:col-span-3">
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Question {idx + 1}</label>
+                  <input
+                    type="text"
+                    className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-sm focus:ring-1 focus:ring-slate-900 outline-none transition-all"
+                    value={q.text}
+                    onChange={e => updateQuestion(q.id, 'text', e.target.value)}
+                    placeholder={placeholder || "Enter question text..."}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Weight (%)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-sm focus:ring-1 focus:ring-slate-900 outline-none transition-all"
+                    value={q.weight ?? 10}
+                    onChange={e => updateQuestion(q.id, 'weight', Number(e.target.value))}
+                  />
+                </div>
               </div>
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Expected Criteria / Answer Key</label>
-                <textarea 
+                <textarea
                   className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-sm focus:ring-1 focus:ring-slate-900 outline-none transition-all"
                   rows={1}
                   value={q.expectedCriteria}
@@ -982,7 +1005,7 @@ const QuestionManager: React.FC<{
 };
 
 // --- Skill Form (Unchanged) ---
-const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => void, onCancel: () => void }> = ({ initialData, onSave, onCancel }) => {
+const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => void, onCancel: () => void, isSubmitting?: boolean }> = ({ initialData, onSave, onCancel, isSubmitting }) => {
   const defaultLevels = {
     1: { level: 1, description: '', requiredCertificates: [] },
     2: { level: 2, description: '', requiredCertificates: [] },
@@ -1175,8 +1198,8 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
 
        <div className="pt-6 flex justify-end gap-3 border-t border-slate-100">
           <button type="button" onClick={onCancel} className="px-6 py-2 text-slate-600 hover:bg-slate-100 rounded-sm font-bold uppercase tracking-wide text-xs transition-colors">Cancel</button>
-          <button type="submit" className="px-6 py-2 bg-blue-700 text-white rounded-sm font-bold uppercase tracking-wide text-xs  hover:bg-blue-800 flex items-center gap-2 transition-all">
-             <Save size={16} /> Save Definition
+          <button type="submit" disabled={isSubmitting} className="px-6 py-2 bg-blue-700 text-white rounded-sm font-bold uppercase tracking-wide text-xs hover:bg-blue-800 flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+             <Save size={16} /> {isSubmitting ? 'Saving...' : 'Save Definition'}
           </button>
       </div>
     </form>
@@ -1184,8 +1207,9 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
 };
 
 // --- Department Form ---
-const DepartmentForm: React.FC<{ initialData?: Department | null, onSave: (d: Department) => void, onCancel: () => void }> = ({ initialData, onSave, onCancel }) => {
+const DepartmentForm: React.FC<{ initialData?: Department | null, onSave: (d: Department) => void, onCancel: () => void, isSubmitting?: boolean }> = ({ initialData, onSave, onCancel, isSubmitting }) => {
     const [name, setName] = useState(initialData?.name || '');
+    const [nameAr, setNameAr] = useState(initialData?.nameAr || '');
     const [type, setType] = useState<DepartmentType>(initialData?.type || 'DEPARTMENT');
     const [parentId, setParentId] = useState(initialData?.parentId || '');
     const [managerId, setManagerId] = useState(initialData?.managerId || '');
@@ -1223,9 +1247,10 @@ const DepartmentForm: React.FC<{ initialData?: Department | null, onSave: (d: De
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        onSave({ 
-            id: initialData?.id || Math.random().toString(36).substr(2, 9), 
-            name, 
+        onSave({
+            id: initialData?.id || Math.random().toString(36).substr(2, 9),
+            name,
+            nameAr: nameAr.trim() || undefined,
             type,
             projectId: projectId || undefined,
             parentId: parentId === 'EPROM' ? undefined : parentId,
@@ -1243,9 +1268,15 @@ const DepartmentForm: React.FC<{ initialData?: Department | null, onSave: (d: De
                     <input required className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none"
                         value={name} onChange={e => setName(e.target.value)} />
                 </div>
-                
-                <SearchableSelect 
-                    label="Hierarchy Level / Type" 
+
+                <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">الاسم بالعربية (Arabic Name)</label>
+                    <input dir="rtl" className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none"
+                        value={nameAr} onChange={e => setNameAr(e.target.value)} placeholder="اختياري" />
+                </div>
+
+                <SearchableSelect
+                    label="Hierarchy Level / Type"
                     options={typeOptions} 
                     value={type} 
                     onChange={(v) => setType(v as DepartmentType)} 
@@ -1301,15 +1332,15 @@ const DepartmentForm: React.FC<{ initialData?: Department | null, onSave: (d: De
 
             <div className="pt-6 flex justify-end gap-3 border-t border-slate-100">
                 <button type="button" onClick={onCancel} className="px-6 py-2 text-slate-600 hover:bg-slate-100 rounded-sm font-bold uppercase tracking-wide text-xs transition-colors">Cancel</button>
-                <button type="submit" className="px-6 py-2 bg-blue-700 text-white rounded-sm font-bold uppercase tracking-wide text-xs  hover:bg-blue-800 flex items-center gap-2 transition-all">
-                    <Save size={16} /> Save Dept
+                <button type="submit" disabled={isSubmitting} className="px-6 py-2 bg-blue-700 text-white rounded-sm font-bold uppercase tracking-wide text-xs hover:bg-blue-800 flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                    <Save size={16} /> {isSubmitting ? 'Saving...' : 'Save Dept'}
                 </button>
             </div>
         </form>
     );
 };
 
-const ProjectForm: React.FC<{ initialData?: Project | null, onSave: (p: Project) => void, onCancel: () => void }> = ({ initialData, onSave, onCancel }) => {
+const ProjectForm: React.FC<{ initialData?: Project | null, onSave: (p: Project) => void, onCancel: () => void, isSubmitting?: boolean }> = ({ initialData, onSave, onCancel, isSubmitting }) => {
     const [name, setName] = useState(initialData?.name || '');
     const [description, setDescription] = useState(initialData?.description || '');
     const [location, setLocation] = useState(initialData?.location || '');
@@ -1345,8 +1376,8 @@ const ProjectForm: React.FC<{ initialData?: Project | null, onSave: (p: Project)
             </div>
             <div className="pt-6 flex justify-end gap-3 border-t border-slate-100">
                 <button type="button" onClick={onCancel} className="px-6 py-2 text-slate-600 hover:bg-slate-100 rounded-sm font-bold uppercase tracking-wide text-xs transition-colors">Cancel</button>
-                <button type="submit" className="px-6 py-2 bg-blue-700 text-white rounded-sm font-bold uppercase tracking-wide text-xs  hover:bg-blue-800 flex items-center gap-2 transition-all">
-                    <Save size={16} /> Save Project
+                <button type="submit" disabled={isSubmitting} className="px-6 py-2 bg-blue-700 text-white rounded-sm font-bold uppercase tracking-wide text-xs hover:bg-blue-800 flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                    <Save size={16} /> {isSubmitting ? 'Saving...' : 'Save Project'}
                 </button>
             </div>
         </form>
@@ -1374,9 +1405,17 @@ const ProjectList: React.FC<{
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {projects.map(project => {
-                    const projectDepts = dataService.getAllDepartments().filter(d => 
+                    const projectDepts = dataService.getAllDepartments().filter(d =>
                         d.projectId === project.id || (project.name.toUpperCase() === 'HQ' && !d.projectId)
                     );
+                    // Count only top-level units (general departments / true roots /
+                    // orphans whose parent isn't in this project) so the figure matches
+                    // what the hierarchy view shows at its first level — not every
+                    // nested sub-department and section.
+                    const projectDeptIds = new Set(projectDepts.map(d => d.id));
+                    const topLevelDeptCount = projectDepts.filter(d =>
+                        d.type === 'GENERAL' || !d.parentId || !projectDeptIds.has(d.parentId)
+                    ).length;
                     const totalStaff = dataService.getAllUsers().filter(u => {
                         const dept = dataService.getAllDepartments().find(d => d.id === u.departmentId);
                         return dept?.projectId === project.id || (project.name.toUpperCase() === 'HQ' && (!dept || !dept.projectId));
@@ -1411,7 +1450,7 @@ const ProjectList: React.FC<{
                                     <div className="grid grid-cols-2 gap-4 mt-6">
                                         <div className="bg-slate-50 p-3 rounded-none border border-slate-100">
                                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Departments</p>
-                                            <p className="text-lg font-bold text-slate-900">{projectDepts.length}</p>
+                                            <p className="text-lg font-bold text-slate-900">{topLevelDeptCount}</p>
                                         </div>
                                         <div className="bg-slate-50 p-3 rounded-none border border-slate-100">
                                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Workforce</p>
@@ -2037,105 +2076,552 @@ const DepartmentProfileView: React.FC<DepartmentProfileViewProps> = ({
     );
 };
 
-const GeneralDeptList: React.FC<{
-    projectId: string;
-    depts: Department[];
+// --- Org Hierarchy: tree-list + detail panel ---
+
+const deptTypeIcon = (type?: DepartmentType) =>
+    type === 'GENERAL' ? Layers : type === 'SECTION' ? LayoutGrid : Building2;
+
+// A single expandable row in the org tree. Defined at module scope (not nested
+// inside OrgTreeView) so its identity is stable and per-row expand state
+// survives parent re-renders.
+const OrgTreeRow: React.FC<{
+    dept: Department;
+    depth: number;
+    allDepts: Department[];
     users: User[];
-    currentUser: User | null;
+    selectedId: string | null;
     onSelect: (id: string) => void;
-    onEdit: (d: Department) => void;
-    onDelete: (id: string) => void;
-    onBack: () => void;
-}> = ({ projectId, depts, users, currentUser, onSelect, onEdit, onDelete, onBack }) => {
-    const project = dataService.getProjectById(projectId);
-    const generalDepts = depts.filter(d => (d.type === 'GENERAL' || !d.parentId));
+}> = ({ dept, depth, allDepts, users, selectedId, onSelect }) => {
+    const children = allDepts
+        .filter(d => d.parentId === dept.id)
+        .sort((a, b) => a.name.localeCompare(b.name));
+    const [open, setOpen] = useState(dept.type === 'GENERAL' || depth === 0);
+    const directCount = users.filter(u => u.departmentId === dept.id).length;
+    const isSelected = dept.id === selectedId;
+    const Icon = deptTypeIcon(dept.type);
 
     return (
-        <div className="p-8 bg-slate-50 min-h-[500px]">
-            <div className="flex items-center gap-6 mb-8 border-b border-slate-200 pb-6">
-                <button 
-                    onClick={onBack} 
-                    className="p-3 bg-white hover:bg-slate-50 text-slate-600 rounded-sm border border-slate-200 transition-all group shadow-sm"
-                >
-                    <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
-                </button>
-                <div>
-                    <div className="flex items-center gap-3">
-                        <h2 className="text-2xl font-black text-slate-900 tracking-tight">{project?.name || 'Project Units'}</h2>
-                        <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-bold uppercase tracking-widest border border-emerald-100">Project View</span>
+        <div>
+            <div
+                onClick={() => onSelect(dept.id)}
+                style={{ paddingLeft: depth * 18 + 8 }}
+                className={`flex items-center gap-2 pr-3 py-2 cursor-pointer border-l-2 transition-colors ${
+                    isSelected ? 'bg-blue-50 border-blue-600' : 'border-transparent hover:bg-slate-50'
+                }`}
+            >
+                {children.length > 0 ? (
+                    <button
+                        onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
+                        className={`p-0.5 rounded-sm hover:bg-slate-200 transition-transform ${open ? 'rotate-90' : ''}`}
+                    >
+                        <ChevronRight size={14} className="text-slate-400" />
+                    </button>
+                ) : (
+                    <span className="w-[22px] shrink-0" />
+                )}
+                <Icon size={15} className={isSelected ? 'text-blue-700 shrink-0' : 'text-slate-400 shrink-0'} />
+                <span className="flex flex-col min-w-0 flex-1">
+                    <span className={`text-sm truncate ${isSelected ? 'font-bold text-blue-900' : 'font-medium text-slate-700'}`}>
+                        {dept.name}
+                    </span>
+                    {dept.nameAr && (
+                        <span dir="rtl" className={`text-[11px] truncate ${isSelected ? 'text-blue-700' : 'text-slate-400'}`}>
+                            {dept.nameAr}
+                        </span>
+                    )}
+                </span>
+                {directCount > 0 && (
+                    <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-none shrink-0">
+                        {directCount}
+                    </span>
+                )}
+            </div>
+            {open && children.map(child => (
+                <OrgTreeRow
+                    key={child.id}
+                    dept={child}
+                    depth={depth + 1}
+                    allDepts={allDepts}
+                    users={users}
+                    selectedId={selectedId}
+                    onSelect={onSelect}
+                />
+            ))}
+        </div>
+    );
+};
+
+// --- Whole-company org chart: EPROM → projects → departments → sections ---
+
+const projectDeptsOf = (depts: Department[], projectId: string, isHq: boolean) =>
+    depts.filter(d => d.projectId === projectId || (isHq && !d.projectId));
+
+const deptRootsOf = (scoped: Department[]) => {
+    const ids = new Set(scoped.map(d => d.id));
+    const RANK: Record<string, number> = { GENERAL: 0, DEPARTMENT: 1, SECTION: 2 };
+    return scoped
+        .filter(d => d.type === 'GENERAL' || !d.parentId || !ids.has(d.parentId))
+        .sort((a, b) =>
+            (RANK[a.type || 'DEPARTMENT'] - RANK[b.type || 'DEPARTMENT']) ||
+            a.name.localeCompare(b.name)
+        );
+};
+
+// A collapsible project group in the company tree: holds that project's
+// top-level departments, rendered with the shared OrgTreeRow.
+const OrgProjectGroup: React.FC<{
+    project: Project;
+    isHq: boolean;
+    allDepts: Department[];
+    users: User[];
+    selectedDeptId: string | null;
+    selectedProjectId: string | null;
+    onSelectProject: (id: string) => void;
+    onSelectDept: (id: string) => void;
+}> = ({ project, isHq, allDepts, users, selectedDeptId, selectedProjectId, onSelectProject, onSelectDept }) => {
+    const scoped = projectDeptsOf(allDepts, project.id, isHq);
+    const roots = deptRootsOf(scoped);
+    const [open, setOpen] = useState(isHq);
+    const isSelected = selectedProjectId === project.id;
+    const staff = users.filter(u => scoped.some(d => d.id === u.departmentId)).length;
+
+    return (
+        <div>
+            <div
+                onClick={() => onSelectProject(project.id)}
+                style={{ paddingLeft: 26 }}
+                className={`flex items-center gap-2 pr-3 py-2 cursor-pointer border-l-2 transition-colors ${
+                    isSelected ? 'bg-emerald-50 border-emerald-600' : 'border-transparent hover:bg-slate-50'
+                }`}
+            >
+                {roots.length > 0 ? (
+                    <button
+                        onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
+                        className={`p-0.5 rounded-sm hover:bg-slate-200 transition-transform ${open ? 'rotate-90' : ''}`}
+                    >
+                        <ChevronRight size={14} className="text-slate-400" />
+                    </button>
+                ) : (
+                    <span className="w-[22px] shrink-0" />
+                )}
+                <Briefcase size={15} className={isSelected ? 'text-emerald-700 shrink-0' : 'text-slate-400 shrink-0'} />
+                <span className="flex flex-col min-w-0 flex-1">
+                    <span className={`text-sm truncate ${isSelected ? 'font-bold text-emerald-900' : 'font-bold text-slate-700'}`}>
+                        {isHq ? 'Head Office' : project.name}
+                    </span>
+                    {isHq && <span dir="rtl" className={`text-[11px] truncate ${isSelected ? 'text-emerald-700' : 'text-slate-400'}`}>المركز الرئيسي</span>}
+                </span>
+                {staff > 0 && (
+                    <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-none shrink-0">{staff}</span>
+                )}
+            </div>
+            {open && roots.map(dept => (
+                <OrgTreeRow
+                    key={dept.id}
+                    dept={dept}
+                    depth={1}
+                    allDepts={allDepts}
+                    users={users}
+                    selectedId={selectedDeptId}
+                    onSelect={onSelectDept}
+                />
+            ))}
+        </div>
+    );
+};
+
+type OrgSelection = { kind: 'root' } | { kind: 'project'; id: string } | { kind: 'dept'; id: string };
+
+const CompanyOrgView: React.FC<{
+    depts: Department[];
+    projects: Project[];
+    users: User[];
+    jobs: JobProfile[];
+    hqProjectId?: string;
+    currentUser: User | null;
+    onEdit: (d: Department) => void;
+    onDelete: (id: string) => void;
+    onAddChild: (parentId: string) => void;
+    onAddDeptToProject: (projectId: string) => void;
+    onEditUser: (u: User) => void;
+    onPromoteUser: (u: User) => void;
+    onAddProject: () => void;
+    onEditProject: (p: Project) => void;
+    onDeleteProject: (id: string) => void;
+}> = ({ depts, projects, users, jobs, hqProjectId, currentUser, onEdit, onDelete, onAddChild, onAddDeptToProject, onEditUser, onPromoteUser, onAddProject, onEditProject, onDeleteProject }) => {
+    const canSeeCeo = currentUser?.role === Role.CEO;
+    const isHqProject = (p?: Project | null) => !!p && (p.id === hqProjectId || p.name.toUpperCase() === 'HQ');
+
+    // Projects ordered with the Head Office (HQ) first, then alphabetically.
+    const orderedProjects = useMemo(() =>
+        [...projects].sort((a, b) =>
+            (isHqProject(b) ? 1 : 0) - (isHqProject(a) ? 1 : 0) || a.name.localeCompare(b.name)
+        ), [projects, hqProjectId]);
+
+    const [selected, setSelected] = useState<OrgSelection>({ kind: 'root' });
+    const selectDept = (id: string) => setSelected({ kind: 'dept', id });
+    const selectProject = (id: string) => setSelected({ kind: 'project', id });
+
+    // Recover selection if the underlying record disappears.
+    useEffect(() => {
+        if (selected.kind === 'dept' && !depts.some(d => d.id === selected.id)) setSelected({ kind: 'root' });
+        if (selected.kind === 'project' && !projects.some(p => p.id === selected.id)) setSelected({ kind: 'root' });
+    }, [depts, projects, selected]);
+
+    const selectedDept = selected.kind === 'dept' ? depts.find(d => d.id === selected.id) || null : null;
+    const selectedProject = selected.kind === 'project' ? projects.find(p => p.id === selected.id) || null : null;
+
+    const descendantIds = (rootId: string): string[] => {
+        const out: string[] = [];
+        const stack = depts.filter(d => d.parentId === rootId).map(d => d.id);
+        const seen = new Set<string>();
+        while (stack.length) {
+            const cur = stack.pop()!;
+            if (seen.has(cur)) continue;
+            seen.add(cur);
+            out.push(cur);
+            depts.filter(d => d.parentId === cur).forEach(c => stack.push(c.id));
+        }
+        return out;
+    };
+
+    const manager = selectedDept ? users.find(u => u.id === selectedDept.managerId) : undefined;
+    const managerName = (manager && (canSeeCeo || (manager.role !== Role.CEO && manager.orgLevel !== 'CEO')))
+        ? manager.name : 'Unassigned';
+    const directPersonnel = selectedDept ? users.filter(u => u.departmentId === selectedDept.id) : [];
+    const subUnits = selectedDept ? depts.filter(d => d.parentId === selectedDept.id) : [];
+    const totalWorkforce = selectedDept
+        ? users.filter(u => u.departmentId === selectedDept.id || descendantIds(selectedDept.id).includes(u.departmentId)).length
+        : 0;
+    const SelectedIcon = deptTypeIcon(selectedDept?.type);
+
+    const projectScoped = selectedProject ? projectDeptsOf(depts, selectedProject.id, isHqProject(selectedProject)) : [];
+    const projectRoots = deptRootsOf(projectScoped);
+    const projectStaff = users.filter(u => projectScoped.some(d => d.id === u.departmentId)).length;
+
+    return (
+        <div className="bg-slate-50 min-h-[600px]">
+            {/* Header */}
+            <div className="flex items-center justify-between gap-6 px-8 py-6 border-b border-slate-200 bg-white">
+                <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-blue-50 text-blue-700 rounded-sm flex items-center justify-center border border-blue-100 shrink-0">
+                        <Shield size={26} />
                     </div>
-                    <p className="text-sm text-slate-500 mt-1 flex items-center gap-1.5">
-                        <MapPin size={14} className="text-slate-400"/> {project?.location || 'General Headquarters'}
-                    </p>
+                    <div>
+                        <div className="flex items-center gap-3">
+                            <h2 className="text-2xl font-black text-slate-900 tracking-tight">Organization Chart</h2>
+                            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-bold uppercase tracking-widest border border-emerald-100">EPROM</span>
+                        </div>
+                        <p className="text-sm text-slate-500 mt-1" dir="rtl">الهيكل التنظيمي — من رئيس مجلس الإدارة حتى أدنى مستوى</p>
+                    </div>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {generalDepts.map(dept => {
-                    const deptManager = users.find(u => u.id === dept.managerId);
-                    const subUnits = depts.filter(d => d.parentId === dept.id);
-                    const allDescendantIds = depts.filter(d => {
-                        let current = d;
-                        while(current.parentId) {
-                            if (current.parentId === dept.id) return true;
-                            current = depts.find(pd => pd.id === current.parentId) || { id: '', name: '', parentId: '' } as any;
-                        }
-                        return false;
-                    }).map(d => d.id);
-                    
-                    const totalStaff = users.filter(u => u.departmentId === dept.id || allDescendantIds.includes(u.departmentId)).length;
-
-                    return (
-                        <div 
-                            key={dept.id} 
-                            onClick={() => onSelect(dept.id)}
-                            className="bg-white rounded-none border border-slate-300 hover: transition-all group cursor-pointer overflow-hidden flex flex-col"
+            <div className="grid grid-cols-1 lg:grid-cols-[360px_1fr]">
+                {/* LEFT: tree */}
+                <div className="border-r border-slate-200 bg-white lg:max-h-[calc(100vh-12rem)] lg:overflow-y-auto">
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 sticky top-0 bg-white z-10">
+                        <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">Structure</span>
+                        <button
+                            onClick={onAddProject}
+                            className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-blue-700 hover:text-blue-900 transition-colors"
+                            title="Add Project / Site"
                         >
-                            <div className="p-6 flex-1">
-                                <div className="flex justify-between items-start mb-6">
-                                    <div className="w-14 h-14 bg-blue-50 text-blue-700 rounded-sm flex items-center justify-center group-hover:bg-blue-700 group-hover:text-white transition-all shadow-sm">
-                                        <Layers size={28} />
-                                    </div>
-                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={(e) => { e.stopPropagation(); onEdit(dept); }} className="p-1.5 text-slate-400 hover:text-slate-900 transition-colors"><Edit2 size={16}/></button>
-                                        <button onClick={(e) => { e.stopPropagation(); onDelete(dept.id); }} className="p-1.5 text-slate-400 hover:text-red-700 transition-colors"><Trash2 size={16}/></button>
-                                    </div>
-                                </div>
-                                
-                                <h3 className="text-xl font-bold text-slate-900 mb-1">{dept.name}</h3>
-                                <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-4">General Department</p>
-                                
-                                <div className="space-y-3 mt-6">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 rounded-none bg-slate-50 flex items-center justify-center text-slate-400">
-                                            <UserCheck size={16} />
-                                        </div>
-                                        <div className="min-w-0">
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Department Manager</p>
-                                            <p className="text-sm font-bold text-slate-800 truncate">{(deptManager && (deptManager.role !== Role.CEO && deptManager.orgLevel !== 'CEO' || currentUser?.role === Role.CEO)) ? deptManager.name : 'Unassigned'}</p>
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="grid grid-cols-2 gap-4 mt-6">
-                                        <div className="bg-slate-50 p-3 rounded-none border border-slate-100">
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Sub-Units</p>
-                                            <p className="text-lg font-bold text-slate-900">{subUnits.length}</p>
-                                        </div>
-                                        <div className="bg-slate-50 p-3 rounded-none border border-slate-100">
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Workforce</p>
-                                            <p className="text-lg font-bold text-slate-900">{totalStaff}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between group-hover:bg-blue-700/5 transition-colors">
-                                <span className="text-xs font-bold text-blue-700 uppercase tracking-widest">Explore Structure</span>
-                                <ChevronRight size={16} className="text-blue-700 group-hover:translate-x-1 transition-transform" />
-                            </div>
-                            <div className="h-1 w-full bg-blue-700 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></div>
+                            <Plus size={14} /> Project
+                        </button>
+                    </div>
+                    <div className="py-2">
+                        {/* ROOT: the company / Chairman */}
+                        <div
+                            onClick={() => setSelected({ kind: 'root' })}
+                            style={{ paddingLeft: 8 }}
+                            className={`flex items-center gap-2 pr-3 py-2 cursor-pointer border-l-2 transition-colors ${
+                                selected.kind === 'root' ? 'bg-blue-50 border-blue-600' : 'border-transparent hover:bg-slate-50'
+                            }`}
+                        >
+                            <Shield size={16} className={selected.kind === 'root' ? 'text-blue-700 shrink-0' : 'text-slate-400 shrink-0'} />
+                            <span className="flex flex-col min-w-0 flex-1">
+                                <span className={`text-sm truncate ${selected.kind === 'root' ? 'font-black text-blue-900' : 'font-black text-slate-800'}`}>EPROM</span>
+                                <span dir="rtl" className="text-[11px] truncate text-slate-400">المصرية لتشغيل وصيانة المشروعات</span>
+                            </span>
                         </div>
-                    );
-                })}
+                        {orderedProjects.map(p => (
+                            <OrgProjectGroup
+                                key={p.id}
+                                project={p}
+                                isHq={isHqProject(p)}
+                                allDepts={depts}
+                                users={users}
+                                selectedDeptId={selected.kind === 'dept' ? selected.id : null}
+                                selectedProjectId={selected.kind === 'project' ? selected.id : null}
+                                onSelectProject={selectProject}
+                                onSelectDept={selectDept}
+                            />
+                        ))}
+                        {orderedProjects.length === 0 && (
+                            <div className="p-8 text-center">
+                                <Briefcase size={36} className="mx-auto text-slate-200 mb-3" />
+                                <p className="text-sm text-slate-500">No projects defined yet.</p>
+                                <button onClick={onAddProject} className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-700 text-white font-bold uppercase text-[10px] tracking-widest rounded-sm hover:bg-blue-800 transition-all">
+                                    <Plus size={14} /> Create First Project
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* RIGHT: detail panel */}
+                <div className="p-8">
+                    {selected.kind === 'dept' && selectedDept ? (
+                        <div className="space-y-8 animate-in fade-in duration-200">
+                            {/* Back button */}
+                            <button
+                                onClick={() => selectedDept.parentId ? selectDept(selectedDept.parentId) : setSelected({ kind: 'root' })}
+                                className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-blue-700 uppercase tracking-wider transition-colors group"
+                            >
+                                <ArrowLeft size={14} className="group-hover:-translate-x-1 transition-transform" />
+                                {selectedDept.parentId ? 'Parent Unit' : 'All Units'}
+                            </button>
+
+                            {/* Unit header */}
+                            <div className="border-b border-slate-200 pb-6 space-y-4">
+                                <div className="flex items-start gap-4">
+                                    <div className="w-14 h-14 bg-blue-50 text-blue-700 rounded-sm flex items-center justify-center border border-blue-100 shrink-0">
+                                        <SelectedIcon size={28} />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex flex-wrap items-center gap-3 mb-1">
+                                            <h3 className="text-2xl font-bold text-slate-900 tracking-tight">{selectedDept.name}</h3>
+                                            <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-[10px] font-bold uppercase tracking-widest border border-blue-100 shrink-0">
+                                                {selectedDept.type?.replace('_', ' ') || 'DEPARTMENT'}
+                                            </span>
+                                        </div>
+                                        {selectedDept.nameAr && (
+                                            <p dir="rtl" className="text-base font-bold text-slate-700 mb-1">{selectedDept.nameAr}</p>
+                                        )}
+                                        <p className="text-sm text-slate-600 flex items-center gap-1.5">
+                                            <UserCheck size={14} className="text-slate-400" /> {managerName}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button onClick={() => onAddChild(selectedDept.id)} className="flex items-center gap-2 px-4 py-2 bg-blue-700 text-white text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-blue-800 transition-all shadow-sm">
+                                        <Plus size={16} /> Sub-Unit
+                                    </button>
+                                    <button onClick={() => onEdit(selectedDept)} className="p-2 bg-white border border-slate-300 text-slate-600 hover:bg-slate-50 rounded-sm transition-all" title="Edit Unit"><Edit2 size={18} /></button>
+                                    <button onClick={() => onDelete(selectedDept.id)} className="p-2 bg-white border border-slate-300 text-slate-600 hover:text-red-700 hover:border-red-200 rounded-sm transition-all" title="Delete Unit"><Trash2 size={18} /></button>
+                                </div>
+                            </div>
+
+                            {/* Stats */}
+                            <div className="grid grid-cols-3 gap-4">
+                                {[
+                                    { label: 'Direct Personnel', value: directPersonnel.length },
+                                    { label: 'Sub-Units', value: subUnits.length },
+                                    { label: 'Total Workforce', value: totalWorkforce },
+                                ].map(stat => (
+                                    <div key={stat.label} className="bg-white p-4 rounded-none border border-slate-200">
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{stat.label}</p>
+                                        <p className="text-2xl font-black text-slate-900">{stat.value}</p>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Personnel roster (list) */}
+                            <div>
+                                <div className="flex items-center gap-2 mb-3 text-[11px] uppercase font-black tracking-widest text-slate-500">
+                                    <Users size={14} /> Personnel ({directPersonnel.length})
+                                </div>
+                                {directPersonnel.length > 0 ? (
+                                    <div className="bg-white border border-slate-200 rounded-none divide-y divide-slate-100">
+                                        {directPersonnel.map(person => {
+                                            const job = jobs.find(j => j.id === person.jobProfileId);
+                                            return (
+                                                <div key={person.id} className="flex items-center gap-4 px-4 py-3 hover:bg-slate-50 transition-colors group">
+                                                    <div className="w-9 h-9 rounded-none bg-slate-100 flex items-center justify-center text-slate-900 font-bold border border-slate-200 shrink-0">
+                                                        {person.avatarUrl ? <img src={person.avatarUrl} alt="" className="w-full h-full object-cover" /> : person.name[0]}
+                                                    </div>
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="font-bold text-slate-900 truncate">{person.name}</span>
+                                                            <span className="text-indigo-700 font-bold uppercase text-[8px] bg-indigo-50 px-1.5 py-0.5 rounded-none border border-indigo-100 shrink-0">{person.orgLevel || 'N/A'}</span>
+                                                        </div>
+                                                        <p className="text-xs text-slate-500 truncate">{job?.title || person.role}</p>
+                                                    </div>
+                                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                                        <button onClick={() => onPromoteUser(person)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-sm transition-all" title="Promote / Transfer"><TrendingUp size={14} /></button>
+                                                        <button onClick={() => onEditUser(person)} className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-sm transition-all" title="Edit Employee"><Edit2 size={14} /></button>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <div className="p-8 bg-white border border-dashed border-slate-300 text-center rounded-none">
+                                        <Users size={28} className="mx-auto text-slate-200 mb-2" />
+                                        <p className="text-sm text-slate-500">No personnel assigned to this unit.</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Sub-units (list, clickable to drill in the tree) */}
+                            {subUnits.length > 0 && (
+                                <div>
+                                    <div className="flex items-center gap-2 mb-3 text-[11px] uppercase font-black tracking-widest text-slate-500">
+                                        <Building2 size={14} /> Sub-Units ({subUnits.length})
+                                    </div>
+                                    <div className="bg-white border border-slate-200 rounded-none divide-y divide-slate-100">
+                                        {subUnits.map(unit => {
+                                            const UnitIcon = deptTypeIcon(unit.type);
+                                            const unitStaff = users.filter(u => u.departmentId === unit.id).length;
+                                            return (
+                                                <div key={unit.id} onClick={() => selectDept(unit.id)} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 cursor-pointer transition-colors group">
+                                                    <UnitIcon size={16} className="text-slate-400 shrink-0" />
+                                                    <div className="min-w-0 flex-1">
+                                                        <span className="font-bold text-slate-800 truncate block group-hover:text-blue-700 transition-colors">{unit.name}</span>
+                                                        <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">{unit.type?.replace('_', ' ') || 'DEPARTMENT'}</span>
+                                                    </div>
+                                                    <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-none shrink-0">{unitStaff}</span>
+                                                    <ChevronRight size={16} className="text-slate-300 group-hover:text-blue-700 group-hover:translate-x-1 transition-all shrink-0" />
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    ) : selected.kind === 'project' && selectedProject ? (
+                        <div className="space-y-8 animate-in fade-in duration-200">
+                            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 border-b border-slate-200 pb-6">
+                                <div className="flex items-start gap-4">
+                                    <div className="w-14 h-14 bg-emerald-50 text-emerald-700 rounded-sm flex items-center justify-center border border-emerald-100 shrink-0">
+                                        <Briefcase size={28} />
+                                    </div>
+                                    <div>
+                                        <div className="flex items-center gap-3 mb-1">
+                                            <h3 className="text-2xl font-bold text-slate-900 tracking-tight">{isHqProject(selectedProject) ? 'Head Office' : selectedProject.name}</h3>
+                                            <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-bold uppercase tracking-widest border border-emerald-100">
+                                                {isHqProject(selectedProject) ? 'المركز الرئيسي' : 'PROJECT'}
+                                            </span>
+                                        </div>
+                                        <p className="text-sm text-slate-600 flex items-center gap-1.5">
+                                            <MapPin size={14} className="text-slate-400" /> {selectedProject.location || 'General Headquarters'}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button onClick={() => onAddDeptToProject(selectedProject.id)} className="flex items-center gap-2 px-4 py-2 bg-blue-700 text-white text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-blue-800 transition-all shadow-sm">
+                                        <Plus size={16} /> Department
+                                    </button>
+                                    <button onClick={() => onEditProject(selectedProject)} className="p-2 bg-white border border-slate-300 text-slate-600 hover:bg-slate-50 rounded-sm transition-all" title="Edit Project"><Edit2 size={18} /></button>
+                                    {!isHqProject(selectedProject) && (
+                                        <button onClick={() => onDeleteProject(selectedProject.id)} className="p-2 bg-white border border-slate-300 text-slate-600 hover:text-red-700 hover:border-red-200 rounded-sm transition-all" title="Delete Project"><Trash2 size={18} /></button>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-4">
+                                {[
+                                    { label: 'Top-Level Units', value: projectRoots.length },
+                                    { label: 'Total Units', value: projectScoped.length },
+                                    { label: 'Workforce', value: projectStaff },
+                                ].map(stat => (
+                                    <div key={stat.label} className="bg-white p-4 rounded-none border border-slate-200">
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{stat.label}</p>
+                                        <p className="text-2xl font-black text-slate-900">{stat.value}</p>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div>
+                                <div className="flex items-center gap-2 mb-3 text-[11px] uppercase font-black tracking-widest text-slate-500">
+                                    <Building2 size={14} /> Top-Level Units ({projectRoots.length})
+                                </div>
+                                {projectRoots.length > 0 ? (
+                                    <div className="bg-white border border-slate-200 rounded-none divide-y divide-slate-100">
+                                        {projectRoots.map(unit => {
+                                            const UnitIcon = deptTypeIcon(unit.type);
+                                            const unitStaff = users.filter(u => u.departmentId === unit.id).length;
+                                            return (
+                                                <div key={unit.id} onClick={() => selectDept(unit.id)} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 cursor-pointer transition-colors group">
+                                                    <UnitIcon size={16} className="text-slate-400 shrink-0" />
+                                                    <div className="min-w-0 flex-1">
+                                                        <span className="font-bold text-slate-800 truncate block group-hover:text-blue-700 transition-colors">{unit.name}</span>
+                                                        {unit.nameAr && <span dir="rtl" className="text-[11px] text-slate-400 block truncate">{unit.nameAr}</span>}
+                                                    </div>
+                                                    <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-none shrink-0">{unitStaff}</span>
+                                                    <ChevronRight size={16} className="text-slate-300 group-hover:text-blue-700 group-hover:translate-x-1 transition-all shrink-0" />
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <div className="p-8 bg-white border border-dashed border-slate-300 text-center rounded-none">
+                                        <Building2 size={28} className="mx-auto text-slate-200 mb-2" />
+                                        <p className="text-sm text-slate-500 mb-4">No departments under this project yet.</p>
+                                        <button onClick={() => onAddDeptToProject(selectedProject.id)} className="inline-flex items-center gap-2 px-4 py-2 bg-blue-700 text-white font-bold uppercase text-[10px] tracking-widest rounded-sm hover:bg-blue-800 transition-all">
+                                            <Plus size={14} /> Add Department
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    ) : selected.kind === 'root' ? (
+                        <div className="space-y-8 animate-in fade-in duration-200">
+                            <div className="flex items-start gap-4 border-b border-slate-200 pb-6">
+                                <div className="w-14 h-14 bg-blue-50 text-blue-700 rounded-sm flex items-center justify-center border border-blue-100 shrink-0">
+                                    <Shield size={28} />
+                                </div>
+                                <div>
+                                    <h3 className="text-2xl font-bold text-slate-900 tracking-tight">EPROM</h3>
+                                    <p dir="rtl" className="text-base font-bold text-slate-700">المصرية لتشغيل وصيانة المشروعات</p>
+                                    <p className="text-sm text-slate-500 mt-1">Egyptian Maintenance Company — Operation & Maintenance of Projects</p>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-4">
+                                {[
+                                    { label: 'Projects / Sites', value: projects.length },
+                                    { label: 'Total Units', value: depts.length },
+                                    { label: 'Workforce', value: users.length },
+                                ].map(stat => (
+                                    <div key={stat.label} className="bg-white p-4 rounded-none border border-slate-200">
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{stat.label}</p>
+                                        <p className="text-2xl font-black text-slate-900">{stat.value}</p>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div>
+                                <div className="flex items-center gap-2 mb-3 text-[11px] uppercase font-black tracking-widest text-slate-500">
+                                    <Briefcase size={14} /> Projects & Sites ({orderedProjects.length})
+                                </div>
+                                <div className="bg-white border border-slate-200 rounded-none divide-y divide-slate-100">
+                                    {orderedProjects.map(p => {
+                                        const scoped = projectDeptsOf(depts, p.id, isHqProject(p));
+                                        const staff = users.filter(u => scoped.some(d => d.id === u.departmentId)).length;
+                                        return (
+                                            <div key={p.id} onClick={() => selectProject(p.id)} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 cursor-pointer transition-colors group">
+                                                <Briefcase size={16} className="text-slate-400 shrink-0" />
+                                                <div className="min-w-0 flex-1">
+                                                    <span className="font-bold text-slate-800 truncate block group-hover:text-emerald-700 transition-colors">{isHqProject(p) ? 'Head Office' : p.name}</span>
+                                                    <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">{deptRootsOf(scoped).length} units</span>
+                                                </div>
+                                                <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-none shrink-0">{staff}</span>
+                                                <ChevronRight size={16} className="text-slate-300 group-hover:text-emerald-700 group-hover:translate-x-1 transition-all shrink-0" />
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="h-full flex flex-col items-center justify-center text-center py-20">
+                            <LayoutGrid size={48} className="text-slate-200 mb-4" />
+                            <p className="text-slate-500">Select a unit from the structure to view its details.</p>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );
@@ -2165,6 +2651,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
   // Search State
   const [searchTerm, setSearchTerm] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [bulkType, setBulkType] = useState<'USER' | 'JOB' | 'SKILL' | 'DEPT' | 'PROJECT'>('USER');
 
@@ -2262,6 +2749,22 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
 
   const totalPages = Math.ceil(filteredSkills.length / itemsPerPage);
 
+  // A3.4: Paginate users and jobs to cap rendered DOM rows at itemsPerPage,
+  // preventing layout thrash with 500+ rows.
+  const paginatedUsers = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredUsers.slice(start, start + itemsPerPage);
+  }, [filteredUsers, currentPage, itemsPerPage]);
+
+  const totalUserPages = Math.ceil(filteredUsers.length / itemsPerPage);
+
+  const paginatedJobs = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredJobs.slice(start, start + itemsPerPage);
+  }, [filteredJobs, currentPage, itemsPerPage]);
+
+  const totalJobPages = Math.ceil(filteredJobs.length / itemsPerPage);
+
   const filteredDepts = useMemo(() => {
     return depts.filter(dept => 
       searchTerm === '' ||
@@ -2281,7 +2784,6 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
     const approvedEvidences = dataService.getEvidences({ skillId: skill.id, status: 'APPROVED' });
     if (approvedEvidences.length === 0) {
       setErrorMessage("Cannot approve: A manager must approve an employee's evidence for this skill first.");
-      setTimeout(() => setErrorMessage(''), 5000);
       return;
     }
     handleEdit('SKILL', skill);
@@ -2298,7 +2800,6 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
         const approvedEvidences = dataService.getEvidences({ skillId: item.id, status: 'APPROVED' });
         if (approvedEvidences.length === 0) {
           setErrorMessage("Cannot edit/approve: A manager must approve an employee's evidence for this skill first.");
-          setTimeout(() => setErrorMessage(''), 5000);
           return;
         }
       }
@@ -2327,6 +2828,12 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
       setFormMode(true);
   }, [depts, selectedProjectId]);
 
+  const handleAddDeptToProject = useCallback((projectId: string) => {
+      setFormType('DEPT');
+      setEditItem({ projectId: projectId || undefined, parentId: undefined, type: 'GENERAL' });
+      setFormMode(true);
+  }, []);
+
   const handleBulkUpload = useCallback((type: 'USER' | 'JOB' | 'SKILL' | 'DEPT' | 'PROJECT') => {
     setBulkType(type);
     setShowBulkUpload(true);
@@ -2344,47 +2851,52 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
   }, []);
 
   const handleSave = useCallback(async (item: any) => {
-      if (formType === 'USER') {
-          const exists = users.find(u => u.id === item.id);
-          if (exists) await dataService.updateUser(item);
-          else await dataService.addUser(item);
+      // A2.6: Guard against double-submit from rapid clicks.
+      if (isSubmitting) return;
+      setIsSubmitting(true);
+      try {
+        if (formType === 'USER') {
+            const exists = users.find(u => u.id === item.id);
+            if (exists) await dataService.updateUser(item);
+            else await dataService.addUser(item);
+        }
+        if (formType === 'JOB') editItem ? await dataService.updateJobProfile(item) : await dataService.addJobProfile(item);
+        if (formType === 'SKILL') editItem ? await dataService.updateSkill(item) : await dataService.addSkill(item);
+        if (formType === 'DEPT') editItem ? await dataService.updateDepartment(item) : await dataService.addDepartment(item);
+        if (formType === 'PROJECT') editItem ? await dataService.updateProject(item) : await dataService.addProject(item);
+        setFormMode(false);
+        setRefreshKey(k => k + 1);
+      } finally {
+        setIsSubmitting(false);
       }
-      if (formType === 'JOB') editItem ? await dataService.updateJobProfile(item) : await dataService.addJobProfile(item);
-      if (formType === 'SKILL') editItem ? await dataService.updateSkill(item) : await dataService.addSkill(item);
-      if (formType === 'DEPT') editItem ? await dataService.updateDepartment(item) : await dataService.addDepartment(item);
-      if (formType === 'PROJECT') editItem ? await dataService.updateProject(item) : await dataService.addProject(item);
-
-
-      setFormMode(false);
-      setRefreshKey(k => k + 1);
-  }, [formType, editItem, users]);
+  }, [formType, editItem, users, isSubmitting]);
 
   const renderFormContent = () => {
       const titlePrefix = editItem ? 'Edit ' : 'New ';
       
       if (formType === 'USER') return (
         <FormPage title={`${titlePrefix}Employee Profile`} onBack={() => setFormMode(false)}>
-            {currentUser && <UserForm initialData={editItem} currentUser={currentUser} onSave={handleSave} onCancel={() => setFormMode(false)} />}
+            {currentUser && <UserForm initialData={editItem} currentUser={currentUser} onSave={handleSave} onCancel={() => setFormMode(false)} isSubmitting={isSubmitting} />}
         </FormPage>
       );
       if (formType === 'JOB') return (
         <FormPage title={`${titlePrefix}Job Profile`} onBack={() => setFormMode(false)}>
-            <JobForm initialData={editItem} onSave={handleSave} onCancel={() => setFormMode(false)} />
+            <JobForm initialData={editItem} onSave={handleSave} onCancel={() => setFormMode(false)} isSubmitting={isSubmitting} />
         </FormPage>
       );
       if (formType === 'SKILL') return (
         <FormPage title={`${titlePrefix}Competency Standard`} onBack={() => setFormMode(false)}>
-            <SkillForm initialData={editItem} onSave={handleSave} onCancel={() => setFormMode(false)} />
+            <SkillForm initialData={editItem} onSave={handleSave} onCancel={() => setFormMode(false)} isSubmitting={isSubmitting} />
         </FormPage>
       );
       if (formType === 'DEPT') return (
         <FormPage title={`${titlePrefix}Department`} onBack={() => setFormMode(false)}>
-            <DepartmentForm initialData={editItem} onSave={handleSave} onCancel={() => setFormMode(false)} />
+            <DepartmentForm initialData={editItem} onSave={handleSave} onCancel={() => setFormMode(false)} isSubmitting={isSubmitting} />
         </FormPage>
       );
       if (formType === 'PROJECT') return (
         <FormPage title={`${titlePrefix}Project`} onBack={() => setFormMode(false)}>
-            <ProjectForm initialData={editItem} onSave={handleSave} onCancel={() => setFormMode(false)} />
+            <ProjectForm initialData={editItem} onSave={handleSave} onCancel={() => setFormMode(false)} isSubmitting={isSubmitting} />
         </FormPage>
       );
 
@@ -2638,12 +3150,24 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
   }
 
   // --- TABLE VIEW (Data View) ---
+  // A5.5: Show loading skeleton while Firestore snapshots haven't arrived yet.
+  if (!dataService.isDataLoaded()) {
+    return (
+      <div className="space-y-6 animate-pulse">
+        <div className="h-16 bg-slate-100 border border-slate-200 rounded-none" />
+        {[...Array(8)].map((_, i) => (
+          <div key={i} className="h-14 bg-slate-50 border border-slate-200 rounded-none" />
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
        {errorMessage && (
-         <div className="bg-slate-50 border border-slate-200 text-slate-700 px-4 py-3 rounded-none relative animate-in fade-in" role="alert">
-           <strong className="font-bold">Error: </strong>
-           <span className="block sm:inline">{errorMessage}</span>
+         <div className="bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 rounded-none relative animate-in fade-in flex items-start justify-between gap-3" role="alert">
+           <span><strong className="font-bold">Error: </strong>{errorMessage}</span>
+           <button onClick={() => setErrorMessage('')} className="shrink-0 text-rose-600 hover:text-rose-900" aria-label="Dismiss error">✕</button>
          </div>
        )}
        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 pb-6 border-b border-slate-300">
@@ -2702,22 +3226,18 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                         )}
                     </div>
                     <div className="flex items-center gap-2 w-full md:w-auto">
-                        <button 
-                            onClick={() => handleBulkUpload(view === 'USERS' ? 'USER' : view === 'JOBS' ? 'JOB' : view === 'SKILLS' ? 'SKILL' : (view === 'DEPTS' && !selectedProjectId) ? 'PROJECT' : 'DEPT')}
+                        <button
+                            onClick={() => handleBulkUpload(view === 'USERS' ? 'USER' : view === 'JOBS' ? 'JOB' : view === 'SKILLS' ? 'SKILL' : 'DEPT')}
                             className="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-sm text-xs font-bold uppercase tracking-wide flex items-center gap-2 transition-all flex-1 md:flex-none justify-center"
                         >
                             <FileSpreadsheet size={16} className="text-blue-700" /> Bulk Upload
                         </button>
-                         <button onClick={() => {
-                             if (view === 'DEPTS' && !selectedProjectId) handleAdd('PROJECT');
-                             else handleAdd(view === 'USERS' ? 'USER' : view === 'JOBS' ? 'JOB' : view === 'SKILLS' ? 'SKILL' : 'DEPT');
-                         }}
+                         <button onClick={() => handleAdd(view === 'USERS' ? 'USER' : view === 'JOBS' ? 'JOB' : view === 'SKILLS' ? 'SKILL' : 'DEPT')}
                              className="bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-sm text-xs font-bold uppercase tracking-wide  flex items-center gap-2 transition-all flex-1 md:flex-none justify-center">
                              <Plus size={16} /> Add {
-                                 view === 'USERS' ? 'Employee' : 
-                                 view === 'JOBS' ? 'Profile' : 
-                                 view === 'SKILLS' ? 'Skill' : 
-                                 (view === 'DEPTS' && !selectedProjectId) ? 'Project' : 'Department'
+                                 view === 'USERS' ? 'Employee' :
+                                 view === 'JOBS' ? 'Profile' :
+                                 view === 'SKILLS' ? 'Skill' : 'Department'
                              }
                          </button>
                     </div>
@@ -2727,44 +3247,23 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
            {/* Table or Tree View */}
            <div className="overflow-x-auto">
                {view === 'DEPTS' ? (
-                   !selectedProjectId ? (
-                       <ProjectList 
-                           projects={projects}
-                           onSelect={setSelectedProjectId}
-                           onEdit={(p) => handleEdit('PROJECT', p)}
-                           onDelete={(id) => handleDelete('PROJECT', id)}
-                           onAdd={() => handleAdd('PROJECT')}
-                       />
-                   ) : selectedDeptProfileId ? (
-                       <DepartmentProfileView 
-                           deptId={selectedDeptProfileId}
-                           depts={depts}
-                           jobProfiles={jobs}
-                           users={users}
-                           currentUser={currentUser}
-                           onBack={setSelectedDeptProfileId}
-                           onEdit={(d) => handleEdit('DEPT', d)}
-                           onDelete={(id) => handleDelete('DEPT', id)}
-                           onAddChild={handleAddChild}
-                           onEditUser={(u) => handleEdit('USER', u)}
-                           onPromoteUser={handlePromoteUser}
-                           onSelectDept={setSelectedDeptProfileId}
-                       />
-                   ) : (
-                       <GeneralDeptList 
-                           projectId={selectedProjectId}
-                           depts={depts.filter(d => 
-                               d.projectId === selectedProjectId || 
-                               (selectedProjectId === hqProjectId && !d.projectId)
-                           )}
-                           users={users}
-                           currentUser={currentUser}
-                           onSelect={setSelectedDeptProfileId}
-                           onEdit={(d) => handleEdit('DEPT', d)}
-                           onDelete={(id) => handleDelete('DEPT', id)}
-                           onBack={() => setSelectedProjectId(null)}
-                       />
-                   )
+                   <CompanyOrgView
+                       depts={depts}
+                       projects={projects}
+                       users={users}
+                       jobs={jobs}
+                       hqProjectId={hqProjectId}
+                       currentUser={currentUser}
+                       onEdit={(d) => handleEdit('DEPT', d)}
+                       onDelete={(id) => handleDelete('DEPT', id)}
+                       onAddChild={handleAddChild}
+                       onAddDeptToProject={handleAddDeptToProject}
+                       onEditUser={(u) => handleEdit('USER', u)}
+                       onPromoteUser={handlePromoteUser}
+                       onAddProject={() => handleAdd('PROJECT')}
+                       onEditProject={(p) => handleEdit('PROJECT', p)}
+                       onDeleteProject={(id) => handleDelete('PROJECT', id)}
+                   />
                ) : (
                    <table className="w-full text-left">
                        <thead className="bg-slate-50 text-slate-700 font-bold text-xs uppercase tracking-wider border-b border-slate-300">
@@ -2776,7 +3275,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                            </tr>
                        </thead>
                        <tbody className="divide-y divide-slate-100 text-sm">
-                           {view === 'USERS' && filteredUsers.map(user => (
+                           {view === 'USERS' && paginatedUsers.map(user => (
                                <tr key={user.id} className="hover:bg-slate-50 transition-colors group">
                                    <td className="p-4 pl-6">
                                        <div className="flex items-center gap-3">
@@ -2796,27 +3295,14 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                                         <div className="flex flex-col gap-0.5">
                                             {(() => {
                                                 const dept = depts.find(d => d.id === user.departmentId);
-                                                const genDept = depts.find(d => d.id === (user.generalDepartmentId || dataService.getGeneralDeptId(user.departmentId)));
-                                                
                                                 if (!dept) return <span className="text-slate-400 text-[10px] font-bold italic lowercase">unassigned</span>;
-                                                
                                                 const parentDept = dept.parentId ? depts.find(d => d.id === dept.parentId) : null;
-                                                
                                                 return (
-                                                    <div className="flex items-center gap-1 overflow-hidden">
-                                                        <span className="text-slate-900 font-bold text-[11px] leading-tight flex items-center gap-1 uppercase tracking-tight whitespace-nowrap">
-                                                            {genDept?.name || 'Unknown'}
-                                                            {genDept?.id !== dept.id && <ChevronRight size={8} className="text-slate-400 shrink-0" />}
-                                                            {genDept?.id !== dept.id && parentDept && parentDept.id !== genDept?.id && (
-                                                                <>
-                                                                    <span className="text-slate-600">{parentDept.name}</span>
-                                                                    {dept.id !== parentDept.id && <ChevronRight size={8} className="text-slate-400 shrink-0" />}
-                                                                </>
-                                                            )}
-                                                            {dept.id !== genDept?.id && dept.id !== parentDept?.id && (
-                                                                <span className="text-blue-700 font-black">{dept.name}</span>
-                                                            )}
-                                                        </span>
+                                                    <div className="flex flex-col gap-0.5">
+                                                        {parentDept && parentDept.id !== dept.id && (
+                                                            <span className="text-slate-500 text-[10px] uppercase tracking-tight">{parentDept.name}</span>
+                                                        )}
+                                                        <span className="text-blue-700 font-black text-[11px] uppercase tracking-tight">{dept.name}</span>
                                                     </div>
                                                 );
                                             })()}
@@ -2844,7 +3330,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                                        </div>
                                    </td>
                                </tr>
-                           ))}{view === 'JOBS' && filteredJobs.map(job => (
+                           ))}{view === 'JOBS' && paginatedJobs.map(job => (
                                <tr key={job.id} className="hover:bg-slate-50 transition-colors group">
                                    <td className="p-4 pl-6">
                                         <span className="px-2 py-1 bg-blue-50 text-blue-700 border border-blue-100 rounded-none text-[10px] font-black uppercase tracking-wide leading-none whitespace-nowrap">
@@ -2902,27 +3388,37 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                    </table>
                )}
            </div>
-            {view === 'SKILLS' && totalPages > 1 && (
+            {/* A3.4: Pagination bar for USERS / JOBS / SKILLS — caps rendered rows at
+                itemsPerPage to prevent DOM freeze with 500+ entries. */}
+            {(() => {
+              // Only the table views (USERS / JOBS / SKILLS) are paginated. The DEPTS
+              // view renders the org-chart tree (CompanyOrgView) and must not show a
+              // pagination bar — otherwise it falls through to the skills counts and
+              // appears as a non-functional control.
+              if (view !== 'USERS' && view !== 'JOBS' && view !== 'SKILLS') return null;
+              if (selectedDeptProfileId) return null;
+              const pageCount = view === 'USERS' ? totalUserPages : view === 'JOBS' ? totalJobPages : totalPages;
+              const totalCount = view === 'USERS' ? filteredUsers.length : view === 'JOBS' ? filteredJobs.length : filteredSkills.length;
+              if (pageCount <= 1) return null;
+              return (
                 <div className="p-4 border-t border-slate-300 bg-slate-50/50 flex flex-col md:flex-row justify-between items-center gap-4">
                     <div className="text-[10px] text-slate-600 font-black uppercase tracking-widest">
-                        Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredSkills.length)} of {filteredSkills.length} entries
+                        Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, totalCount)} of {totalCount} entries
                     </div>
                     <div className="flex items-center gap-1">
-                        <button 
+                        <button
                             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                             disabled={currentPage === 1}
                             className="p-2 border border-slate-300 bg-white text-slate-600 disabled:opacity-50 hover:bg-slate-50 transition-all rounded-none"
                         >
                             <ArrowLeft size={16} />
                         </button>
-                        
                         <div className="flex items-center gap-1 mx-1">
-                            {Array.from({ length: totalPages }, (_, i) => i + 1).filter(page => {
-                                return page === 1 || page === totalPages || (page >= currentPage - 2 && page <= currentPage + 2);
-                            }).map((page, idx, arr) => {
+                            {Array.from({ length: pageCount }, (_, i) => i + 1).filter(page =>
+                                page === 1 || page === pageCount || (page >= currentPage - 2 && page <= currentPage + 2)
+                            ).map((page, idx, arr) => {
                                 const prevPage = arr[idx - 1];
                                 const showEllipsis = prevPage && page - prevPage > 1;
-                                
                                 return (
                                     <React.Fragment key={page}>
                                         {showEllipsis && <span className="text-slate-400 px-1 text-xs">...</span>}
@@ -2936,17 +3432,17 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                                 );
                             })}
                         </div>
-
-                        <button 
-                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                            disabled={currentPage === totalPages}
+                        <button
+                            onClick={() => setCurrentPage(p => Math.min(pageCount, p + 1))}
+                            disabled={currentPage === pageCount}
                             className="p-2 border border-slate-300 bg-white text-slate-600 disabled:opacity-50 hover:bg-slate-50 transition-all rounded-none"
                         >
                             <ChevronRight size={16} />
                         </button>
                     </div>
                 </div>
-            )}
+              );
+            })()}
        </div>
        {viewSkill && <SkillDetailsModal skill={viewSkill} onClose={() => setViewSkill(null)} />}
        {showBulkUpload && (

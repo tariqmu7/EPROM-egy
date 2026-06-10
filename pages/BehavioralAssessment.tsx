@@ -52,22 +52,35 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
   const [searchTerm, setSearchTerm] = useState('');
 
   const [evalType, setEvalType] = useState<'OTHER_SKILLS' | 'ANNUAL_APPRAISAL'>('OTHER_SKILLS');
-  const [appraisalAnswers, setAppraisalAnswers] = useState<boolean[]>(new Array(10).fill(false));
-
-  const ANNUAL_APPRAISAL_QUESTIONS = useMemo(() => [
-    { title: "Health, Safety, and Environment (HSE) Compliance", text: "Did the employee consistently adhere to, and actively promote, all safety protocols and HSE guidelines without any recorded compliance violations this year?" },
-    { title: "Technical Execution and Quality", text: "Did the employee successfully execute their assigned technical tasks, field operations, or project deliverables to the required quality standards?" },
-    { title: "Problem Solving and Troubleshooting", text: "Did the employee demonstrate the ability to independently and safely resolve unexpected technical, mechanical, or operational challenges on-site or during project design?" },
-    { title: "Multidisciplinary Collaboration", text: "Did the employee collaborate effectively across different roles (e.g., engineers working well with technicians and management) to keep projects moving smoothly?" },
-    { title: "Operational Efficiency and Resource Management", text: "Did the employee manage company resources—such as time, field equipment, materials, or budget—efficiently and responsibly?" },
-    { title: "Adaptability Under Pressure", text: "Did the employee adapt successfully to sudden changes in project scope, shifting site conditions, or emergency operational demands?" },
-    { title: "Clear Technical Communication", text: "Did the employee consistently communicate critical project updates, technical data, and potential operational risks clearly to their supervisors and team members?" },
-    { title: "Continuous Improvement and Innovation", text: "Did the employee suggest or implement any process optimizations, cost-saving measures, or new technical approaches that benefited the team or project?" },
-    { title: "Knowledge Sharing and Mentorship", text: "Did the employee actively share their technical expertise, assist peers with complex tasks, or help guide junior staff/technicians?" },
-    { title: "Professional Development", text: "Did the employee complete required industry training and actively work to update their technical skills or certifications relevant to the energy sector?" }
-  ], []);
+  const [appraisalAnswers, setAppraisalAnswers] = useState<boolean[]>([]);
 
   const storeVersion = useStoreData();
+
+  // Active annual appraisal plan; falls back to built-in questions if none configured
+  const annualAppraisalPlan = useMemo(() => {
+    return dataService.getAllAssessmentPlans().find(
+      p => p.method === 'ANNUAL_APPRAISAL' && p.status === 'ACTIVE'
+    ) ?? null;
+  }, [storeVersion]);
+
+  const ANNUAL_APPRAISAL_QUESTIONS = useMemo(() => {
+    if (annualAppraisalPlan?.annualAppraisalQuestions?.length) {
+      return annualAppraisalPlan.annualAppraisalQuestions;
+    }
+    // Built-in fallback when no plan is configured
+    return [
+      { id: 'q1', title: "Health, Safety, and Environment (HSE) Compliance", text: "Did the employee consistently adhere to, and actively promote, all safety protocols and HSE guidelines without any recorded compliance violations this year?", weight: 10 },
+      { id: 'q2', title: "Technical Execution and Quality", text: "Did the employee successfully execute their assigned technical tasks, field operations, or project deliverables to the required quality standards?", weight: 10 },
+      { id: 'q3', title: "Problem Solving and Troubleshooting", text: "Did the employee demonstrate the ability to independently and safely resolve unexpected technical, mechanical, or operational challenges on-site or during project design?", weight: 10 },
+      { id: 'q4', title: "Multidisciplinary Collaboration", text: "Did the employee collaborate effectively across different roles (e.g., engineers working well with technicians and management) to keep projects moving smoothly?", weight: 10 },
+      { id: 'q5', title: "Operational Efficiency and Resource Management", text: "Did the employee manage company resources—such as time, field equipment, materials, or budget—efficiently and responsibly?", weight: 10 },
+      { id: 'q6', title: "Adaptability Under Pressure", text: "Did the employee adapt successfully to sudden changes in project scope, shifting site conditions, or emergency operational demands?", weight: 10 },
+      { id: 'q7', title: "Clear Technical Communication", text: "Did the employee consistently communicate critical project updates, technical data, and potential operational risks clearly to their supervisors and team members?", weight: 10 },
+      { id: 'q8', title: "Continuous Improvement and Innovation", text: "Did the employee suggest or implement any process optimizations, cost-saving measures, or new technical approaches that benefited the team or project?", weight: 10 },
+      { id: 'q9', title: "Knowledge Sharing and Mentorship", text: "Did the employee actively share their technical expertise, assist peers with complex tasks, or help guide junior staff/technicians?", weight: 10 },
+      { id: 'q10', title: "Professional Development", text: "Did the employee complete required industry training and actively work to update their technical skills or certifications relevant to the energy sector?", weight: 10 }
+    ];
+  }, [annualAppraisalPlan]);
 
   const users = useMemo(() => dataService.getPublicUsers(), [storeVersion]);
 
@@ -148,8 +161,9 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
         setFeedback('');
       }
     } else {
+      const qCount = ANNUAL_APPRAISAL_QUESTIONS.length;
       if (existingAppraisal) {
-        let answers = new Array(10).fill(false);
+        let answers = new Array(qCount).fill(false);
         let parsedFeedback = existingAppraisal.comment || '';
         if (parsedFeedback.startsWith('[APPRAISAL_DATA:')) {
             const endIdx = parsedFeedback.indexOf(']');
@@ -157,8 +171,11 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
                 const data = parsedFeedback.substring(16, endIdx);
                 try {
                     const parsedAnswers = JSON.parse(`[${data}]`);
-                    if (Array.isArray(parsedAnswers) && parsedAnswers.length === 10) {
-                        answers = parsedAnswers;
+                    if (Array.isArray(parsedAnswers)) {
+                        // Pad or truncate to match current question count
+                        answers = Array.from({ length: qCount }, (_, i) =>
+                          i < parsedAnswers.length ? Boolean(parsedAnswers[i]) : false
+                        );
                     }
                 } catch (e) {
                     console.warn(
@@ -170,16 +187,17 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
                 parsedFeedback = parsedFeedback.substring(endIdx + 1).trim();
             }
         } else {
-            answers = new Array(10).fill(false).map((_, i) => i < existingAppraisal.score);
+            // Legacy format: score was count of yes answers
+            answers = new Array(qCount).fill(false).map((_, i) => i < existingAppraisal.score);
         }
         setAppraisalAnswers(answers);
         setFeedback(parsedFeedback);
       } else {
-        setAppraisalAnswers(new Array(10).fill(false));
+        setAppraisalAnswers(new Array(qCount).fill(false));
         setFeedback('');
       }
     }
-  }, [evalType, existingAssessment, existingAppraisal, selectedSubjectId, selectedSkillId]);
+  }, [evalType, existingAssessment, existingAppraisal, selectedSubjectId, selectedSkillId, ANNUAL_APPRAISAL_QUESTIONS]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -208,7 +226,10 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
             : 'UPWARD';
 
       if (evalType === 'ANNUAL_APPRAISAL') {
-        const score = appraisalAnswers.filter(a => a).length;
+        const totalWeight = ANNUAL_APPRAISAL_QUESTIONS.reduce((s, q) => s + (q.weight ?? 10), 0);
+        const earnedWeight = ANNUAL_APPRAISAL_QUESTIONS.reduce((s, q, i) =>
+          s + (appraisalAnswers[i] ? (q.weight ?? 10) : 0), 0);
+        const score = totalWeight > 0 ? Math.round((earnedWeight / totalWeight) * 100) : 0;
         const commentData = `[APPRAISAL_DATA:${appraisalAnswers.join(',')}]\n${feedback}`;
         await dataService.addAssessment({
           raterId: currentUser.id,
@@ -236,7 +257,7 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
       setSelectedSkillId('');
       setRating(0);
       setFeedback('');
-      setAppraisalAnswers(new Array(10).fill(false));
+      setAppraisalAnswers(new Array(ANNUAL_APPRAISAL_QUESTIONS.length).fill(false));
 
       setTimeout(() => setSuccessMessage(''), 3000);
     } finally {
@@ -419,15 +440,30 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
                 <div className="space-y-4">
                   <div className="flex items-center justify-between mb-2">
                     <label className="block text-sm font-bold text-slate-700">Annual Appraisal Checklist</label>
-                    <span className="text-sm font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-sm border border-blue-200">
-                      Score: {appraisalAnswers.filter(Boolean).length} / 10
-                    </span>
+                    {(() => {
+                      const totalWeight = ANNUAL_APPRAISAL_QUESTIONS.reduce((s, q) => s + (q.weight ?? 10), 0);
+                      const earnedWeight = ANNUAL_APPRAISAL_QUESTIONS.reduce((s, q, i) =>
+                        s + (appraisalAnswers[i] ? (q.weight ?? 10) : 0), 0);
+                      const pct = totalWeight > 0 ? Math.round((earnedWeight / totalWeight) * 100) : 0;
+                      return (
+                        <span className="text-sm font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-sm border border-blue-200">
+                          Weighted Score: {pct}%
+                        </span>
+                      );
+                    })()}
                   </div>
                   <div className="grid grid-cols-1 gap-3">
                     {ANNUAL_APPRAISAL_QUESTIONS.map((q, idx) => (
-                      <div key={idx} className="flex items-start gap-4 p-4 border border-slate-200 rounded-sm bg-white hover:border-slate-300 transition-colors">
+                      <div key={q.id ?? idx} className="flex items-start gap-4 p-4 border border-slate-200 rounded-sm bg-white hover:border-slate-300 transition-colors">
                         <div className="flex-1">
-                          <h4 className="text-sm font-bold text-slate-900 mb-1">{idx + 1}. {q.title}</h4>
+                          <div className="flex items-center gap-2 mb-1">
+                            <h4 className="text-sm font-bold text-slate-900">{idx + 1}. {q.title}</h4>
+                            {q.weight !== undefined && (
+                              <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 border border-blue-200 rounded-none">
+                                {q.weight}%
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs text-slate-600">{q.text}</p>
                         </div>
                         <div className="flex items-center gap-3">

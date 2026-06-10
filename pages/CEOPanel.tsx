@@ -87,6 +87,27 @@ export const CEOPanel: React.FC<CEOPanelProps> = ({ currentUser, onViewProfile }
     }).sort((a, b) => a.name.localeCompare(b.name));
   }, [users, searchTerm, skills, depts]);
 
+  const dataLoaded = dataService.isDataLoaded();
+
+  if (!dataLoaded) {
+    return (
+      <div className="space-y-8 animate-pulse">
+        <div className="h-40 bg-slate-200 rounded-none" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="h-32 bg-slate-100 border border-slate-200 rounded-none" />
+          ))}
+        </div>
+        <div className="h-16 bg-slate-100 border border-slate-200 rounded-none" />
+        <div className="space-y-3">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="h-14 bg-slate-100 border border-slate-200 rounded-none" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
       {/* Header Banner */}

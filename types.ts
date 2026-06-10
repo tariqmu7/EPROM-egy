@@ -53,6 +53,7 @@ export interface Skill {
   id: string;
   name: string;
   category: string;
+  isArchived?: boolean;
   levels: Record<number, SkillLevel>;
   status?: 'APPROVED' | 'PENDING';
   // How this skill is assessed now lives on reusable AssessmentInstruction
@@ -83,14 +84,16 @@ export interface Skill {
   periodicInterval?: 'MONTHLY' | 'QUARTERLY' | 'ANNUALLY';
 }
 
-export type AssessmentMethod = 'WRITTEN_EXAM' | 'PRACTICAL_DEMO' | 'OJT_OBSERVATION' | 'INTERVIEW' | 'WORK_RECORD_REVIEW' | 'THREE_SIXTY_EVALUATION';
+export type AssessmentMethod = 'WRITTEN_EXAM' | 'PRACTICAL_DEMO' | 'OJT_OBSERVATION' | 'INTERVIEW' | 'WORK_RECORD_REVIEW' | 'THREE_SIXTY_EVALUATION' | 'ANNUAL_APPRAISAL';
 
 export interface EvaluationQuestion {
   id: string;
+  title?: string;          // Short label (used as heading in annual appraisal)
   text: string;
   expectedCriteria?: string;
   minRating?: number;
   maxRating?: number;
+  weight?: number;         // Scoring weight (percentage points); weights should sum to 100
 }
 
 export interface ScheduledAssessment {
@@ -153,6 +156,7 @@ export interface AssessmentPlan {
   audience: AssessmentAudience;
   audienceOrgLevels?: OrgLevel[];     // when audience === 'ORG_LEVELS'
   audienceDepartmentIds?: string[];   // when audience === 'DEPARTMENTS'
+  annualAppraisalQuestions?: EvaluationQuestion[];  // when method === 'ANNUAL_APPRAISAL'
   status: 'ACTIVE' | 'INACTIVE';
   createdAt: string;
   updatedAt: string;
@@ -174,6 +178,7 @@ export interface AssessmentInstruction {
   evaluationQuestions?: EvaluationQuestion[];   // WRITTEN_EXAM internal test bank
   interviewQuestions?: EvaluationQuestion[];    // INTERVIEW question bank
   threeSixtyQuestions?: EvaluationQuestion[];   // 360° feedback bank
+  annualAppraisalQuestions?: EvaluationQuestion[]; // ANNUAL_APPRAISAL checklist items
   status: 'ACTIVE' | 'INACTIVE';
   createdAt: string;
   updatedAt: string;
@@ -185,7 +190,8 @@ export const ASSESSMENT_METHOD_LABELS: Record<AssessmentMethod, string> = {
   PRACTICAL_DEMO: 'Practical Demonstration / Simulation',
   INTERVIEW: 'Interview & Technical Discussion',
   WORK_RECORD_REVIEW: 'Work Record / Case Study Review',
-  THREE_SIXTY_EVALUATION: '360° Multi-Rater Evaluation'
+  THREE_SIXTY_EVALUATION: '360° Multi-Rater Evaluation',
+  ANNUAL_APPRAISAL: 'Annual Appraisal (Weighted Checklist)'
 };
 
 export interface JobProfileSkill {
@@ -197,6 +203,7 @@ export interface JobProfile {
   id: string;
   title: string;
   description: string;
+  isArchived?: boolean;
   departmentId: string;
   // Requirements mapped by OrgLevel (e.g., 'FR' -> skills for freshers)
   requirements: Partial<Record<OrgLevel, JobProfileSkill[]>>;
@@ -216,6 +223,7 @@ export type DepartmentType = 'GENERAL' | 'DEPARTMENT' | 'SECTION';
 export interface Department {
   id: string;
   name: string;
+  nameAr?: string; // Arabic name (shown under the English name in the org chart)
   projectId?: string; // Added link to project
   type?: DepartmentType; // New field for hierarchy level
   parentId?: string; // Support for hierarchical structure
@@ -266,6 +274,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  isArchived?: boolean;
   phone?: string;
   whatsapp?: string;
   role: Role;
