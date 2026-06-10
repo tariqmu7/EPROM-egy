@@ -1940,6 +1940,21 @@ export class DataService {
   getAllDepartments() { return this.departments; }
   getSkill(id: string) { return this.skills.find(s => s.id === id && !s.isArchived); }
   getSystemLogs() { return this.logs; }
+
+  // On-demand fetch of the full audit trail (ISO.1). The live listener keeps
+  // only the latest 50 in memory; the admin Audit Trail view pulls a deeper
+  // history when opened.
+  async fetchAuditLogs(max = 500): Promise<ActivityLog[]> {
+    try {
+      const snap = await getDocs(
+        query(collection(db, 'activityLogs'), orderBy('timestamp', 'desc'), limit(max))
+      );
+      return snap.docs.map(d => ({ id: d.id, ...d.data() } as ActivityLog));
+    } catch (err) {
+      console.error('fetchAuditLogs failed', err);
+      return this.logs;
+    }
+  }
   getAllProjects() { return this.projects; }
   getProjectById(id: string) { return this.projects.find(p => p.id === id); }
 
@@ -2359,14 +2374,39 @@ export class DataService {
 
   // --- ACTIONS (Async Write-Behind) ---
 
-  public async logActivity(action: string, target: string) {
+  // Resolve the acting user from the live auth session for audit attribution
+  // (ISO.1). Best-effort: returns empty when the actor can't be matched (e.g.
+  // a pre-auth system event) so the log still writes.
+  private resolveActor(): { actorId?: string; actorName?: string } {
+    const uid = auth.currentUser?.uid;
+    const email = auth.currentUser?.email?.toLowerCase();
+    const profile =
+      (uid && this.users.find(u => u.id === uid)) ||
+      (email && this.users.find(u => u.email?.toLowerCase() === email)) ||
+      null;
+    if (profile) return { actorId: profile.id, actorName: profile.name };
+    if (email) return { actorName: email };
+    return {};
+  }
+
+  public async logActivity(
+    action: string,
+    target: string,
+    details?: { entity?: string; entityId?: string; before?: string; after?: string }
+  ) {
     const id = doc(collection(db, 'activityLogs')).id;
+    // Build without undefined fields — Firestore rejects them.
     const newLog: ActivityLog = {
         id,
         action,
         target,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        ...this.resolveActor(),
     };
+    if (details?.entity !== undefined) newLog.entity = details.entity;
+    if (details?.entityId !== undefined) newLog.entityId = details.entityId;
+    if (details?.before !== undefined) newLog.before = details.before;
+    if (details?.after !== undefined) newLog.after = details.after;
     await this.persistItem('activityLogs', newLog);
   }
 
@@ -2389,7 +2429,14 @@ export class DataService {
     });
 
     const subject = this.users.find(u => u.id === assessment.subjectId)?.name || 'Employee';
-    await this.logActivity('Submitted Assessment', `For ${subject}`);
+    const skillName = assessment.skillId === 'annual-appraisal'
+      ? 'Annual Appraisal'
+      : (this.skills.find(s => s.id === assessment.skillId)?.name || assessment.skillId);
+    await this.logActivity('Submitted Assessment', `For ${subject}`, {
+      entity: 'assessment',
+      entityId: id,
+      after: `${skillName} (${assessment.type}) → ${assessment.score}`,
+    });
 
     if (assessment.raterId !== assessment.subjectId) {
       await this.addNotification({
@@ -2403,9 +2450,15 @@ export class DataService {
   }
 
   async updateAssessment(assessment: Assessment) {
+    const prior = this.assessments.find(a => a.id === assessment.id);
     await this.updateItem('assessments', assessment);
     const subject = this.users.find(u => u.id === assessment.subjectId)?.name || 'Employee';
-    await this.logActivity('Updated Assessment', `For ${subject}`);
+    await this.logActivity('Updated Assessment', `For ${subject}`, {
+      entity: 'assessment',
+      entityId: assessment.id,
+      before: prior ? `score ${prior.score}` : undefined,
+      after: `score ${assessment.score}`,
+    });
   }
 
   async addSkill(skill: Skill) { 

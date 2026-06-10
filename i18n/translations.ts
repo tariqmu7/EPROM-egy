@@ -1,0 +1,103 @@
+// I18N.1 / I18N.4 — translation bundles. English is the source of truth;
+// Arabic mirrors it for the Egyptian rollout. Keys are dot-namespaced by area.
+// Add keys here, not inline strings, so screens render bilingually.
+
+export type Locale = 'en' | 'ar';
+
+export const LOCALES: { code: Locale; label: string; dir: 'ltr' | 'rtl' }[] = [
+  { code: 'en', label: 'English', dir: 'ltr' },
+  { code: 'ar', label: 'العربية', dir: 'rtl' },
+];
+
+export const DICTIONARIES: Record<Locale, Record<string, string>> = {
+  en: {
+    'app.name': 'EPROM CMS',
+    'app.tagline': 'EPROM Competency program',
+
+    'nav.skipToContent': 'Skip to main content',
+    'nav.overview': 'Overview',
+    'nav.analytics': 'Analytics',
+    'nav.assessments': 'Assessments',
+    'nav.instructions': 'Instructions',
+    'nav.auditTrail': 'Audit Trail',
+    'nav.organization': 'Organization',
+    'nav.orgStructure': 'Org Structure',
+    'nav.myProfile': 'My Profile',
+    'nav.myTeam': 'My Team',
+    'nav.evaluations': 'Evaluations',
+    'nav.settings': 'Settings',
+    'nav.signOut': 'Sign Out',
+
+    'role.administrator': 'Administrator',
+    'role.ceo': 'CEO',
+    'role.employee': 'Employee',
+
+    'common.save': 'Save',
+    'common.cancel': 'Cancel',
+    'common.close': 'Close',
+    'common.search': 'Search',
+    'common.loading': 'Loading…',
+    'common.refresh': 'Refresh',
+
+    'settings.title': 'Settings',
+    'settings.subtitle': 'Manage your language, appearance and notification preferences.',
+    'settings.language': 'Language',
+    'settings.languageHint': 'Choose the interface language. Arabic switches the layout to right-to-left.',
+    'settings.theme': 'Theme',
+    'settings.theme.light': 'Light',
+    'settings.theme.dark': 'Dark',
+    'settings.theme.system': 'System',
+    'settings.notifications': 'Notifications',
+    'settings.notifications.email': 'Email notifications',
+    'settings.notifications.inApp': 'In-app notifications',
+    'settings.saved': 'Your preferences have been saved.',
+    'settings.data': 'Your data',
+    'settings.dataHint': 'Download a complete copy of your profile, assessments, evidence and training plans as a JSON file.',
+    'settings.dataDownload': 'Download my data',
+  },
+  ar: {
+    'app.name': 'نظام إدارة الكفاءات',
+    'app.tagline': 'برنامج كفاءات إبروم',
+
+    'nav.skipToContent': 'تخطَّ إلى المحتوى الرئيسي',
+    'nav.overview': 'نظرة عامة',
+    'nav.analytics': 'التحليلات',
+    'nav.assessments': 'التقييمات',
+    'nav.instructions': 'التعليمات',
+    'nav.auditTrail': 'سجل التدقيق',
+    'nav.organization': 'المؤسسة',
+    'nav.orgStructure': 'الهيكل التنظيمي',
+    'nav.myProfile': 'ملفي الشخصي',
+    'nav.myTeam': 'فريقي',
+    'nav.evaluations': 'التقييمات',
+    'nav.settings': 'الإعدادات',
+    'nav.signOut': 'تسجيل الخروج',
+
+    'role.administrator': 'مسؤول النظام',
+    'role.ceo': 'الرئيس التنفيذي',
+    'role.employee': 'موظف',
+
+    'common.save': 'حفظ',
+    'common.cancel': 'إلغاء',
+    'common.close': 'إغلاق',
+    'common.search': 'بحث',
+    'common.loading': 'جارٍ التحميل…',
+    'common.refresh': 'تحديث',
+
+    'settings.title': 'الإعدادات',
+    'settings.subtitle': 'إدارة تفضيلات اللغة والمظهر والإشعارات.',
+    'settings.language': 'اللغة',
+    'settings.languageHint': 'اختر لغة الواجهة. تؤدي العربية إلى تحويل التخطيط من اليمين إلى اليسار.',
+    'settings.theme': 'المظهر',
+    'settings.theme.light': 'فاتح',
+    'settings.theme.dark': 'داكن',
+    'settings.theme.system': 'النظام',
+    'settings.notifications': 'الإشعارات',
+    'settings.notifications.email': 'إشعارات البريد الإلكتروني',
+    'settings.notifications.inApp': 'الإشعارات داخل التطبيق',
+    'settings.saved': 'تم حفظ تفضيلاتك.',
+    'settings.data': 'بياناتك',
+    'settings.dataHint': 'نزّل نسخة كاملة من ملفك الشخصي وتقييماتك وأدلتك وخطط التدريب بصيغة JSON.',
+    'settings.dataDownload': 'تنزيل بياناتي',
+  },
+};

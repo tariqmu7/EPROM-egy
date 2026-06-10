@@ -8,6 +8,7 @@ const ManagerDashboard = lazy(() => import('./pages/ManagerDashboard').then(m =>
 const AdminPanel = lazy(() => import('./pages/AdminPanel').then(m => ({ default: m.AdminPanel })));
 const CEOPanel = lazy(() => import('./pages/CEOPanel').then(m => ({ default: m.CEOPanel })));
 const EvaluationsHub = lazy(() => import('./pages/EvaluationsHub').then(m => ({ default: m.EvaluationsHub })));
+const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
 import { Logo } from './components/Logo';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { dataService, CONFIG, isBootstrapAdminEmail } from './services/store';
@@ -532,10 +533,12 @@ const App: React.FC = () => {
         case 'admin-analytics': return <AdminPanel view="ANALYTICS" onNavigate={setActiveTab} />;
         case 'admin-assessments': return <AdminPanel view="PLANS" onNavigate={setActiveTab} />;
         case 'admin-instructions': return <AdminPanel view="INSTRUCTIONS" onNavigate={setActiveTab} />;
+        case 'admin-audit': return <AdminPanel view="AUDIT" onNavigate={setActiveTab} />;
         case 'admin-users': return <AdminPanel view="USERS" onNavigate={setActiveTab} />;
         case 'admin-jobs': return <AdminPanel view="JOBS" onNavigate={setActiveTab} />;
         case 'admin-skills': return <AdminPanel view="SKILLS" onNavigate={setActiveTab} />;
         case 'admin-depts': return <AdminPanel view="DEPTS" onNavigate={setActiveTab} />;
+        case 'settings': return <SettingsPage user={user} />;
         default: return <div className="p-8 text-center text-slate-600">Section Under Construction</div>;
     }
   };

@@ -317,6 +317,11 @@ export interface Assessment {
   type: 'SELF' | 'PEER' | 'MANAGER' | 'UPWARD' | 'WRITTEN_EXAM' | 'PRACTICAL_DEMO' | 'INTERVIEW' | 'WORK_RECORD_REVIEW';
   cycleId?: string;
   isArchived?: boolean;
+  // Structured annual-appraisal answers (W1.2 / C.2). One boolean per checklist
+  // question, in question order. Replaces the legacy `[APPRAISAL_DATA:...]`
+  // string packed into `comment`; that format is still parsed at read-time for
+  // legacy docs only. Present only on annual-appraisal records.
+  appraisalAnswers?: boolean[];
 }
 
 export interface Nomination {
@@ -353,6 +358,16 @@ export interface ActivityLog {
   action: string;
   target: string;
   timestamp: string;
+  // Audit-trail enrichment (ISO.1 — "who scored whom, when, before/after").
+  // All optional so legacy logs and unattributed system events still parse.
+  actorId?: string;
+  actorName?: string;
+  // Entity the action touched, e.g. 'assessment' | 'user' | 'jobProfile'.
+  entity?: string;
+  entityId?: string;
+  // Human-readable before/after snapshot for tamper-evident competence records.
+  before?: string;
+  after?: string;
 }
 
 export interface Evidence {

@@ -9,6 +9,7 @@ import { BulkUpload } from '../components/BulkUpload';
 import { AdminAnalytics } from './AdminAnalytics';
 import { AssessmentManagement } from './AssessmentManagement';
 import { AssessmentInstructionManagement } from './AssessmentInstructionManagement';
+import { AuditTrail } from './AuditTrail';
 
 // --- Reusable Form Wrapper ---
 const FormPage: React.FC<{ title: string; onBack: () => void; children: React.ReactNode }> = ({ title, onBack, children }) => {
@@ -3147,6 +3148,11 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
   // --- ASSESSMENT INSTRUCTIONS VIEW ---
   if (view === 'INSTRUCTIONS') {
       return <AssessmentInstructionManagement />;
+  }
+
+  // --- AUDIT TRAIL VIEW (ISO.1) ---
+  if (view === 'AUDIT') {
+      return <AuditTrail />;
   }
 
   // --- TABLE VIEW (Data View) ---

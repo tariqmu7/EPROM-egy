@@ -51,6 +51,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { auth } from '../firebase';
+import { exportCompetenceStatement } from '../utils/competenceStatement';
 
 interface EmployeeDashboardProps {
   user: User;
@@ -122,8 +123,28 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
     if (editingCert?.id === certId) setEditingCert(null);
   };
 
+  // ISO.3 — export a branded Statement of Competence instead of printing the
+  // whole dashboard chrome. Reads the computed skill analysis below (initialised
+  // by render time, so the closure is safe).
   const handleExportCV = () => {
-    window.print();
+    const deptName = dataService.getAllDepartments().find(d => d.id === user.departmentId)?.name;
+    exportCompetenceStatement({
+      employeeName: user.name,
+      employeeId: user.employeeId ? String(user.employeeId) : undefined,
+      jobTitle: jobProfile?.title,
+      department: deptName,
+      orgLevelLabel: user.orgLevel ? ORG_LEVEL_LABELS[user.orgLevel] : undefined,
+      managerName: manager?.name,
+      rows: skillAnalysis
+        .filter(s => s.skill)
+        .map(s => ({
+          code: s.skill?.code,
+          name: s.skill?.name ?? '',
+          required: s.required,
+          current: s.current,
+        })),
+      appraisalScore: latestAppraisal?.score,
+    });
   };
 
   // Re-render when Firestore listeners deliver data; storeVersion is fed
@@ -393,8 +414,9 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
             <button 
                 onClick={handleExportCV}
                 className="flex items-center gap-2 px-5 py-2.5 bg-white border-2 border-slate-900 text-slate-900 font-black uppercase text-xs tracking-widest hover:bg-slate-900 hover:text-white transition-all"
+                title="Export a branded Statement of Competence (ISO 9001 §7.2)"
             >
-                <Download size={16} /> Export CV
+                <Download size={16} /> Competence Statement
             </button>
         </div>
       </div>
@@ -1001,7 +1023,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                                 onClick={handleExportCV}
                                 className="bg-white text-blue-900 px-6 py-3 font-black uppercase tracking-widest text-xs flex items-center gap-2 hover:bg-blue-50 transition-all shadow-lg shrink-0"
                             >
-                                <FileText size={16} /> Export Professional CV
+                                <FileText size={16} /> Export Competence Statement
                             </button>
                         </div>
                     </div>

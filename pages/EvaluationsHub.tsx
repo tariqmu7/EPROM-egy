@@ -38,7 +38,7 @@ export const EvaluationsHub: React.FC<Props> = ({ currentUser, initialTab = 'onl
       {/* Page Header */}
       <div>
         <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Evaluations</h1>
-        <p className="text-sm text-slate-500 mt-0.5">
+        <p className="text-sm text-slate-600 mt-0.5">
           Select an evaluation method to view your assessments and submissions.
         </p>
       </div>

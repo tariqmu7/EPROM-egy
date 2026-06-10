@@ -2,8 +2,10 @@ import React, { memo, useState } from 'react';
 import { User, Role, ORG_LEVEL_LABELS } from '../types';
 import { Logo } from './Logo';
 import { dataService } from '../services/store';
-import { LogOut, LayoutDashboard, ClipboardList, ClipboardCheck, ShieldCheck, UserCircle, Users, Building2, Briefcase, Activity, Grid, UploadCloud, CheckSquare, Star, Monitor, MessageSquare, Menu, X } from 'lucide-react';
+import { LogOut, LayoutDashboard, ClipboardList, ClipboardCheck, ShieldCheck, UserCircle, Users, Building2, Briefcase, Activity, Grid, UploadCloud, CheckSquare, Star, Monitor, MessageSquare, Menu, X, Settings, LucideIcon } from 'lucide-react';
 import { NotificationBell } from './NotificationBell';
+import { LanguageToggle } from './LanguageToggle';
+import { useI18n } from '../i18n/I18nContext';
 
 interface LayoutProps {
   user: User;
@@ -15,7 +17,7 @@ interface LayoutProps {
 
 const EVAL_TABS = new Set(['evaluations', 'online-assessments', 'interviews', 'emp-assessment', 'evidence-portal']);
 
-const NavItem = memo(({ id, label, icon: Icon, activeTab, onSwitchTab }: { id: string, label: string, icon: any, activeTab: string, onSwitchTab: (tab: string) => void }) => {
+const NavItem = memo(({ id, label, icon: Icon, activeTab, onSwitchTab }: { id: string, label: string, icon: LucideIcon, activeTab: string, onSwitchTab: (tab: string) => void }) => {
   const isActive = activeTab === id || (id === 'evaluations' && EVAL_TABS.has(activeTab));
   return (
     <button
@@ -34,14 +36,49 @@ const NavItem = memo(({ id, label, icon: Icon, activeTab, onSwitchTab }: { id: s
 
 export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwitchTab, children }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { t } = useI18n();
 
   const handleMobileNav = (tab: string) => {
     onSwitchTab(tab);
     setMobileMenuOpen(false);
   };
 
+  // C.6 — nav model defined once, rendered for both desktop and mobile.
+  const navItems: { id: string; label: string; icon: LucideIcon }[] =
+    user.role === Role.ADMIN
+      ? [
+          { id: 'admin-dashboard', label: t('nav.overview'), icon: LayoutDashboard },
+          { id: 'admin-analytics', label: t('nav.analytics'), icon: Activity },
+          { id: 'admin-assessments', label: t('nav.assessments'), icon: ClipboardList },
+          { id: 'admin-instructions', label: t('nav.instructions'), icon: ClipboardCheck },
+          { id: 'admin-audit', label: t('nav.auditTrail'), icon: ShieldCheck },
+          { id: 'settings', label: t('nav.settings'), icon: Settings },
+        ]
+      : user.role === Role.CEO
+      ? [
+          { id: 'ceo-dashboard', label: t('nav.organization'), icon: LayoutDashboard },
+          { id: 'admin-depts', label: t('nav.orgStructure'), icon: Building2 },
+          { id: 'emp-dashboard', label: t('nav.myProfile'), icon: UserCircle },
+          { id: 'settings', label: t('nav.settings'), icon: Settings },
+        ]
+      : [
+          { id: 'emp-dashboard', label: t('nav.myProfile'), icon: LayoutDashboard },
+          ...(dataService.isManager(user)
+            ? [{ id: 'manager-dashboard', label: t('nav.myTeam'), icon: Users }]
+            : []),
+          { id: 'evaluations', label: t('nav.evaluations'), icon: Star },
+          { id: 'settings', label: t('nav.settings'), icon: Settings },
+        ];
+
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans">
+      {/* AX.4 — skip link: visually hidden until focused, jumps past the header. */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:top-2 focus:left-2 focus:px-4 focus:py-2 focus:bg-slate-900 focus:text-white focus:rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+      >
+        {t('nav.skipToContent')}
+      </a>
       {/* Top Navbar - Modern Style */}
       <header className="bg-white border-b border-slate-300  z-50 sticky top-0">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -53,35 +90,16 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
                     <Logo className="w-full h-full" />
                </div>
                <div className="hidden lg:flex flex-col">
-                 <span className="font-bold text-lg tracking-tight leading-none text-slate-900">EPROM CMS</span>
-                 <span className="text-xs text-slate-900 font-bold uppercase tracking-widest mt-1">EPROM Competency program</span>
+                 <span className="font-bold text-lg tracking-tight leading-none text-slate-900">{t('app.name')}</span>
+                 <span className="text-xs text-slate-900 font-bold uppercase tracking-widest mt-1">{t('app.tagline')}</span>
                </div>
             </div>
 
             {/* Main Navigation */}
-            <nav className="hidden md:flex items-center gap-2 mx-4">
-              {user.role === Role.ADMIN ? (
-                <>
-                  <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="admin-dashboard" label="Overview" icon={LayoutDashboard} />
-                  <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="admin-analytics" label="Analytics" icon={Activity} />
-                  <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="admin-assessments" label="Assessments" icon={ClipboardList} />
-                  <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="admin-instructions" label="Instructions" icon={ClipboardCheck} />
-                </>
-              ) : user.role === Role.CEO ? (
-                <>
-                  <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="ceo-dashboard" label="Organization" icon={LayoutDashboard} />
-                  <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="admin-depts" label="Org Structure" icon={Building2} />
-                  <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="emp-dashboard" label="My Profile" icon={UserCircle} />
-                </>
-              ) : (
-                <>
-                  <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="emp-dashboard" label="My Profile" icon={LayoutDashboard} />
-                  {dataService.isManager(user) && (
-                    <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="manager-dashboard" label="My Team" icon={Users} />
-                  )}
-                  <NavItem activeTab={activeTab} onSwitchTab={onSwitchTab} id="evaluations" label="Evaluations" icon={Star} />
-                </>
-              )}
+            <nav className="hidden md:flex items-center gap-2 mx-4" aria-label="Primary">
+              {navItems.map(item => (
+                <NavItem key={item.id} activeTab={activeTab} onSwitchTab={onSwitchTab} id={item.id} label={item.label} icon={item.icon} />
+              ))}
             </nav>
 
             {/* Mobile hamburger */}
@@ -95,7 +113,9 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
 
             {/* Right Side Actions */}
             <div className="flex items-center gap-4 lg:gap-6 flex-shrink-0">
-              
+
+              <LanguageToggle />
+
               {user.role !== Role.ADMIN && <NotificationBell user={user} onNavigate={onSwitchTab} />}
 
               {/* User Profile */}
@@ -103,18 +123,18 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
                 <div className="text-right hidden sm:block">
                     <p className="text-sm font-bold text-slate-900 leading-none">{user.name}</p>
                     <p className="text-xs text-slate-700 uppercase mt-1">
-                        {user.role === Role.ADMIN ? 'Administrator' : (user.role === Role.CEO ? 'CEO' : (user.orgLevel ? ORG_LEVEL_LABELS[user.orgLevel] : 'Employee'))}
+                        {user.role === Role.ADMIN ? t('role.administrator') : (user.role === Role.CEO ? t('role.ceo') : (user.orgLevel ? ORG_LEVEL_LABELS[user.orgLevel] : t('role.employee')))}
                     </p>
                 </div>
                 <div className="w-10 h-10 rounded-full bg-slate-100 border border-slate-300 flex items-center justify-center overflow-hidden text-slate-700">
-                    {user.avatarUrl ? <img src={user.avatarUrl} alt="avatar" /> : <UserCircle size={24} />}
+                    {user.avatarUrl ? <img src={user.avatarUrl} alt={user.name} /> : <UserCircle size={24} />}
                 </div>
                 <button
                   onClick={onLogout}
                   className="flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-sm transition-colors"
                 >
                   <LogOut size={16} />
-                  <span className="hidden sm:inline">Sign Out</span>
+                  <span className="hidden sm:inline">{t('nav.signOut')}</span>
                 </button>
               </div>
             </div>
@@ -123,35 +143,16 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
         </div>
         {/* Mobile nav drawer */}
         {mobileMenuOpen && (
-          <div className="md:hidden border-t border-slate-200 bg-white px-4 py-3 flex flex-col gap-1">
-            {user.role === Role.ADMIN ? (
-              <>
-                <NavItem activeTab={activeTab} onSwitchTab={handleMobileNav} id="admin-dashboard" label="Overview" icon={LayoutDashboard} />
-                <NavItem activeTab={activeTab} onSwitchTab={handleMobileNav} id="admin-analytics" label="Analytics" icon={Activity} />
-                <NavItem activeTab={activeTab} onSwitchTab={handleMobileNav} id="admin-assessments" label="Assessments" icon={ClipboardList} />
-                <NavItem activeTab={activeTab} onSwitchTab={handleMobileNav} id="admin-instructions" label="Instructions" icon={ClipboardCheck} />
-              </>
-            ) : user.role === Role.CEO ? (
-              <>
-                <NavItem activeTab={activeTab} onSwitchTab={handleMobileNav} id="ceo-dashboard" label="Organization" icon={LayoutDashboard} />
-                <NavItem activeTab={activeTab} onSwitchTab={handleMobileNav} id="admin-depts" label="Org Structure" icon={Building2} />
-                <NavItem activeTab={activeTab} onSwitchTab={handleMobileNav} id="emp-dashboard" label="My Profile" icon={UserCircle} />
-              </>
-            ) : (
-              <>
-                <NavItem activeTab={activeTab} onSwitchTab={handleMobileNav} id="emp-dashboard" label="My Profile" icon={LayoutDashboard} />
-                {dataService.isManager(user) && (
-                  <NavItem activeTab={activeTab} onSwitchTab={handleMobileNav} id="manager-dashboard" label="My Team" icon={Users} />
-                )}
-                <NavItem activeTab={activeTab} onSwitchTab={handleMobileNav} id="evaluations" label="Evaluations" icon={Star} />
-              </>
-            )}
-          </div>
+          <nav className="md:hidden border-t border-slate-200 bg-white px-4 py-3 flex flex-col gap-1" aria-label="Primary">
+            {navItems.map(item => (
+              <NavItem key={item.id} activeTab={activeTab} onSwitchTab={handleMobileNav} id={item.id} label={item.label} icon={item.icon} />
+            ))}
+          </nav>
         )}
       </header>
 
       {/* Main Content Body */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
+      <main id="main-content" tabIndex={-1} className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
          {children}
       </main>
     </div>
