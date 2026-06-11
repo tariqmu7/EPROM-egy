@@ -58,7 +58,7 @@ const SkillDetailsModal: React.FC<{ skill: Skill; onClose: () => void }> = ({ sk
                         <div className="grid gap-4">
                             {[1, 2, 3, 4, 5].map((level) => {
                                 const lvlData = skill.levels[level];
-                                // @ts-ignore
+                                // @ts-expect-error numeric index not in type
                                 const genericDef = PROFICIENCY_DEFINITIONS[level];
                                 return (
                                     <div key={level} className="relative pl-6 border-l-2 border-slate-200 hover:border-slate-900 transition-colors group">
@@ -1182,7 +1182,7 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
                 <textarea className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none" rows={3}
                    value={formData.levels?.[activeTab as any]?.description || ''}
                    onChange={e => updateLevel(activeTab, 'description', e.target.value)}
-                   // @ts-ignore
+                   // @ts-expect-error numeric index not in type
                    placeholder={PROFICIENCY_DEFINITIONS[activeTab]?.description || `Describe what a Level ${activeTab} (${PROFICIENCY_LABELS[activeTab]}) employee can do...`}
                 />
              </div>
@@ -1825,7 +1825,7 @@ const DepartmentProfileView: React.FC<DepartmentProfileViewProps> = ({
     // Total workforce in this branch (for stats)
     const allDescendantIds = depts.filter(d => {
         let current = d;
-        let visited = new Set();
+        const visited = new Set();
         while(current.parentId) {
             if (visited.has(current.id)) break;
             visited.add(current.id);
@@ -2861,10 +2861,10 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
             if (exists) await dataService.updateUser(item);
             else await dataService.addUser(item);
         }
-        if (formType === 'JOB') editItem ? await dataService.updateJobProfile(item) : await dataService.addJobProfile(item);
-        if (formType === 'SKILL') editItem ? await dataService.updateSkill(item) : await dataService.addSkill(item);
-        if (formType === 'DEPT') editItem ? await dataService.updateDepartment(item) : await dataService.addDepartment(item);
-        if (formType === 'PROJECT') editItem ? await dataService.updateProject(item) : await dataService.addProject(item);
+        if (formType === 'JOB') { if (editItem) await dataService.updateJobProfile(item); else await dataService.addJobProfile(item); }
+        if (formType === 'SKILL') { if (editItem) await dataService.updateSkill(item); else await dataService.addSkill(item); }
+        if (formType === 'DEPT') { if (editItem) await dataService.updateDepartment(item); else await dataService.addDepartment(item); }
+        if (formType === 'PROJECT') { if (editItem) await dataService.updateProject(item); else await dataService.addProject(item); }
         setFormMode(false);
         setRefreshKey(k => k + 1);
       } finally {

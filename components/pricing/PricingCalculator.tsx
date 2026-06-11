@@ -33,13 +33,12 @@ const PricingCalculator: React.FC = () => {
     const subtotal = instructorTotal + materialsTotal + certsTotal + venueTotal;
 
     // 5. Group Size Modifier (simplified logic for demonstration)
-    let groupModifier = 1.0;
-    if (participants <= 3) groupModifier = 1.5;
-    else if (participants <= 6) groupModifier = 1.2;
-    else if (participants <= 12) groupModifier = 1.0;
-    else if (participants <= 18) groupModifier = 0.9;
-    else if (participants <= 25) groupModifier = 0.85;
-    else groupModifier = 0.8;
+    const groupModifier =
+      participants <= 3  ? 1.5  :
+      participants <= 6  ? 1.2  :
+      participants <= 12 ? 1.0  :
+      participants <= 18 ? 0.9  :
+      participants <= 25 ? 0.85 : 0.8;
 
     const groupAdjusted = subtotal * groupModifier;
 

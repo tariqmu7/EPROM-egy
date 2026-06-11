@@ -176,9 +176,9 @@ export const CompetencyMatrix: React.FC<{ currentUser: User }> = ({ currentUser 
                         return <td key={col.id} className="px-6 py-4 text-center text-slate-300">-</td>;
                       }
 
-                      let bgColor = '';
-                      let icon    = null;
-                      let label   = '';
+                      let bgColor: string;
+                      let icon: React.ReactNode;
+                      let label: string;
 
                       if (status === 'VERIFIED') {
                         bgColor = 'bg-slate-100 text-slate-800 border-slate-200';

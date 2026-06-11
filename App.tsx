@@ -498,7 +498,7 @@ const App: React.FC = () => {
                 }} 
             />
         );
-        case 'ceo-view-profile':
+        case 'ceo-view-profile': {
             const targetUser = dataService.getUserById(selectedProfileUserId || '');
             if (!targetUser) return (
                 <CEOPanel 
@@ -520,6 +520,7 @@ const App: React.FC = () => {
                     <EmployeeDashboard user={targetUser} />
                 </div>
             );
+        }
         case 'manager-dashboard': return <ManagerDashboard user={user} />;
         case 'manager-approvals': return <ManagerDashboard user={user} initialView="APPROVALS" />;
         case 'evaluations': return <EvaluationsHub currentUser={user} />;

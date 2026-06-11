@@ -397,14 +397,13 @@ export class DataService {
     if (this.usersLoaded) return Promise.resolve();
     return new Promise<void>((resolve) => {
       let settled = false;
-      let timer: ReturnType<typeof setTimeout>;
       const done = () => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
         resolve();
       };
-      timer = setTimeout(done, timeoutMs);
+      const timer = setTimeout(done, timeoutMs);
       this.usersSnapshotWaiters.push(done);
     });
   }
@@ -563,7 +562,6 @@ export class DataService {
     if (!isPrivileged && profile) {
       const managerialLevels: OrgLevel[] = ['CEO', 'GM', 'AGM', 'DM', 'SH'];
       const isManagerialLevel = profile.orgLevel ? managerialLevels.includes(profile.orgLevel) : false;
-      let hasSubordinates = false;
       try {
         // A3.7: Fetch up to 31 direct reports so we know both (a) whether any
         // exist and (b) whether we can scope with a single `in` query (≤30).
@@ -571,14 +569,12 @@ export class DataService {
           query(collection(db, 'users'), where('managerId', '==', profile.id), limit(31))
         );
         if (auth.currentUser?.uid !== userId) return;
-        hasSubordinates = !subSnap.empty;
-        if (hasSubordinates && subSnap.docs.length <= 30) {
+        if (!subSnap.empty && subSnap.docs.length <= 30) {
           directReportIds = subSnap.docs.map(d => d.data().id ?? d.id);
         }
       } catch (err) {
         // On a scoped-probe failure, keep the safer (broader) behaviour.
         console.error('setupListeners: subordinate probe failed', err);
-        hasSubordinates = true;
       }
       // TODO (V2.0): department-scope assessments/evidences/nominations.
       // QA #12 scoped the `users` directory by Direct Department /
@@ -1335,7 +1331,7 @@ export class DataService {
   // --- PERSISTENCE HELPERS ---
 
   private preparePayload(collectionName: string, item: any) {
-    let payload = { ...item };
+    const payload = { ...item };
     
     // Serialize complex objects
     if (collectionName === 'users') {
@@ -1432,8 +1428,8 @@ export class DataService {
         img.onload = async () => {
           const canvas = document.createElement('canvas');
           const MAX_SIZE = 200;
-          let width = img.width;
-          let height = img.height;
+          const width = img.width;
+          const height = img.height;
 
           // Square crop and resize
           const size = Math.min(width, height);
@@ -1638,14 +1634,11 @@ export class DataService {
         
         const matchingCourse = this.trainingCourses.find(c => c.linkedSkillIds.includes(req.skillId));
         
-        let recommendationText = '';
-        if (matchingCourse) {
-          recommendationText = `Enroll in "${matchingCourse.title}" (${matchingCourse.provider}) to bridge the gap.`;
-        } else if (gap >= 2) {
-          recommendationText = `Intensive training and external certification required for ${skillName}.`;
-        } else {
-          recommendationText = `On-the-job training and mentorship recommended to reach proficiency level ${req.requiredLevel}.`;
-        }
+        const recommendationText = matchingCourse
+          ? `Enroll in "${matchingCourse.title}" (${matchingCourse.provider}) to bridge the gap.`
+          : gap >= 2
+          ? `Intensive training and external certification required for ${skillName}.`
+          : `On-the-job training and mentorship recommended to reach proficiency level ${req.requiredLevel}.`;
 
         const targetDate = new Date();
         targetDate.setMonth(targetDate.getMonth() + (gap >= 2 ? 6 : 3));

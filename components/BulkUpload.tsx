@@ -171,8 +171,8 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, user, onComplete, 
                 const directDeptName = (row['Direct Department Name'] || row['Department Name'] || '').toString().trim();
                 
                 let genDept = depts.find(d => d.name.toLowerCase() === genDeptName.toLowerCase());
-                let parentDept = depts.find(d => d.name.toLowerCase() === parentDeptName.toLowerCase());
-                let directDept = depts.find(d => {
+                const parentDept = depts.find(d => d.name.toLowerCase() === parentDeptName.toLowerCase());
+                const directDept = depts.find(d => {
                   const matchesName = d.name.toLowerCase() === directDeptName.toLowerCase();
                   if (!matchesName) return false;
                   
