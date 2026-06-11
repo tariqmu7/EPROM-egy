@@ -640,8 +640,9 @@ describe('evidence flow integration', () => {
     const result = await svc.addEvidence({
       userId: 'emp1',
       skillId: 'skill1',
-      title: 'Safety Cert',
-      description: 'Completed safety training',
+      fileUrl: '',
+      fileName: 'Safety Cert',
+      notes: 'Completed safety training',
     });
 
     expect(result.status).toBe('PENDING');
@@ -655,8 +656,9 @@ describe('evidence flow integration', () => {
     await svc.addEvidence({
       userId: 'emp1',
       skillId: 'skill1',
-      title: 'Evidence',
-      description: 'desc',
+      fileUrl: '',
+      fileName: 'Evidence',
+      notes: 'desc',
     });
 
     // Batch should have two set calls: evidence doc + notification doc
@@ -671,8 +673,9 @@ describe('evidence flow integration', () => {
     await svc.addEvidence({
       userId: 'emp1',
       skillId: 'skill1',
-      title: 'Evidence',
-      description: 'desc',
+      fileUrl: '',
+      fileName: 'Evidence',
+      notes: 'desc',
     });
 
     // Only evidence set, no notification set
