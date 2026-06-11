@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { Download, Upload, X, AlertCircle, CheckCircle, FileSpreadsheet, Loader2, Lock } from 'lucide-react';
 import { dataService } from '../services/store';
 import { User, Role, JobProfile, Skill, Department, OrgLevel } from '../types';
@@ -17,6 +17,14 @@ interface BulkUploadProps {
 // imported value is treated as inert text. Repeated leading markers (e.g.
 // "=+cmd|...") are stripped together.
 const sanitizeCellValue = (value: any): any => {
+  // ExcelJS rich text: { richText: [{text: '...'},...] }
+  if (value && typeof value === 'object' && Array.isArray(value.richText)) {
+    value = value.richText.map((rt: any) => rt.text ?? '').join('');
+  }
+  // ExcelJS formula: { formula: '...', result: ... }
+  if (value && typeof value === 'object' && 'result' in value) {
+    value = value.result;
+  }
   if (typeof value !== 'string') return value;
   return value.replace(/^[=@+]+/, '');
 };
@@ -72,12 +80,23 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, user, onComplete, 
     }
   };
 
-  const downloadTemplate = () => {
-    const data = getTemplateData();
-    const ws = XLSX.utils.aoa_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Template');
-    XLSX.writeFile(wb, `${type.toLowerCase()}_template.xlsx`);
+  const downloadTemplate = async () => {
+    try {
+      const data = getTemplateData();
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('Template');
+      ws.addRows(data);
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${type.toLowerCase()}_template.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Failed to generate template:', err);
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -98,20 +117,36 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, user, onComplete, 
     setError(null);
 
     try {
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const data = new Uint8Array(e.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: 'array' });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const jsonData = (XLSX.utils.sheet_to_json(worksheet) as any[]).map(sanitizeRow);
+      const buffer = await file.arrayBuffer();
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const ws = wb.worksheets[0];
 
-        if (jsonData.length === 0) {
-          setError('The file is empty.');
-          setLoading(false);
-          return;
-        }
+      const allRows = ws.getRows(1, ws.rowCount) ?? [];
+      if (allRows.length < 2) {
+        setError('The file is empty.');
+        setLoading(false);
+        return;
+      }
+      // ExcelJS row.values is 1-indexed: [undefined, cell1, cell2, ...]
+      const headers = (allRows[0].values as any[]).slice(1) as string[];
+      const jsonData = allRows.slice(1)
+        .map(row => {
+          const vals = (row.values as any[]).slice(1);
+          const obj: Record<string, any> = {};
+          headers.forEach((h, i) => { if (h) obj[h] = vals[i] ?? ''; });
+          return obj;
+        })
+        .filter(row => Object.values(row).some(v => v !== '' && v !== null && v !== undefined))
+        .map(sanitizeRow);
 
+      if (jsonData.length === 0) {
+        setError('The file is empty.');
+        setLoading(false);
+        return;
+      }
+
+      {
         let count = 0;
         const depts = dataService.getAllDepartments();
         const jobs = dataService.getAllJobs();
@@ -376,8 +411,7 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, user, onComplete, 
         setSuccess(`Successfully imported ${count} ${type.toLowerCase()}s.`);
         setLoading(false);
         setTimeout(() => onComplete(), 2000);
-      };
-      reader.readAsArrayBuffer(file);
+      }
     } catch (err) {
       setError('Failed to process file. Please check the format.');
       setLoading(false);
