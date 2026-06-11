@@ -562,6 +562,7 @@ export class DataService {
     if (!isPrivileged && profile) {
       const managerialLevels: OrgLevel[] = ['CEO', 'GM', 'AGM', 'DM', 'SH'];
       const isManagerialLevel = profile.orgLevel ? managerialLevels.includes(profile.orgLevel) : false;
+      let hasSubordinates = false;
       try {
         // A3.7: Fetch up to 31 direct reports so we know both (a) whether any
         // exist and (b) whether we can scope with a single `in` query (≤30).
@@ -569,6 +570,7 @@ export class DataService {
           query(collection(db, 'users'), where('managerId', '==', profile.id), limit(31))
         );
         if (auth.currentUser?.uid !== userId) return;
+        hasSubordinates = !subSnap.empty;
         if (!subSnap.empty && subSnap.docs.length <= 30) {
           directReportIds = subSnap.docs.map(d => d.data().id ?? d.id);
         }
