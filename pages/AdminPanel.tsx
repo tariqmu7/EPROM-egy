@@ -2122,12 +2122,12 @@ const OrgTreeRow: React.FC<{
                 )}
                 <Icon size={15} className={isSelected ? 'text-blue-700 shrink-0' : 'text-slate-400 shrink-0'} />
                 <span className="flex flex-col min-w-0 flex-1">
-                    <span className={`text-sm truncate ${isSelected ? 'font-bold text-blue-900' : 'font-medium text-slate-700'}`}>
-                        {dept.name}
+                    <span dir="rtl" className={`text-sm truncate ${isSelected ? 'font-bold text-blue-900' : 'font-medium text-slate-700'}`}>
+                        {dept.nameAr || dept.name}
                     </span>
                     {dept.nameAr && (
-                        <span dir="rtl" className={`text-[11px] truncate ${isSelected ? 'text-blue-700' : 'text-slate-400'}`}>
-                            {dept.nameAr}
+                        <span className={`text-[11px] truncate ${isSelected ? 'text-blue-700' : 'text-slate-400'}`}>
+                            {dept.name}
                         </span>
                     )}
                 </span>
@@ -2342,8 +2342,8 @@ const CompanyOrgView: React.FC<{
                         >
                             <Shield size={16} className={selected.kind === 'root' ? 'text-blue-700 shrink-0' : 'text-slate-400 shrink-0'} />
                             <span className="flex flex-col min-w-0 flex-1">
-                                <span className={`text-sm truncate ${selected.kind === 'root' ? 'font-black text-blue-900' : 'font-black text-slate-800'}`}>EPROM</span>
-                                <span dir="rtl" className="text-[11px] truncate text-slate-400">المصرية لتشغيل وصيانة المشروعات</span>
+                                <span dir="rtl" className={`text-sm truncate ${selected.kind === 'root' ? 'font-black text-blue-900' : 'font-black text-slate-800'}`}>المصرية لتشغيل وصيانة المشروعات</span>
+                                <span className="text-[11px] truncate text-slate-400">EPROM</span>
                             </span>
                         </div>
                         {orderedProjects.map(p => (
@@ -2392,13 +2392,13 @@ const CompanyOrgView: React.FC<{
                                     </div>
                                     <div className="min-w-0 flex-1">
                                         <div className="flex flex-wrap items-center gap-3 mb-1">
-                                            <h3 className="text-2xl font-bold text-slate-900 tracking-tight">{selectedDept.name}</h3>
+                                            <h3 dir="rtl" className="text-2xl font-bold text-slate-900 tracking-tight">{selectedDept.nameAr || selectedDept.name}</h3>
                                             <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-[10px] font-bold uppercase tracking-widest border border-blue-100 shrink-0">
                                                 {selectedDept.type?.replace('_', ' ') || 'DEPARTMENT'}
                                             </span>
                                         </div>
                                         {selectedDept.nameAr && (
-                                            <p dir="rtl" className="text-base font-bold text-slate-700 mb-1">{selectedDept.nameAr}</p>
+                                            <p className="text-base font-bold text-slate-700 mb-1">{selectedDept.name}</p>
                                         )}
                                         <p className="text-sm text-slate-600 flex items-center gap-1.5">
                                             <UserCheck size={14} className="text-slate-400" /> {managerName}
@@ -2479,7 +2479,8 @@ const CompanyOrgView: React.FC<{
                                                 <div key={unit.id} onClick={() => selectDept(unit.id)} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 cursor-pointer transition-colors group">
                                                     <UnitIcon size={16} className="text-slate-400 shrink-0" />
                                                     <div className="min-w-0 flex-1">
-                                                        <span className="font-bold text-slate-800 truncate block group-hover:text-blue-700 transition-colors">{unit.name}</span>
+                                                        <span dir="rtl" className="font-bold text-slate-800 truncate block group-hover:text-blue-700 transition-colors">{unit.nameAr || unit.name}</span>
+                                                        {unit.nameAr && <span className="text-[11px] text-slate-500 block truncate">{unit.name}</span>}
                                                         <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">{unit.type?.replace('_', ' ') || 'DEPARTMENT'}</span>
                                                     </div>
                                                     <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-none shrink-0">{unitStaff}</span>
@@ -2547,8 +2548,8 @@ const CompanyOrgView: React.FC<{
                                                 <div key={unit.id} onClick={() => selectDept(unit.id)} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 cursor-pointer transition-colors group">
                                                     <UnitIcon size={16} className="text-slate-400 shrink-0" />
                                                     <div className="min-w-0 flex-1">
-                                                        <span className="font-bold text-slate-800 truncate block group-hover:text-blue-700 transition-colors">{unit.name}</span>
-                                                        {unit.nameAr && <span dir="rtl" className="text-[11px] text-slate-400 block truncate">{unit.nameAr}</span>}
+                                                        <span dir="rtl" className="font-bold text-slate-800 truncate block group-hover:text-blue-700 transition-colors">{unit.nameAr || unit.name}</span>
+                                                        {unit.nameAr && <span className="text-[11px] text-slate-400 block truncate">{unit.name}</span>}
                                                     </div>
                                                     <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-none shrink-0">{unitStaff}</span>
                                                     <ChevronRight size={16} className="text-slate-300 group-hover:text-blue-700 group-hover:translate-x-1 transition-all shrink-0" />

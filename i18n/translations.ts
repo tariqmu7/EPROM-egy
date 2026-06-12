@@ -26,6 +26,7 @@ export const DICTIONARIES: Record<Locale, Record<string, string>> = {
     'nav.myTeam': 'My Team',
     'nav.evaluations': 'Evaluations',
     'nav.settings': 'Settings',
+    'nav.more': 'More',
     'nav.signOut': 'Sign Out',
 
     'role.administrator': 'Administrator',
@@ -71,6 +72,7 @@ export const DICTIONARIES: Record<Locale, Record<string, string>> = {
     'nav.myTeam': 'فريقي',
     'nav.evaluations': 'التقييمات',
     'nav.settings': 'الإعدادات',
+    'nav.more': 'المزيد',
     'nav.signOut': 'تسجيل الخروج',
 
     'role.administrator': 'مسؤول النظام',

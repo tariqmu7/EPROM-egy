@@ -1,11 +1,11 @@
-import React, { memo, useState } from 'react';
+import React, { memo, useState, useRef, useEffect } from 'react';
 import { User, Role, ORG_LEVEL_LABELS } from '../types';
 import { Logo } from './Logo';
 import { dataService } from '../services/store';
-import { LogOut, LayoutDashboard, ClipboardList, ClipboardCheck, ShieldCheck, UserCircle, Users, Building2, Briefcase, Activity, Grid, UploadCloud, CheckSquare, Star, Monitor, MessageSquare, Menu, X, Settings, LucideIcon } from 'lucide-react';
+import { LogOut, LayoutDashboard, ClipboardList, ClipboardCheck, ShieldCheck, UserCircle, Users, Building2, Briefcase, Activity, Grid, UploadCloud, CheckSquare, Star, Monitor, MessageSquare, Menu, X, Settings, Languages, ChevronDown, LucideIcon } from 'lucide-react';
 import { NotificationBell } from './NotificationBell';
-import { LanguageToggle } from './LanguageToggle';
 import { useI18n } from '../i18n/I18nContext';
+import { LOCALES } from '../i18n/translations';
 
 interface LayoutProps {
   user: User;
@@ -34,6 +34,75 @@ const NavItem = memo(({ id, label, icon: Icon, activeTab, onSwitchTab }: { id: s
   );
 });
 
+const NavDropdown = memo(({ navTabs, activeTab, onSwitchTab }: {
+  navTabs: { id: string; label: string; icon: LucideIcon }[];
+  activeTab: string;
+  onSwitchTab: (tab: string) => void;
+}) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const { locale, setLocale, t } = useI18n();
+  const next = locale === 'en' ? 'ar' : 'en';
+  const nextLabel = LOCALES.find(l => l.code === next)?.label ?? next;
+  const isAnyActive = navTabs.some(tab => tab.id === activeTab);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        className={`relative flex items-center gap-2 px-3 py-2 text-sm font-medium transition-all duration-200 rounded-sm group whitespace-nowrap flex-shrink-0 ${
+          isAnyActive
+            ? 'text-blue-700 bg-blue-50 border border-blue-200'
+            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+        }`}
+      >
+        <span>{t('nav.more')}</span>
+        <ChevronDown size={14} className={`transition-transform duration-150 ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="absolute end-0 mt-1 w-52 bg-white border border-slate-200 rounded-sm shadow-lg z-50 py-1">
+          {navTabs.map(tab => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => { onSwitchTab(tab.id); setOpen(false); }}
+                className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium transition-colors ${
+                  isActive ? 'text-blue-700 bg-blue-50' : 'text-slate-700 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+              >
+                <Icon size={16} className={isActive ? 'text-blue-700' : 'text-slate-500'} />
+                {tab.label}
+              </button>
+            );
+          })}
+          <div className="border-t border-slate-100 my-1" />
+          <button
+            type="button"
+            onClick={() => { setLocale(next); setOpen(false); }}
+            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors"
+          >
+            <Languages size={16} className="text-slate-500" />
+            {nextLabel}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+});
+
 export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwitchTab, children }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { t } = useI18n();
@@ -51,15 +120,12 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
           { id: 'admin-analytics', label: t('nav.analytics'), icon: Activity },
           { id: 'admin-assessments', label: t('nav.assessments'), icon: ClipboardList },
           { id: 'admin-instructions', label: t('nav.instructions'), icon: ClipboardCheck },
-          { id: 'admin-audit', label: t('nav.auditTrail'), icon: ShieldCheck },
-          { id: 'settings', label: t('nav.settings'), icon: Settings },
         ]
       : user.role === Role.CEO
       ? [
           { id: 'ceo-dashboard', label: t('nav.organization'), icon: LayoutDashboard },
           { id: 'admin-depts', label: t('nav.orgStructure'), icon: Building2 },
           { id: 'emp-dashboard', label: t('nav.myProfile'), icon: UserCircle },
-          { id: 'settings', label: t('nav.settings'), icon: Settings },
         ]
       : [
           { id: 'emp-dashboard', label: t('nav.myProfile'), icon: LayoutDashboard },
@@ -67,8 +133,13 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
             ? [{ id: 'manager-dashboard', label: t('nav.myTeam'), icon: Users }]
             : []),
           { id: 'evaluations', label: t('nav.evaluations'), icon: Star },
-          { id: 'settings', label: t('nav.settings'), icon: Settings },
         ];
+
+  // Items that go inside the combined dropdown button
+  const dropdownTabs: { id: string; label: string; icon: LucideIcon }[] = [
+    ...(user.role === Role.ADMIN ? [{ id: 'admin-audit', label: t('nav.auditTrail'), icon: ShieldCheck }] : []),
+    { id: 'settings', label: t('nav.settings'), icon: Settings },
+  ];
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans">
@@ -100,6 +171,7 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
               {navItems.map(item => (
                 <NavItem key={item.id} activeTab={activeTab} onSwitchTab={onSwitchTab} id={item.id} label={item.label} icon={item.icon} />
               ))}
+              <NavDropdown navTabs={dropdownTabs} activeTab={activeTab} onSwitchTab={onSwitchTab} />
             </nav>
 
             {/* Mobile hamburger */}
@@ -113,8 +185,6 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
 
             {/* Right Side Actions */}
             <div className="flex items-center gap-4 lg:gap-6 flex-shrink-0">
-
-              <LanguageToggle />
 
               {user.role !== Role.ADMIN && <NotificationBell user={user} onNavigate={onSwitchTab} />}
 
@@ -145,6 +215,9 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
         {mobileMenuOpen && (
           <nav className="md:hidden border-t border-slate-200 bg-white px-4 py-3 flex flex-col gap-1" aria-label="Primary">
             {navItems.map(item => (
+              <NavItem key={item.id} activeTab={activeTab} onSwitchTab={handleMobileNav} id={item.id} label={item.label} icon={item.icon} />
+            ))}
+            {dropdownTabs.map(item => (
               <NavItem key={item.id} activeTab={activeTab} onSwitchTab={handleMobileNav} id={item.id} label={item.label} icon={item.icon} />
             ))}
           </nav>

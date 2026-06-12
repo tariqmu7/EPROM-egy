@@ -218,7 +218,7 @@ export interface Project {
 }
 
 
-export type DepartmentType = 'GENERAL' | 'DEPARTMENT' | 'SECTION';
+export type DepartmentType = 'COMPANY' | 'EXECUTIVE' | 'SECTOR' | 'GENERAL' | 'DEPARTMENT' | 'SECTION' | 'POSITION';
 
 export interface Department {
   id: string;
