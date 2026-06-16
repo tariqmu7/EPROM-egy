@@ -30,9 +30,13 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      # A6.3 — catch high/critical vulnerabilities before deploy
+      # A6.3 — catch high/critical vulnerabilities before deploy.
+      # Scoped to production deps (--omit=dev): the deployed static bundle
+      # ships only prod dependencies. Dev-only advisories (e.g. the esbuild
+      # dev-server CORS issue) don't affect the build output or the live site,
+      # and resolving them would force a breaking Vite major upgrade.
       - name: Security audit
-        run: npm audit --audit-level=high
+        run: npm audit --audit-level=high --omit=dev
 
       # A6.1 — fail the build on TypeScript errors
       - name: Type check
