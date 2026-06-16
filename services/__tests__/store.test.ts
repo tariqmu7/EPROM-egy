@@ -757,3 +757,155 @@ describe('evidence flow integration', () => {
     }));
   });
 });
+
+// ─── isManager ───────────────────────────────────────────────────────────────
+
+describe('isManager', () => {
+  let svc: DataService;
+
+  beforeEach(() => {
+    svc = makeSvc();
+    inject(svc, { users: [] });
+  });
+
+  it('ADMIN is always a manager', () => {
+    expect(svc.isManager(makeUser({ role: Role.ADMIN, orgLevel: 'JP' }))).toBe(true);
+  });
+
+  it('CEO role is always a manager', () => {
+    expect(svc.isManager(makeUser({ role: Role.CEO, orgLevel: 'JP' }))).toBe(true);
+  });
+
+  it('a user with explicit subordinates is a manager regardless of level', () => {
+    const boss = makeUser({ id: 'boss', orgLevel: 'JP' });
+    inject(svc, { users: [boss, makeUser({ id: 'report', managerId: 'boss' })] });
+    expect(svc.isManager(boss)).toBe(true);
+  });
+
+  it('falls back to org level — managerial levels are managers', () => {
+    expect(svc.isManager(makeUser({ id: 'sh', orgLevel: 'SH' }))).toBe(true);
+  });
+
+  it('falls back to org level — non-managerial levels are not', () => {
+    expect(svc.isManager(makeUser({ id: 'sp', orgLevel: 'SP' }))).toBe(false);
+  });
+});
+
+// ─── getEffectiveRequirements ────────────────────────────────────────────────
+
+describe('getEffectiveRequirements', () => {
+  let svc: DataService;
+
+  const makeJob = (requiredSkills: { skillId: string; requiredLevel: number }[]): JobProfile => ({
+    id: 'job1',
+    title: 'Test Job',
+    description: '',
+    departmentId: 'dept1',
+    orgLevel: 'SP',
+    requiredSkills,
+  } as unknown as JobProfile);
+
+  beforeEach(() => {
+    svc = makeSvc();
+    inject(svc, { skills: [makeSkill({ id: 'skill1' })] });
+  });
+
+  it('returns [] for a null/undefined profile', () => {
+    expect(svc.getEffectiveRequirements(null)).toEqual([]);
+    expect(svc.getEffectiveRequirements(undefined)).toEqual([]);
+  });
+
+  it('drops requirements that reference deleted skills', () => {
+    const reqs = svc.getEffectiveRequirements(makeJob([
+      { skillId: 'skill1', requiredLevel: 3 },
+      { skillId: 'gone', requiredLevel: 4 },
+    ]));
+    expect(reqs).toHaveLength(1);
+    expect(reqs[0].skillId).toBe('skill1');
+  });
+});
+
+// ─── code generation ─────────────────────────────────────────────────────────
+
+describe('code generation', () => {
+  let svc: DataService;
+
+  beforeEach(() => {
+    svc = makeSvc();
+    inject(svc, { skills: [], departments: [] });
+  });
+
+  it('generateSkillCode derives CAT-SUB-NN from category and name', () => {
+    const code = svc.generateSkillCode(makeSkill({ category: 'Technical', name: 'Test Skill', code: undefined }));
+    expect(code).toBe('TEC-TES-01');
+  });
+
+  it('generateSkillCode increments the sequence for an existing prefix', () => {
+    inject(svc, { skills: [makeSkill({ id: 's0', code: 'TEC-TES-01' })] });
+    const code = svc.generateSkillCode(makeSkill({ category: 'Technical', name: 'Test Skill', code: undefined }));
+    expect(code).toBe('TEC-TES-02');
+  });
+
+  it('generateJobProfileCode falls back to GEN when department is unknown', () => {
+    const code = svc.generateJobProfileCode({
+      id: 'job1', title: 'Test Job', departmentId: 'missing', orgLevel: 'SP', requiredSkills: [],
+    } as unknown as JobProfile);
+    expect(code).toBe('GEN-TJ');
+  });
+
+  it('generateJobProfileCode uses the department name prefix and title initials', () => {
+    inject(svc, { departments: [{ id: 'dept1', name: 'Engineering', type: 'GENERAL', managerId: '' } as unknown as Department] });
+    const code = svc.generateJobProfileCode({
+      id: 'job1', title: 'Senior Field Engineer', departmentId: 'dept1', orgLevel: 'SP', requiredSkills: [],
+    } as unknown as JobProfile);
+    expect(code).toBe('ENG-SFE');
+  });
+});
+
+// ─── generateDepartmentalTNA ─────────────────────────────────────────────────
+
+describe('generateDepartmentalTNA', () => {
+  let svc: DataService;
+
+  const JOB: JobProfile = {
+    id: 'job1', title: 'Test Job', description: '', departmentId: 'dept1', orgLevel: 'SP',
+    requiredSkills: [{ skillId: 'skill1', requiredLevel: 4 }],
+  } as unknown as JobProfile;
+
+  beforeEach(() => {
+    svc = makeSvc();
+    inject(svc, {
+      skills: [makeSkill({ id: 'skill1', name: 'Test Skill', assessmentMethod: 'WRITTEN_EXAM' })],
+      jobs: [JOB],
+      assessments: [],
+      evidences: [],
+      trainingCourses: [],
+      assessmentInstructions: [],
+    });
+  });
+
+  it('returns [] when no department members have gaps', () => {
+    inject(svc, {
+      users: [makeUser({ id: 'u1', departmentId: 'dept1', jobProfileId: 'job1', orgLevel: 'SP' })],
+      assessments: [makeAssessment({ subjectId: 'u1', type: 'WRITTEN_EXAM', score: 4 })],
+    });
+    expect(svc.generateDepartmentalTNA('dept1')).toEqual([]);
+  });
+
+  it('aggregates gap counts and totals across department members', () => {
+    inject(svc, {
+      users: [
+        makeUser({ id: 'u1', departmentId: 'dept1', jobProfileId: 'job1', orgLevel: 'SP' }),
+        makeUser({ id: 'u2', departmentId: 'dept1', jobProfileId: 'job1', orgLevel: 'SP' }),
+      ],
+      assessments: [], // both score 0 vs required 4 → gap 4 each
+    });
+    const tna = svc.generateDepartmentalTNA('dept1');
+    expect(tna).toHaveLength(1);
+    expect(tna[0].skillId).toBe('skill1');
+    expect(tna[0].gapCount).toBe(2);
+    expect(tna[0].totalGap).toBe(8);
+    expect(tna[0].averageGap).toBe(4);
+    expect(tna[0].priority).toBe('HIGH');
+  });
+});
