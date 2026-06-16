@@ -12,7 +12,8 @@
     "test:coverage": "vitest run --coverage",
     "preview": "vite preview",
     "rules:build": "node scripts/gen-firestore-rules.mjs",
-    "seed:org": "node scripts/seed-org-hierarchy.mjs",
+    "org:rebuild": "node scripts/rebuild-org-hierarchy.mjs",
+    "jobs:seed": "node scripts/seed-job-profiles.mjs",
     "check-env": "node scripts/check-env.mjs",
     "pricing:build": "node reporting/training-pricing/generate-pricing-calculator.mjs"
   },

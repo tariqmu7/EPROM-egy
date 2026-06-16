@@ -44,7 +44,7 @@ export const ManagerialInterviews: React.FC<ManagerialInterviewsProps> = ({ curr
     const jobProfile = dataService.getJobProfile(user.jobProfileId);
     if (!jobProfile) return [];
 
-    const levelRequirements = jobProfile.requirements[user.orgLevel] || [];
+    const levelRequirements = dataService.getEffectiveRequirements(jobProfile);
     return levelRequirements
       .map(req => dataService.getSkill(req.skillId))
       .filter((s): s is Skill => !!s && (dataService.skillHasMethod(s.id, 'INTERVIEW') || dataService.skillHasMethod(s.id, 'PRACTICAL_DEMO')));

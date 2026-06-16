@@ -36,7 +36,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
     const jobProfile = member.jobProfileId ? dataService.getJobProfile(member.jobProfileId) : null;
     if (!jobProfile || !member.orgLevel) return { compliance: 0, gaps: 0 };
 
-    const requirements = jobProfile.requirements[member.orgLevel] || [];
+    const requirements = dataService.getEffectiveRequirements(jobProfile);
     if (requirements.length === 0) return { compliance: 0, gaps: 0 };
 
     const analysis = requirements.map(req => {
@@ -120,7 +120,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
                                     <Shield size={16} className="text-slate-600" /> Competency Requirements
                                 </h4>
                                 <div className="space-y-4">
-                                    {Object.entries(job.requirements).map(([level, reqs]) => (
+                                    {[{ level: job?.orgLevel, reqs: dataService.getEffectiveRequirements(job) }]
+                                      .filter(entry => entry.reqs.length > 0)
+                                      .map(({ level, reqs }) => (
                                         <div key={level} className="bg-slate-100 rounded-sm p-4 border border-slate-100">
                                             <div className="flex items-center justify-between mb-3">
                                                 <span className="text-xs font-bold bg-white border border-slate-300 px-2 py-1 rounded-none text-slate-700">Level: {level}</span>

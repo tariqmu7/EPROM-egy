@@ -1,4 +1,4 @@
-import { User, Role, JobProfile, Skill, Project, Department, Assessment, ActivityLog, ORG_HIERARCHY_ORDER, ORG_LEVEL_NUMBERS, Notification, AssessmentCycle, Nomination, IndividualTrainingPlan, TrainingRecommendation, OrgLevel, Evidence, PromotionRequirement, CareerProgressionPlan, CareerLevelProgress, TrainingCourse, ScheduledAssessment, AssessmentMethod, UserStatus, Certificate, CareerHistoryEntry, SkillLevel, EvaluationQuestion, AssessmentPlan, AssessmentInstruction } from '../types';
+import { User, Role, JobProfile, Skill, Project, Department, Assessment, ActivityLog, ORG_HIERARCHY_ORDER, ORG_LEVEL_NUMBERS, Notification, AssessmentCycle, Nomination, IndividualTrainingPlan, TrainingRecommendation, OrgLevel, Evidence, PromotionRequirement, CareerProgressionPlan, CareerLevelProgress, TrainingCourse, ScheduledAssessment, AssessmentMethod, UserStatus, Certificate, CareerHistoryEntry, SkillLevel, EvaluationQuestion, AssessmentPlan, AssessmentInstruction, JobProfileSkill } from '../types';
 import { db, auth } from '../firebase';
 import {
   collection,
@@ -687,25 +687,14 @@ export class DataService {
       onSnapshot(query(collection(db, 'jobProfiles'), limit(MAX_LISTENER_DOCS)), (snapshot) => {
         this.jobs = snapshot.docs.map(doc => {
           const data = doc.data();
-          let requirements = {};
-          
-          if (data.requirements) {
-            try {
-              const rawReqs = typeof data.requirements === 'string' ? JSON.parse(data.requirements) : data.requirements;
-              // Ensure every level's requirement is an array
-              requirements = Object.entries(rawReqs).reduce((acc: any, [level, reqs]: [string, any]) => {
-                acc[level] = Array.isArray(reqs) ? reqs : Object.values(reqs || {});
-                return acc;
-              }, {});
-            } catch (e) {
-              console.error('Error parsing requirements for job', doc.id, e);
-            }
-          }
+          const requiredSkills = safeJsonField<JobProfileSkill[]>(
+            data.requiredSkills, [], `jobProfiles.requiredSkills (${doc.id})`
+          );
 
           const job = {
             id: doc.id,
             ...data,
-            requirements
+            requiredSkills: Array.isArray(requiredSkills) ? requiredSkills : []
           } as JobProfile;
 
           if (!job.code) {
@@ -743,7 +732,18 @@ export class DataService {
     // Departments
     this.unsubscribers.push(
       onSnapshot(query(collection(db, 'departments'), limit(MAX_LISTENER_DOCS)), (snapshot) => {
-        this.departments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Department));
+        const used = new Set<string>();
+        const depts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Department));
+        // Reserve codes already stored so generated ones don't collide with them.
+        for (const d of depts) if (d.code) used.add(d.code);
+        // Backfill a code for any department missing one (legacy docs / UI-created).
+        for (const d of depts) {
+          if (!d.code) {
+            d.code = this.generateDepartmentCode(d, used);
+            used.add(d.code);
+          }
+        }
+        this.departments = depts;
         this.scheduleNotify();
       }, this.handleError('departments'))
     );
@@ -1340,8 +1340,8 @@ export class DataService {
       if (item.certificates) payload.certificates = JSON.stringify(item.certificates);
       if (item.careerHistory) payload.careerHistory = JSON.stringify(item.careerHistory);
     }
-    if (collectionName === 'jobProfiles' && item.requirements) {
-      payload.requirements = JSON.stringify(item.requirements);
+    if (collectionName === 'jobProfiles' && item.requiredSkills) {
+      payload.requiredSkills = JSON.stringify(item.requiredSkills);
     }
     if (collectionName === 'skills') {
       if (item.levels) payload.levels = JSON.stringify(item.levels);
@@ -1623,7 +1623,7 @@ export class DataService {
     const job = this.getJobProfile(user.jobProfileId);
     if (!job) return null;
 
-    const requirements = job.requirements[user.orgLevel] || [];
+    const requirements = this.getEffectiveRequirements(job);
     const recommendations: TrainingRecommendation[] = [];
 
     requirements.forEach(req => {
@@ -1675,7 +1675,7 @@ export class DataService {
     const job = this.getJobProfile(user.jobProfileId);
     if (!job) return null;
 
-    const requirements = job.requirements[user.orgLevel] || [];
+    const requirements = this.getEffectiveRequirements(job);
     const scheduled = this.scheduledAssessments.filter(a => a.userId === userId);
 
     const writtenExams: any[] = [];
@@ -1856,9 +1856,16 @@ export class DataService {
     const currentJob = this.getJobProfile(user.jobProfileId);
     if (!currentJob) return null;
 
-    // Succession Logic: Find all jobs in the same General Department to bridge gap requirements
-    const generalDeptId = this.getGeneralDeptId(user.departmentId);
-    const deptJobs = this.getAllJobs().filter(j => this.getGeneralDeptId(j.departmentId) === generalDeptId);
+    // Succession Logic: Find all jobs in the same General Department to bridge gap requirements.
+    // Prefer the user's explicit generalDepartmentId (the canonical grouping that
+    // survives org-chart rebuilds); fall back to walking departmentId up the tree.
+    // Jobs are matched either by direct departmentId equality (career-ladder
+    // profiles are keyed straight to the general department) or by their own
+    // tree walk — robust to orphaned departmentId references.
+    const generalDeptId = user.generalDepartmentId || this.getGeneralDeptId(user.departmentId);
+    const deptJobs = this.getAllJobs().filter(j =>
+      j.departmentId === generalDeptId || this.getGeneralDeptId(j.departmentId) === generalDeptId
+    );
 
     const currentIndex = ORG_HIERARCHY_ORDER.indexOf(user.orgLevel);
     if (currentIndex === -1) return null;
@@ -1868,15 +1875,13 @@ export class DataService {
     // Loop from current position up to GM (index 0)
     for (let i = currentIndex - 1; i >= 0; i--) {
       const level = ORG_HIERARCHY_ORDER[i];
-      
-      // Smart Lookup: Try current job profile first, then search general department for that level's standards
-      let requirements = currentJob.requirements[level] || [];
-      if (requirements.length === 0) {
-        const fallbackJob = deptJobs.find(j => (j.requirements[level]?.length || 0) > 0);
-        if (fallbackJob) {
-          requirements = fallbackJob.requirements[level] || [];
-        }
-      }
+
+      // Each position is its own profile at a single org level. Find the
+      // department's position profile for this higher level and use its
+      // required skills as the promotion target.
+      const targetJob = deptJobs.find(j => j.orgLevel === level && this.getEffectiveRequirements(j).length > 0)
+        || deptJobs.find(j => j.orgLevel === level);
+      const requirements = this.getEffectiveRequirements(targetJob);
 
       const promReqs: PromotionRequirement[] = [];
       let totalGapPoints = 0;
@@ -1925,6 +1930,26 @@ export class DataService {
 
   getUserById(id: string) { return this.users.find(u => u.id === id && !u.isArchived); }
   getJobProfile(id: string) { return this.jobs.find(j => j.id === id && !j.isArchived); }
+  // Active job profiles (positions) attached to a specific department/unit.
+  getJobProfilesByDepartment(departmentId: string) {
+    return this.jobs.filter(j => j.departmentId === departmentId && !j.isArchived);
+  }
+  // When a user is attached to a unit but has no job profile, and that unit has
+  // exactly one profile, adopt it. Multi-profile units stay manual (ambiguous).
+  private autoAssignJobProfile(user: User) {
+    if (user.departmentId && !user.jobProfileId) {
+      const deptJobs = this.getJobProfilesByDepartment(user.departmentId);
+      if (deptJobs.length === 1) user.jobProfileId = deptJobs[0].id;
+    }
+  }
+
+  // Returns the required skills for a job profile (position). Each position is
+  // its own profile with a single flat skill list, so this just returns the
+  // profile's requiredSkills, dropping any that reference deleted skills.
+  getEffectiveRequirements(profile: JobProfile | undefined | null): JobProfileSkill[] {
+    if (!profile) return [];
+    return (profile.requiredSkills || []).filter(req => !!this.getSkill(req.skillId));
+  }
   // A2.4: Archived items are excluded from active queries; pass includeArchived for admin audit views.
   getAllSkills(includeArchived = false) { return includeArchived ? this.skills : this.skills.filter(s => !s.isArchived); }
   getAllJobs(includeArchived = false) { return includeArchived ? this.jobs : this.jobs.filter(j => !j.isArchived); }
@@ -2498,14 +2523,55 @@ export class DataService {
     return `${deptPrefix}-${titleInitials}`;
   }
   
-  async addUser(user: User) { 
+  async addUser(user: User) {
+    this.autoAssignJobProfile(user);
     await this.persistItem('users', user);
     await this.logActivity('Onboarded Employee', user.name);
   }
 
   async addDepartment(dept: Department) {
+    if (!dept.code) {
+      const used = new Set(this.departments.map(d => d.code).filter(Boolean) as string[]);
+      dept.code = this.generateDepartmentCode(dept, used);
+    }
     await this.persistItem('departments', dept);
     await this.logActivity('Created Department', dept.name);
+  }
+
+  // Short, searchable mnemonic identifier for a department (e.g. HR-PERS,
+  // FIN-ACCT). Derived from the curated doc id when it follows the org-chart
+  // convention (type prefix + slug, e.g. `d-hr-pers`), otherwise abbreviated
+  // from the English name. `used` guarantees uniqueness across departments.
+  public generateDepartmentCode(dept: Department, used: Set<string> = new Set()): string {
+    const CURATED = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/; // org-chart ids: chairman, g-hr, d-hr-pers, sec-admin
+    const TYPE_PREFIXES = ['sec-', 'g-', 'd-', 'p-'];
+    const STOP = new Set(['of', 'and', 'the', 'for', 'to', 'a', 'an', 'within', 'with', 'general', 'manager']);
+
+    let base: string;
+    const id = dept.id || '';
+    if (CURATED.test(id) && id.length <= 40) {
+      // Strip the org-level type prefix, uppercase the remaining slug.
+      let slug = id;
+      for (const p of TYPE_PREFIXES) {
+        if (id.startsWith(p)) { slug = id.slice(p.length); break; }
+      }
+      base = slug.toUpperCase();
+    } else {
+      // UI-created dept with a random Firestore id — abbreviate the name.
+      const words = (dept.name || 'DEPT')
+        .replace(/[^A-Za-z0-9 ]/g, ' ')
+        .split(/\s+/)
+        .filter(w => w && !STOP.has(w.toLowerCase()));
+      if (words.length === 0) base = 'DEPT';
+      else if (words.length === 1) base = words[0].substring(0, 4).toUpperCase();
+      else base = words.map(w => w[0]).join('').toUpperCase().substring(0, 5);
+    }
+
+    // Ensure uniqueness with a numeric suffix when needed.
+    let code = base;
+    let n = 2;
+    while (used.has(code)) code = `${base}-${n++}`;
+    return code;
   }
 
   async addProject(project: Omit<Project, 'id'>) {
@@ -2528,6 +2594,7 @@ export class DataService {
   }
 
   async updateUser(user: User) {
+    this.autoAssignJobProfile(user);
     await this.updateItem('users', user);
     await this.logActivity('Updated Profile', user.name);
   }

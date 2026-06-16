@@ -60,7 +60,7 @@ EPROM-egy/
 |---|---|
 | `users` | Employee profiles: role, orgLevel, departmentId, managerId, jobProfileId |
 | `skills` | Competency catalog with 5-level proficiency scale and assessment method |
-| `jobProfiles` | Role definitions: maps OrgLevel → required skills & required level |
+| `jobProfiles` | **One position = one profile.** Each box/position in the org chart is its own job profile, scoped to a single `orgLevel` with a flat `requiredSkills: { skillId, requiredLevel }[]` list |
 | `assessments` | Score records per user/skill/cycle (Self, Peer, Manager, Exam, Interview, etc.) |
 | `evidences` | Work records submitted by employees, approved by managers |
 | `assessmentCycles` | Time-bound evaluation periods (ACTIVE / CLOSED). Read-only now — historical appraisal labelling only; no admin UI writes cycles since the Assessment Engine was removed |
@@ -87,13 +87,16 @@ EPROM-egy/
 - **Direct assessment skills**: Latest score from WRITTEN_EXAM, INTERVIEW, or PRACTICAL_DEMO
 - **Evidence skills**: Highest `assignedScore` from APPROVED work records
 
+### Effective Requirements (`getEffectiveRequirements`)
+The single resolver for "what does this position require". Returns the profile's flat `requiredSkills` list (dropping any that reference deleted skills). All readers — scoring, gap, ITP, career, TNA, assessment queues, and the page components — go through it.
+
 ### Skill Gap
 `gap = requiredLevel - currentScore`
 
 Used to drive ITP generation and career path readiness calculations.
 
 ### Career Path (`generateCareerPath`)
-Compares employee's current scores vs. requirements at each higher OrgLevel up to GM. Readiness buckets: `READY_NOW`, `READY_1_2_YEARS`, `READY_3_5_YEARS`, `NOT_READY`.
+For each OrgLevel above the employee, finds the position profile at that level in the same general department and compares the employee's current scores vs. that profile's `requiredSkills`. Readiness buckets: `READY_NOW`, `READY_1_2_YEARS`, `READY_3_5_YEARS`, `DEVELOPMENT_NEEDED`.
 
 ### ITP (`generateIndividualTrainingPlan`)
 Auto-generates training recommendations from skill gaps, linked to courses in `trainingCourses`.

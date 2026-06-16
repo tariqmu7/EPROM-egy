@@ -422,9 +422,11 @@ describe('generateCareerPath', () => {
 
   const makeJob = (overrides: Partial<JobProfile> = {}): JobProfile => ({
     id: 'job1',
-    name: 'Test Job',
+    title: 'Test Job',
+    description: '',
     departmentId: 'dept1',
-    requirements: {},
+    orgLevel: 'SP',
+    requiredSkills: [],
     ...overrides,
   } as unknown as JobProfile);
 
@@ -452,7 +454,7 @@ describe('generateCareerPath', () => {
   it('READY_NOW — gap is 0 (current score meets requirement)', () => {
     inject(svc, {
       users: [makeUser({ orgLevel: 'JP' })],
-      jobs: [makeJob({ requirements: { SP: [{ skillId: 'skill1', requiredLevel: 3 }] } })],
+      jobs: [makeJob({ orgLevel: 'SP', requiredSkills: [{ skillId: 'skill1', requiredLevel: 3 }] })],
       assessments: [makeAssessment({ type: 'WRITTEN_EXAM', score: 3 })],
     });
     const plan = svc.generateCareerPath('u1')!;
@@ -463,7 +465,7 @@ describe('generateCareerPath', () => {
   it('READY_1_2_YEARS — total gap ≤ 2', () => {
     inject(svc, {
       users: [makeUser({ orgLevel: 'JP' })],
-      jobs: [makeJob({ requirements: { SP: [{ skillId: 'skill1', requiredLevel: 4 }] } })],
+      jobs: [makeJob({ orgLevel: 'SP', requiredSkills: [{ skillId: 'skill1', requiredLevel: 4 }] })],
       assessments: [makeAssessment({ type: 'WRITTEN_EXAM', score: 3 })],
     });
     const plan = svc.generateCareerPath('u1')!;
@@ -474,7 +476,7 @@ describe('generateCareerPath', () => {
   it('READY_3_5_YEARS — total gap ≤ 5', () => {
     inject(svc, {
       users: [makeUser({ orgLevel: 'JP' })],
-      jobs: [makeJob({ requirements: { SP: [{ skillId: 'skill1', requiredLevel: 5 }] } })],
+      jobs: [makeJob({ orgLevel: 'SP', requiredSkills: [{ skillId: 'skill1', requiredLevel: 5 }] })],
       assessments: [makeAssessment({ type: 'WRITTEN_EXAM', score: 2 })],
     });
     const plan = svc.generateCareerPath('u1')!;
@@ -485,7 +487,7 @@ describe('generateCareerPath', () => {
   it('DEVELOPMENT_NEEDED — total gap > 5', () => {
     inject(svc, {
       users: [makeUser({ orgLevel: 'JP' })],
-      jobs: [makeJob({ requirements: { SP: [{ skillId: 'skill1', requiredLevel: 5 }] } })],
+      jobs: [makeJob({ orgLevel: 'SP', requiredSkills: [{ skillId: 'skill1', requiredLevel: 5 }] })],
       assessments: [], // score = 0, gap = 5 — BUT since gap exactly 5, READY_3_5_YEARS
       // gap > 5 requires score = 0 and level > 5 which is impossible
       // use two skills instead:
@@ -496,12 +498,11 @@ describe('generateCareerPath', () => {
       skills: [SKILL, SKILL2],
       users: [makeUser({ orgLevel: 'JP' })],
       jobs: [makeJob({
-        requirements: {
-          SP: [
-            { skillId: 'skill1', requiredLevel: 4 },
-            { skillId: 'skill2', requiredLevel: 4 },
-          ],
-        },
+        orgLevel: 'SP',
+        requiredSkills: [
+          { skillId: 'skill1', requiredLevel: 4 },
+          { skillId: 'skill2', requiredLevel: 4 },
+        ],
       })],
       assessments: [],
     });
@@ -531,11 +532,11 @@ describe('generateIndividualTrainingPlan', () => {
 
   const JOB: JobProfile = {
     id: 'job1',
-    name: 'Test Job',
+    title: 'Test Job',
+    description: '',
     departmentId: 'dept1',
-    requirements: {
-      SP: [{ skillId: 'skill1', requiredLevel: 4 }],
-    },
+    orgLevel: 'SP',
+    requiredSkills: [{ skillId: 'skill1', requiredLevel: 4 }],
   } as unknown as JobProfile;
 
   const COURSE: TrainingCourse = {
@@ -593,12 +594,10 @@ describe('generateIndividualTrainingPlan', () => {
       skills: [SKILL, SKILL2],
       jobs: [{
         ...JOB,
-        requirements: {
-          SP: [
-            { skillId: 'skill1', requiredLevel: 3 },
-            { skillId: 'skill2', requiredLevel: 5 },
-          ],
-        },
+        requiredSkills: [
+          { skillId: 'skill1', requiredLevel: 3 },
+          { skillId: 'skill2', requiredLevel: 5 },
+        ],
       }],
       assessments: [],
     });

@@ -27,7 +27,7 @@ export const OnlineAssessments: React.FC<OnlineAssessmentsProps> = ({ currentUse
     const jobProfile = dataService.getJobProfile(currentUser.jobProfileId);
     if (!jobProfile) return [];
 
-    const levelRequirements = jobProfile.requirements[currentUser.orgLevel] || [];
+    const levelRequirements = dataService.getEffectiveRequirements(jobProfile);
     return levelRequirements
       .map(req => dataService.getSkill(req.skillId))
       .filter((s): s is Skill => !!s && dataService.skillHasMethod(s.id, 'WRITTEN_EXAM'));

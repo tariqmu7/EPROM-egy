@@ -36,8 +36,7 @@ export const CEOPanel: React.FC<CEOPanelProps> = ({ currentUser, onViewProfile }
       if (itp) {
         // Simple heuristic: compliance = (total requirements - total gaps) / total requirements
         const job = jobs.find(j => j.id === u.jobProfileId);
-        const level = u.orgLevel as OrgLevel;
-        const reqs = (job && level) ? (job.requirements[level] || []) : [];
+        const reqs = dataService.getEffectiveRequirements(job);
         totalChecked += reqs.length;
         totalCompliant += (reqs.length - itp.recommendations.length);
       }
@@ -288,8 +287,7 @@ export const CEOPanel: React.FC<CEOPanelProps> = ({ currentUser, onViewProfile }
                              <span>
                                 {(() => {
                                    const job = jobs.find(j => j.id === person.jobProfileId);
-                                   const level = person.orgLevel as OrgLevel;
-                                   const reqs = (job && level) ? (job.requirements[level] || []) : [];
+                                   const reqs = dataService.getEffectiveRequirements(job);
                                    if (reqs.length === 0) return '0%';
                                    const itp = dataService.generateIndividualTrainingPlan(person.id);
                                    const gaps = itp?.recommendations.length || 0;
@@ -304,8 +302,7 @@ export const CEOPanel: React.FC<CEOPanelProps> = ({ currentUser, onViewProfile }
                                 style={{
                                    width: (() => {
                                       const job = jobs.find(j => j.id === person.jobProfileId);
-                                      const level = person.orgLevel as OrgLevel;
-                                      const reqs = (job && level) ? (job.requirements[level] || []) : [];
+                                      const reqs = dataService.getEffectiveRequirements(job);
                                       if (reqs.length === 0) return '0%';
                                       const itp = dataService.generateIndividualTrainingPlan(person.id);
                                       const gaps = itp?.recommendations.length || 0;

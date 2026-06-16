@@ -42,7 +42,7 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
 
   const myRequiredSkills = useMemo(() => {
     if (!myJobProfile || !currentUser.orgLevel) return [];
-    const reqs = myJobProfile.requirements[currentUser.orgLevel] || [];
+    const reqs = dataService.getEffectiveRequirements(myJobProfile);
     return reqs.map(req => {
       const skill = skills.find(s => s.id === req.skillId);
       return { ...req, skill };

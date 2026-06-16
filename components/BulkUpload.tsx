@@ -255,7 +255,8 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, user, onComplete, 
                     title: title,
                     description: row['Description']?.toString() || '',
                     departmentId: dept.id,
-                    requirements: {},
+                    orgLevel: 'JP' as OrgLevel,
+                    requiredSkills: [],
                     code: row['Code']?.toString() || ''
                   };
                   if (row['Code']) {
@@ -291,12 +292,12 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, user, onComplete, 
                     skills.push(skill);
                   }
                   
-                  if (!job.requirements[orgLevel]) {
-                    job.requirements[orgLevel] = [];
-                  }
-                  // Avoid duplicate skills for the same level
-                  if (!job.requirements[orgLevel].find((r: any) => r.skillId === skill!.id)) {
-                    job.requirements[orgLevel].push({
+                  // Each profile is one position at a single org level.
+                  job.orgLevel = orgLevel;
+                  if (!job.requiredSkills) job.requiredSkills = [];
+                  // Avoid duplicate skills on the same profile
+                  if (!job.requiredSkills.find((r: any) => r.skillId === skill!.id)) {
+                    job.requiredSkills.push({
                       skillId: skill.id,
                       requiredLevel: reqLevel
                     });

@@ -113,14 +113,13 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
     
     const department = dataService.getAllDepartments().find(d => d.id === selectedEmployee.departmentId);
     const jobProfile = selectedEmployee.jobProfileId ? dataService.getJobProfile(selectedEmployee.jobProfileId) : null;
-    const orgLevel = selectedEmployee.orgLevel;
 
     // 1. Get behavioral skills from Department defaults
     const deptSkillIds = department?.behavioralSkillIds || [];
     
     // 2. Get skills from Job Profile requirements for this specific Hierarchy Level (orgLevel)
-    const jobSkillIds = (jobProfile && orgLevel) 
-      ? (jobProfile.requirements[orgLevel] || []).map(req => req.skillId)
+    const jobSkillIds = jobProfile
+      ? dataService.getEffectiveRequirements(jobProfile).map(req => req.skillId)
       : [];
 
     // 3. Combine and deduplicate skill IDs

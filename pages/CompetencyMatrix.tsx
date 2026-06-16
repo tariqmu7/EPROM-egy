@@ -34,10 +34,9 @@ export const CompetencyMatrix: React.FC<{ currentUser: User }> = ({ currentUser 
   const requiredSkillIds = useMemo(() => {
     const ids = new Set<string>();
     relevantUsers.forEach((user: User) => {
-      if (user.jobProfileId && user.orgLevel) {
+      if (user.jobProfileId) {
         const job = jobs.find(j => j.id === user.jobProfileId);
-        const requirements = job?.requirements as any;
-        requirements?.[user.orgLevel]?.forEach((req: any) => ids.add(req.skillId));
+        dataService.getEffectiveRequirements(job).forEach(req => ids.add(req.skillId));
       }
     });
     return ids; // keep as Set for O(1) lookups below
@@ -86,7 +85,7 @@ export const CompetencyMatrix: React.FC<{ currentUser: User }> = ({ currentUser 
 
   const getColumnStatus = (user: User, categories: string[]) => {
     const job  = jobs.find(j => j.id === user.jobProfileId);
-    const reqs = (job && user.orgLevel ? job.requirements[user.orgLevel] : null) ?? [];
+    const reqs = dataService.getEffectiveRequirements(job);
 
     const relevantReqs = reqs.filter(r => {
       const skill = skills.find(s => s.id === r.skillId);

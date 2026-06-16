@@ -199,14 +199,17 @@ export interface JobProfileSkill {
   requiredLevel: number; // 1-5
 }
 
+// --- Job Profile (one position = one profile) ---
+// Each box/position in the org chart is its own job profile, scoped to a single
+// org level and carrying one flat list of required skills for that position.
 export interface JobProfile {
   id: string;
   title: string;
   description: string;
   isArchived?: boolean;
   departmentId: string;
-  // Requirements mapped by OrgLevel (e.g., 'FR' -> skills for freshers)
-  requirements: Partial<Record<OrgLevel, JobProfileSkill[]>>;
+  orgLevel: OrgLevel;                 // the position's single org level
+  requiredSkills: JobProfileSkill[];  // flat list of skills required for this position
   code?: string; // Automatically generated professional identifier
 }
 
@@ -223,6 +226,7 @@ export type DepartmentType = 'COMPANY' | 'EXECUTIVE' | 'SECTOR' | 'GENERAL' | 'D
 export interface Department {
   id: string;
   name: string;
+  code?: string; // Short searchable mnemonic identifier (e.g. HR-PERS, FIN-ACCT). Auto-generated.
   nameAr?: string; // Arabic name (shown under the English name in the org chart)
   projectId?: string; // Added link to project
   type?: DepartmentType; // New field for hierarchy level

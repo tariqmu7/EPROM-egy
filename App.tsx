@@ -536,7 +536,8 @@ const App: React.FC = () => {
         case 'admin-instructions': return <AdminPanel view="INSTRUCTIONS" onNavigate={setActiveTab} />;
         case 'admin-audit': return <AdminPanel view="AUDIT" onNavigate={setActiveTab} />;
         case 'admin-users': return <AdminPanel view="USERS" onNavigate={setActiveTab} />;
-        case 'admin-jobs': return <AdminPanel view="JOBS" onNavigate={setActiveTab} />;
+        // Job profiles are now managed inside the Departments page (admin-depts).
+        case 'admin-jobs': return <AdminPanel view="DEPTS" onNavigate={setActiveTab} />;
         case 'admin-skills': return <AdminPanel view="SKILLS" onNavigate={setActiveTab} />;
         case 'admin-depts': return <AdminPanel view="DEPTS" onNavigate={setActiveTab} />;
         case 'settings': return <SettingsPage user={user} />;

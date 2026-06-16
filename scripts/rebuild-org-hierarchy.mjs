@@ -41,9 +41,12 @@ const REGIONAL = (p) => [
   [`d-${p}-lab`,   'DEPARTMENT', 'المعامل الكيميائية', 'Chemical Laboratories'],
 ];
 
+// NOTE: Tree.md has a COMPANY root (EPROM Head Office) above the Chairman, but the
+// Admin org-chart UI already supplies an "EPROM" root + "Head Office" wrapper, so the
+// company node would be a redundant third layer. We therefore make the Chairman the
+// top department (no parentId); the company / Head-Office framing comes from the UI.
 const TREE = [
-  ['co-eprom', 'COMPANY', 'المصرية لتشغيل وصيانة المشروعات (المركز الرئيسي)', 'Egyptian Maintenance Company for Operation & Maintenance of Projects (EPROM), Head Office', [
-    ['chairman', 'EXECUTIVE', 'رئيس مجلس الإدارة والعضو المنتدب', 'Chairman & Managing Director', [
+  ['chairman', 'EXECUTIVE', 'رئيس مجلس الإدارة والعضو المنتدب', 'Chairman & Managing Director', [
       ['vice-chairman', 'EXECUTIVE', 'نائب رئيس مجلس الإدارة (1)', 'Vice Chairman of the Board'],
 
       // --- Assistant to President: Administrative Affairs ---
@@ -78,15 +81,13 @@ const TREE = [
           ['d-supply-purch', 'DEPARTMENT', 'المشتريات', 'Purchasing'],
           ['d-supply-wh',    'DEPARTMENT', 'المخازن', 'Warehouses'],
           ['d-supply-contr', 'DEPARTMENT', 'العقود', 'Contracts'],
-          ['p-supply-gm-dept',     'POSITION', 'مدير عام بالإدارة (1)', 'General Manager within the department'],
+          ['p-supply-gm-pers',     'POSITION', 'مدير عام بصفة شخصية (1)', 'General Manager, personal capacity'],
           ['p-supply-asstgm-pers', 'POSITION', 'مدير عام مساعد بصفة شخصية (4)', 'Assistant General Manager, personal capacity'],
         ]],
         ['g-bizdev', 'GENERAL', 'مدير عام تنمية الأعمال والتعاقدات الخارجية', 'General Manager of Business Development & External Contracting', [
           ['d-bizdev-mkt', 'DEPARTMENT', 'تنمية الأعمال وبرامج التسويق', 'Business Development & Marketing Programs'],
           ['d-bizdev-ext', 'DEPARTMENT', 'العقود والعروض الخارجية ومتابعة عقود المشروعات', 'External Contracts/Bids & Project Contract Follow-up'],
         ]],
-        ['p-techsvc-gm-pers',     'POSITION', 'مدير عام بصفة شخصية (1)', 'General Manager, personal capacity'],
-        ['p-techsvc-asstgm-pers', 'POSITION', 'مدير عام مساعد بصفة شخصية (4)', 'Assistant General Manager, personal capacity'],
       ]],
 
       // --- Assistant to President: Financial Affairs ---
@@ -193,15 +194,31 @@ const TREE = [
       ['p-expert-company-pres', 'POSITION', 'خبير / رئيس شركة (3)', 'Expert / Company President grade'],
       ['p-expert-vice-pres',    'POSITION', 'خبير / نائب رئيس شركة (1)', 'Expert / Vice President grade'],
       ['p-expert-asst-pres',    'POSITION', 'خبير / مساعد رئيس شركة (15)', 'Expert / Assistant President grade'],
-    ]],
   ]],
 ];
 
-// Flatten the tree into {id, name, nameAr, type, parentId} records.
-function flatten(nodes, parentId, out = []) {
+// Short searchable mnemonic code derived from the curated doc id: strip the
+// org-level type prefix (sec-/g-/d-/p-) and uppercase the remaining slug.
+// Must match DataService.generateDepartmentCode so client backfill agrees.
+const TYPE_PREFIXES = ['sec-', 'g-', 'd-', 'p-'];
+function deptCode(id) {
+  let slug = id;
+  for (const p of TYPE_PREFIXES) {
+    if (id.startsWith(p)) { slug = id.slice(p.length); break; }
+  }
+  return slug.toUpperCase();
+}
+
+// Flatten the tree into {id, name, nameAr, code, type, parentId} records.
+// Codes are deduped with a numeric suffix on the rare chance two slugs collide.
+function flatten(nodes, parentId, out = [], used = new Set()) {
   for (const [id, type, ar, en, children] of nodes) {
-    out.push({ id, name: en, nameAr: ar, type, ...(parentId ? { parentId } : {}) });
-    if (children && children.length) flatten(children, id, out);
+    let code = deptCode(id);
+    let n = 2;
+    while (used.has(code)) code = `${deptCode(id)}-${n++}`;
+    used.add(code);
+    out.push({ id, name: en, nameAr: ar, code, type, ...(parentId ? { parentId } : {}) });
+    if (children && children.length) flatten(children, id, out, used);
   }
   return out;
 }
@@ -282,7 +299,7 @@ async function main() {
   if (DRY_RUN) {
     console.log('— DRY RUN — no writes.');
     console.log('Delete:', toDelete.join(', ') || '(none)');
-    records.forEach(r => console.log(`  upsert ${r.id} [${r.type}] ${r.nameAr} — ${r.name}${r.parentId ? '  ⟶ ' + r.parentId : ''}`));
+    records.forEach(r => console.log(`  upsert ${r.id} [${r.code}] [${r.type}] ${r.nameAr} — ${r.name}${r.parentId ? '  ⟶ ' + r.parentId : ''}`));
     return;
   }
 

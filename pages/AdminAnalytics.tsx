@@ -65,7 +65,7 @@ export const AdminAnalytics: React.FC = () => {
         const jobProfile = jobs.find(j => j.id === user.jobProfileId);
         if (!jobProfile) return;
         
-        const levelRequirements = jobProfile.requirements[user.orgLevel] || [];
+        const levelRequirements = dataService.getEffectiveRequirements(jobProfile);
         const userScores = currentScores[user.id] || {};
         
         if (Array.isArray(levelRequirements)) {

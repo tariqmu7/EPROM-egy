@@ -33,51 +33,47 @@ export const EvaluationsHub: React.FC<Props> = ({ currentUser, initialTab = 'onl
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5 max-w-[1600px] mx-auto">
 
       {/* Page Header */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Evaluations</h1>
-        <p className="text-sm text-slate-600 mt-0.5">
+        <h1 className="text-2xl font-black text-slate-900 tracking-tight">Evaluations</h1>
+        <p className="text-sm text-slate-500 mt-1">
           Select an evaluation method to view your assessments and submissions.
         </p>
       </div>
 
       {/* Sub-Tab Bar + Content — unified card */}
-      <div className="bg-white border border-slate-200 rounded-sm overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+        <div className="h-1.5 bg-gradient-to-r from-blue-600 via-blue-500 to-indigo-500" />
 
-        {/* Fixed-height tab strip — h-14 keeps every tab identical regardless of label length */}
-        <div className="grid grid-cols-4 divide-x divide-slate-200 border-b border-slate-200">
+        {/* Tab strip — fixed height keeps every tab identical regardless of label length */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-2 border-b border-slate-100 bg-slate-50/50">
           {TABS.map(({ id, label, icon: Icon, description }) => {
             const isActive = activeTab === id;
             return (
               <button
                 key={id}
                 onClick={() => setActiveTab(id)}
-                style={{ height: '3.5rem' /* 56px — fixed, never stretches */ }}
-                className={`relative flex items-center gap-2 px-4 w-full transition-colors duration-150 group overflow-hidden
+                className={`relative flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-all duration-150 group
                   ${isActive
-                    ? 'bg-blue-50 text-blue-700'
-                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+                    ? 'bg-white shadow-sm ring-1 ring-blue-100'
+                    : 'hover:bg-white/70'
                   }`}
               >
-                {/* Active bottom bar */}
-                <span
-                  className={`absolute bottom-0 left-0 right-0 h-0.5 transition-all duration-150 ${
-                    isActive ? 'bg-blue-600' : 'bg-transparent'
-                  }`}
-                />
+                <div className={`flex items-center justify-center w-9 h-9 rounded-lg shrink-0 transition-colors ${
+                  isActive ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400 group-hover:text-slate-600'
+                }`}>
+                  <Icon size={17} />
+                </div>
 
-                <Icon
-                  size={15}
-                  className={`flex-shrink-0 ${isActive ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-600'}`}
-                />
-
-                <div className="flex flex-col items-start overflow-hidden">
-                  <span className="text-[11px] font-bold uppercase tracking-wide leading-none truncate w-full">
+                <div className="flex flex-col overflow-hidden">
+                  <span className={`text-[11px] font-black uppercase tracking-wide leading-none truncate ${
+                    isActive ? 'text-blue-700' : 'text-slate-600'
+                  }`}>
                     {label}
                   </span>
-                  <span className={`text-[10px] leading-tight truncate w-full mt-0.5 hidden sm:block ${
+                  <span className={`text-[10px] leading-tight truncate mt-1 hidden sm:block ${
                     isActive ? 'text-blue-400' : 'text-slate-400'
                   }`}>
                     {description}
@@ -89,7 +85,7 @@ export const EvaluationsHub: React.FC<Props> = ({ currentUser, initialTab = 'onl
         </div>
 
         {/* Content — p-8 so child page headers aren't flush against the tab bar border */}
-        <div className="p-8 pt-10">
+        <div className="p-6 md:p-8">
           <div key={activeTab} className="animate-in fade-in duration-200">
             {renderContent()}
           </div>
