@@ -9,6 +9,7 @@ const AdminPanel = lazy(() => import('./pages/AdminPanel').then(m => ({ default:
 const CEOPanel = lazy(() => import('./pages/CEOPanel').then(m => ({ default: m.CEOPanel })));
 const EvaluationsHub = lazy(() => import('./pages/EvaluationsHub').then(m => ({ default: m.EvaluationsHub })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
+const MethodologyStandards = lazy(() => import('./pages/MethodologyStandards').then(m => ({ default: m.MethodologyStandards })));
 import { Logo } from './components/Logo';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { dataService, CONFIG, isBootstrapAdminEmail } from './services/store';
@@ -528,12 +529,12 @@ const App: React.FC = () => {
         case 'online-assessments': return <EvaluationsHub currentUser={user} initialTab="online" />;
         case 'interviews': return <EvaluationsHub currentUser={user} initialTab="interviews" />;
         case 'emp-assessment': return <EvaluationsHub currentUser={user} initialTab="360" />;
+        case 'emp-appraisal': return <EvaluationsHub currentUser={user} initialTab="appraisal" />;
         case 'evidence-portal': return <EvaluationsHub currentUser={user} initialTab="evidence" />;
         // Admin Views - Mapped to sidebar IDs
         case 'admin-dashboard': return <AdminPanel view="OVERVIEW" onNavigate={setActiveTab} />;
         case 'admin-analytics': return <AdminPanel view="ANALYTICS" onNavigate={setActiveTab} />;
-        case 'admin-assessments': return <AdminPanel view="PLANS" onNavigate={setActiveTab} />;
-        case 'admin-instructions': return <AdminPanel view="INSTRUCTIONS" onNavigate={setActiveTab} />;
+        case 'admin-appraisal': return <AdminPanel view="APPRAISAL" onNavigate={setActiveTab} />;
         case 'admin-audit': return <AdminPanel view="AUDIT" onNavigate={setActiveTab} />;
         case 'admin-users': return <AdminPanel view="USERS" onNavigate={setActiveTab} />;
         // Job profiles are now managed inside the Departments page (admin-depts).
@@ -541,6 +542,7 @@ const App: React.FC = () => {
         case 'admin-skills': return <AdminPanel view="SKILLS" onNavigate={setActiveTab} />;
         case 'admin-depts': return <AdminPanel view="DEPTS" onNavigate={setActiveTab} />;
         case 'settings': return <SettingsPage user={user} />;
+        case 'methodology': return <MethodologyStandards />;
         default: return <div className="p-8 text-center text-slate-600">Section Under Construction</div>;
     }
   };

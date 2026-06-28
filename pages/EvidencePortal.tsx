@@ -84,7 +84,7 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
           const newSkill: Skill = {
             id: 's_custom_' + Date.now(),
             name: newSkillName.trim(),
-            category: 'Other',
+            category: 'Technical',
             levels: {
               1: { level: 1, description: 'Awareness', requiredCertificates: [] },
               2: { level: 2, description: 'Basic', requiredCertificates: [] },

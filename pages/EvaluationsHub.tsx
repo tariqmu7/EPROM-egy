@@ -3,10 +3,11 @@ import { User } from '../types';
 import { OnlineAssessments } from './OnlineAssessments';
 import { ManagerialInterviews } from './ManagerialInterviews';
 import { BehavioralAssessment } from './BehavioralAssessment';
+import { AnnualAppraisal } from './AnnualAppraisal';
 import { EvidencePortal } from './EvidencePortal';
-import { Monitor, MessageSquare, Star, UploadCloud } from 'lucide-react';
+import { Monitor, MessageSquare, Star, UploadCloud, ClipboardCheck } from 'lucide-react';
 
-type EvalTab = 'online' | 'interviews' | '360' | 'evidence';
+type EvalTab = 'online' | 'interviews' | '360' | 'appraisal' | 'evidence';
 
 interface Props {
   currentUser: User;
@@ -17,6 +18,7 @@ const TABS: { id: EvalTab; label: string; icon: React.ElementType; description: 
   { id: 'online',     label: 'Online',     icon: Monitor,       description: 'Written exams via external platforms' },
   { id: 'interviews', label: 'Interviews', icon: MessageSquare, description: 'Interviews & practical demos' },
   { id: '360',        label: '360°',       icon: Star,          description: 'Self, peer & manager evaluation' },
+  { id: 'appraisal',  label: 'Appraisal',  icon: ClipboardCheck, description: 'Annual performance checklist' },
   { id: 'evidence',   label: 'Evidence',   icon: UploadCloud,   description: 'Upload proof & work records' },
 ];
 
@@ -28,6 +30,7 @@ export const EvaluationsHub: React.FC<Props> = ({ currentUser, initialTab = 'onl
       case 'online':     return <OnlineAssessments currentUser={currentUser} />;
       case 'interviews': return <ManagerialInterviews currentUser={currentUser} />;
       case '360':        return <BehavioralAssessment currentUser={currentUser} />;
+      case 'appraisal':  return <AnnualAppraisal currentUser={currentUser} />;
       case 'evidence':   return <EvidencePortal currentUser={currentUser} />;
     }
   };
@@ -48,7 +51,7 @@ export const EvaluationsHub: React.FC<Props> = ({ currentUser, initialTab = 'onl
         <div className="h-1.5 bg-gradient-to-r from-blue-600 via-blue-500 to-indigo-500" />
 
         {/* Tab strip — fixed height keeps every tab identical regardless of label length */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-2 border-b border-slate-100 bg-slate-50/50">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 p-2 border-b border-slate-100 bg-slate-50/50">
           {TABS.map(({ id, label, icon: Icon, description }) => {
             const isActive = activeTab === id;
             return (

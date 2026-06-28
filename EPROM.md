@@ -126,7 +126,7 @@ UserStatus: ACTIVE | PENDING | REJECTED
 8-tier strict top-to-bottom order:
 
 ```
-CEO (0) → GM (1) → AGM (2) → DM (3) → SH (4) → SP (5) → JP (6) → FR (7)
+CEO (0) → ACEO (1) → GM (2) → AGM (3) → DM (4) → SH (5) → SP (6) → JP (7) → FR (8)
 ```
 
 | Code | Label |
@@ -184,7 +184,7 @@ Tier number used for hierarchy comparison via `ORG_LEVEL_NUMBERS`. `ORG_HIERARCH
   status: 'ACTIVE' | 'PENDING' | 'REJECTED';
   departmentId: string;
   generalDepartmentId?: string;
-  orgLevel?: OrgLevel;     // 'CEO'|'GM'|'AGM'|'DM'|'SH'|'SP'|'JP'|'FR'
+  orgLevel?: OrgLevel;     // 'CEO'|'ACEO'|'GM'|'AGM'|'DM'|'SH'|'SP'|'JP'|'FR'
   jobProfileId?: string;
   managerId?: string;
   avatarUrl?: string;

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import ExcelJS from 'exceljs';
 import { Download, Upload, X, AlertCircle, CheckCircle, FileSpreadsheet, Loader2, Lock } from 'lucide-react';
 import { dataService } from '../services/store';
-import { User, Role, JobProfile, Skill, Department, OrgLevel } from '../types';
+import { User, Role, JobProfile, Skill, Department, OrgLevel, normalizeSkillCategory } from '../types';
 
 interface BulkUploadProps {
   type: 'USER' | 'JOB' | 'SKILL' | 'DEPT' | 'PROJECT';
@@ -47,12 +47,12 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, user, onComplete, 
     switch (type) {
       case 'USER':
         return [
-          ['Name', 'Email', 'Phone', 'WhatsApp', 'Role (EMPLOYEE/ADMIN/CEO)', 'Status (ACTIVE/PENDING/REJECTED)', 'General Department Name', 'Parent Department Name', 'Direct Department Name', 'Job Profile Title', 'Manager Email', 'Hierarchy Level (CEO/GM/AGM/DM/SH/SP/JP/FR)', 'Location', 'Project Name'],
+          ['Name', 'Email', 'Phone', 'WhatsApp', 'Role (EMPLOYEE/ADMIN/CEO)', 'Status (ACTIVE/PENDING/REJECTED)', 'General Department Name', 'Parent Department Name', 'Direct Department Name', 'Job Profile Title', 'Manager Email', 'Hierarchy Level (CEO/ACEO/GM/AGM/DM/SH/SP/JP/FR)', 'Location', 'Project Name'],
           ['John Doe', 'john@example.com', '01234567890', '01234567890', 'EMPLOYEE', 'ACTIVE', 'General Health & Safety', 'Safety Department', 'Safety Section 1', 'Safety Engineer', 'manager@example.com', 'JP', 'Cairo Office', 'Project Alpha']
         ];
       case 'JOB':
         return [
-          ['Title', 'Description', 'Code', 'Department Name', 'Skill Name', 'Required Level (1-5)', 'Org Level (GM/AGM/DM/SH/SP/JP/FR)'],
+          ['Title', 'Description', 'Code', 'Department Name', 'Skill Name', 'Required Level (1-5)', 'Org Level (CEO/ACEO/GM/AGM/DM/SH/SP/JP/FR)'],
           ['Software Engineer', 'Develops and maintains software applications.', 'ENG-SWE', 'Engineering', 'React.js', '3', 'JP'],
           ['Software Engineer', '', '', '', 'Node.js', '2', 'JP'],
           ['Software Engineer', '', '', '', 'React.js', '4', 'SH']
@@ -208,7 +208,7 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, user, onComplete, 
                   generalDepartmentId: genDept?.id || (directDept ? dataService.getGeneralDeptId(directDept.id) : (parentDept ? dataService.getGeneralDeptId(parentDept.id) : undefined)),
                   jobProfileId: job?.id,
                   managerId: manager?.id,
-                  orgLevel: (row['Hierarchy Level (CEO/GM/AGM/DM/SH/SP/JP/FR)']?.toString().toUpperCase() || row['Hierarchy Level (GM/AGM/DM/SH/SP/JP/FR)']?.toString().toUpperCase() as OrgLevel)
+                  orgLevel: (row['Hierarchy Level (CEO/ACEO/GM/AGM/DM/SH/SP/JP/FR)']?.toString().toUpperCase() || row['Hierarchy Level (CEO/GM/AGM/DM/SH/SP/JP/FR)']?.toString().toUpperCase() || row['Hierarchy Level (GM/AGM/DM/SH/SP/JP/FR)']?.toString().toUpperCase() as OrgLevel)
                 };
                 if (newUser.name && newUser.email) {
                   if (existingUser) {
@@ -268,7 +268,7 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, user, onComplete, 
                 // Handle skill requirement
                 const skillName = row['Skill Name']?.toString().trim();
                 const reqLevel = parseInt(row['Required Level (1-5)']?.toString());
-                const orgLevelRaw = row['Org Level (CEO/GM/AGM/DM/SH/SP/JP/FR)']?.toString() || row['Org Level (GM/AGM/DM/SH/SP/JP/FR)']?.toString() || row['Org Level']?.toString() || row['Hierarchy Level (CEO/GM/AGM/DM/SH/SP/JP/FR)']?.toString() || row['Hierarchy Level (GM/AGM/DM/SH/SP/JP/FR)']?.toString();
+                const orgLevelRaw = row['Org Level (CEO/ACEO/GM/AGM/DM/SH/SP/JP/FR)']?.toString() || row['Org Level (CEO/GM/AGM/DM/SH/SP/JP/FR)']?.toString() || row['Org Level (GM/AGM/DM/SH/SP/JP/FR)']?.toString() || row['Org Level']?.toString() || row['Hierarchy Level (CEO/ACEO/GM/AGM/DM/SH/SP/JP/FR)']?.toString() || row['Hierarchy Level (CEO/GM/AGM/DM/SH/SP/JP/FR)']?.toString() || row['Hierarchy Level (GM/AGM/DM/SH/SP/JP/FR)']?.toString();
                 const orgLevel = orgLevelRaw?.toString().toUpperCase().trim() as OrgLevel;
 
                 if (skillName && !isNaN(reqLevel) && orgLevel) {
@@ -322,7 +322,7 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, user, onComplete, 
                 const newSkill: Skill = {
                   id: existingSkill ? existingSkill.id : Math.random().toString(36).substr(2, 9),
                   name: name,
-                  category: row['Category (Technical/Safety/Management/Soft Skills/Behavioral)']?.toString() || 'Technical',
+                  category: normalizeSkillCategory(row['Category (Technical/Safety/Management/Soft Skills/Behavioral)']?.toString()),
                   assessmentQuestion: row['Assessment Question']?.toString() || '',
                   assessmentMethod: (row['Assessment Method (OJT_OBSERVATION/WORK_RECORD_REVIEW/WRITTEN_EXAM/PRACTICAL_DEMO/INTERVIEW)']?.toString().toUpperCase() as any) || (existingSkill?.assessmentMethod) || 'OJT_OBSERVATION',
                   assessmentLink: row['Assessment Link']?.toString() || '',

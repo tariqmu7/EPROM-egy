@@ -36,7 +36,7 @@ An employee's profile is stored in the `users` Firestore collection and is defin
 
 ### A. Core Relational Links
 *   **Job Profile Link (`jobProfileId`)**: Links the employee directly to their specific role defined in the `jobProfiles` collection (e.g., *Mechanical Maintenance Engineer*).
-*   **Organizational Level (`orgLevel`)**: Represents the employee's current tier in the organizational hierarchy (e.g., `'CEO'`, `'GM'`, `'AGM'`, `'DM'`, `'SH'`, `'SP'`, `'JP'`, `'FR'`).
+*   **Organizational Level (`orgLevel`)**: Represents the employee's current tier in the organizational hierarchy (e.g., `'CEO'`, `'ACEO'`, `'GM'`, `'AGM'`, `'DM'`, `'SH'`, `'SP'`, `'JP'`, `'FR'`).
 *   **Department Link (`departmentId`)**: Links the employee to their designated section or department in the `departments` collection.
 *   **Supervisor Link (`managerId`)**: Holds the canonical ID of the supervisor/manager they report to.
 

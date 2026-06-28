@@ -7,11 +7,35 @@ export enum Role {
 
 export type UserStatus = 'ACTIVE' | 'PENDING' | 'REJECTED';
 
+// Skill.category is one of exactly these five buckets:
+//  Technical   — everything tied to the core job / the actual work
+//  Behavioral  — the human / personal-conduct dimension
+//  Safety      — HSE / safety-critical competencies
+//  Management  — leading, planning, supervising
+//  Soft Skills — communication, interpersonal, etc.
+export type SkillCategory = 'Technical' | 'Behavioral' | 'Safety' | 'Management' | 'Soft Skills';
+
+export const SKILL_CATEGORIES: SkillCategory[] = ['Technical', 'Behavioral', 'Safety', 'Management', 'Soft Skills'];
+
+// Normalize free-text / legacy category strings (Excel import, old seed values
+// like 'Leadership' or 'Business / Commercial') to a canonical SkillCategory.
+// Anything not recognised as behavioral/safety/management/soft is treated as
+// Technical (core-job work, which includes business/commercial domain skills).
+export function normalizeSkillCategory(raw?: string | null): SkillCategory {
+  const v = (raw || '').trim().toLowerCase();
+  if (v.startsWith('behav')) return 'Behavioral';
+  if (v.startsWith('saf') || v.includes('hse')) return 'Safety';
+  if (v.startsWith('manage') || v.startsWith('lead')) return 'Management';
+  if (v.startsWith('soft')) return 'Soft Skills';
+  return 'Technical';
+}
+
 // Org Hierarchy tiers
-export type OrgLevel = 'CEO' | 'GM' | 'AGM' | 'DM' | 'SH' | 'SP' | 'JP' | 'FR';
+export type OrgLevel = 'CEO' | 'ACEO' | 'GM' | 'AGM' | 'DM' | 'SH' | 'SP' | 'JP' | 'FR';
 
 export const ORG_LEVEL_LABELS: Record<OrgLevel, string> = {
   'CEO': 'Chief Executive Officer',
+  'ACEO': 'Assistant to Company President',
   'GM': 'General Manager',
   'AGM': 'Assistant General Manager',
   'DM': 'Department Manager',
@@ -23,17 +47,18 @@ export const ORG_LEVEL_LABELS: Record<OrgLevel, string> = {
 
 export const ORG_LEVEL_NUMBERS: Record<OrgLevel, number> = {
   'CEO': 0,
-  'GM': 1,
-  'AGM': 2,
-  'DM': 3,
-  'SH': 4,
-  'SP': 5,
-  'JP': 6,
-  'FR': 7
+  'ACEO': 1,
+  'GM': 2,
+  'AGM': 3,
+  'DM': 4,
+  'SH': 5,
+  'SP': 6,
+  'JP': 7,
+  'FR': 8
 };
 
 // Strict Hierarchy Order (Top to Bottom)
-export const ORG_HIERARCHY_ORDER: OrgLevel[] = ['CEO', 'GM', 'AGM', 'DM', 'SH', 'SP', 'JP', 'FR'];
+export const ORG_HIERARCHY_ORDER: OrgLevel[] = ['CEO', 'ACEO', 'GM', 'AGM', 'DM', 'SH', 'SP', 'JP', 'FR'];
 
 export const PROFICIENCY_LABELS: Record<number, string> = {
   1: 'Awareness',
@@ -52,12 +77,18 @@ export interface SkillLevel {
 export interface Skill {
   id: string;
   name: string;
-  category: string;
+  category: SkillCategory;
   isArchived?: boolean;
   levels: Record<number, SkillLevel>;
   status?: 'APPROVED' | 'PENDING';
-  // How this skill is assessed now lives on reusable AssessmentInstruction
-  // entities. A skill may carry several (multi-method assessment).
+  // How AND when this skill is assessed lives inline on the skill. Each block
+  // pairs an assessment method (with its prompt / link / question bank) with a
+  // recurrence schedule and target audience. A skill may carry several blocks
+  // (multi-method assessment). Configured from the Competency Standard form.
+  assessmentMethods?: SkillAssessmentMethod[];
+  // @deprecated Superseded by Skill.assessmentMethods. Kept optional so legacy
+  // Firestore docs still parse and feed the one-time migration into
+  // assessmentMethods; no longer written by the Skill form.
   assessmentInstructionIds?: string[];
   // @deprecated Moved to AssessmentInstruction. Kept optional so legacy
   // Firestore docs still parse and feed the one-time auto-migration; no
@@ -106,6 +137,71 @@ export interface ScheduledAssessment {
   assessorId?: string;
 }
 
+// --- Per-skill assessment method (inline on Skill.assessmentMethods) ---
+// One assessment method for a skill: HOW it is assessed (method + prompt /
+// link / question bank) plus WHEN (recurrence) and WHO (audience). Replaces the
+// separate AssessmentInstruction (how) and AssessmentPlan (when) entities — a
+// skill now owns its full assessment definition. A skill may carry several.
+export interface SkillAssessmentMethod {
+  id: string;
+  method: AssessmentMethod;
+  // --- HOW ---
+  assessmentQuestion?: string;        // Observation / evaluation prompt
+  assessmentLink?: string;            // External exam form OR interview meeting link
+  questions?: EvaluationQuestion[];   // Question / checklist bank for this method
+  // --- STANDARD (per-method controls; see ASSESSMENT_METHODOLOGY.md) ---
+  // WRITTEN_EXAM: pass mark, duration and number of items drawn. The pass mark
+  // here is the skill-wide default; a job profile may override it per skill via
+  // JobProfileSkill.passingScorePercent. Target proficiency (pass level) is not
+  // stored here — it is owned per profile by JobProfileSkill.requiredLevel.
+  passingScorePercent?: number;       // 0-100
+  timeLimitMinutes?: number;
+  questionCount?: number;
+  // OJT_OBSERVATION / THREE_SIXTY_EVALUATION: 360° rater blend (percentages
+  // summing to 100). Drives the weighted average in getUserSkillScore; when
+  // unset, DEFAULT_RATER_WEIGHTS is used (back-compat with the old hardcoding).
+  raterWeights?: RaterWeights;
+  // INTERVIEW / PRACTICAL_DEMO / THREE_SIXTY_EVALUATION: who conducts it.
+  assessorRole?: AssessorRole;
+  // WORK_RECORD_REVIEW: evidence validity window and minimum approved records.
+  evidenceValidityMonths?: number;
+  minEvidenceCount?: number;
+  // --- WHEN (recurrence) ---
+  frequency: AssessmentFrequency;
+  fixedMonth?: number;                // 1-12, when frequency === 'ANNUAL_FIXED_DATE'
+  fixedDay?: number;                  // 1-31, when frequency === 'ANNUAL_FIXED_DATE'
+  // --- WHO (audience) ---
+  audience: AssessmentAudience;
+  audienceOrgLevels?: OrgLevel[];     // when audience === 'ORG_LEVELS'
+  audienceDepartmentIds?: string[];   // when audience === 'DEPARTMENTS'
+}
+
+// 360° multi-rater blend (percentages; should sum to 100). Per BARS / 360°
+// methodology the weighting is a configurable policy choice, not a constant.
+export interface RaterWeights {
+  self: number;
+  peer: number;
+  manager: number;
+}
+
+export const DEFAULT_RATER_WEIGHTS: RaterWeights = { self: 10, peer: 30, manager: 60 };
+
+// Who is accountable for conducting a method (ISO 10667 traceability of assessor).
+export type AssessorRole =
+  | 'DIRECT_MANAGER'
+  | 'SECTION_HEAD'
+  | 'DEPARTMENT_MANAGER'
+  | 'EXTERNAL'
+  | 'COMMITTEE';
+
+export const ASSESSOR_ROLE_LABELS: Record<AssessorRole, string> = {
+  DIRECT_MANAGER: 'Direct Manager',
+  SECTION_HEAD: 'Section Head',
+  DEPARTMENT_MANAGER: 'Department Manager',
+  EXTERNAL: 'External Assessor',
+  COMMITTEE: 'Assessment Committee'
+};
+
 // --- Assessment Management (Assessment Plans) ---
 // Recurrence rule for an AssessmentPlan. Replaces the per-skill
 // assessmentFrequency/periodicInterval fields as the single source of truth.
@@ -144,6 +240,9 @@ export const ASSESSMENT_AUDIENCE_LABELS: Record<AssessmentAudience, string> = {
   DEPARTMENTS: 'Specific departments'
 };
 
+// @deprecated Scheduling is now inline on Skill.assessmentMethods. Retained for
+// legacy Firestore parsing + the one-time migration, and for the company-wide
+// ANNUAL_APPRAISAL config still read by the Behavioral Assessment page.
 export interface AssessmentPlan {
   id: string;
   name: string;
@@ -168,6 +267,9 @@ export interface AssessmentPlan {
 // instructions via Skill.assessmentInstructionIds (a skill may be assessed by
 // several methods). Replaces the per-skill assessmentMethod / assessmentQuestion
 // / assessmentLink / *Questions fields.
+// @deprecated The "how to assess" definition is now inline on
+// Skill.assessmentMethods. Retained only for legacy Firestore parsing + the
+// one-time migration into assessmentMethods.
 export interface AssessmentInstruction {
   id: string;
   name: string;
@@ -196,7 +298,10 @@ export const ASSESSMENT_METHOD_LABELS: Record<AssessmentMethod, string> = {
 
 export interface JobProfileSkill {
   skillId: string;
-  requiredLevel: number; // 1-5
+  requiredLevel: number; // 1-5 — the Target Proficiency / Pass Level for this skill in this profile
+  // Optional exam pass-mark (0-100) for this skill in this profile. When unset,
+  // falls back to the skill's own WRITTEN_EXAM passingScorePercent default.
+  passingScorePercent?: number;
 }
 
 // --- Job Profile (one position = one profile) ---
@@ -221,7 +326,25 @@ export interface Project {
 }
 
 
-export type DepartmentType = 'COMPANY' | 'EXECUTIVE' | 'SECTOR' | 'GENERAL' | 'DEPARTMENT' | 'SECTION' | 'POSITION';
+export type DepartmentType = 'COMPANY' | 'EXECUTIVE' | 'SECTOR' | 'GENERAL' | 'ASSISTANT_GENERAL' | 'DEPARTMENT' | 'SECTION' | 'POSITION';
+
+// Structural node type → org level. The single source for the org level a unit
+// box implies (a profile's orgLevel is validated against this, never inferred
+// from the node's name or who it reports to). `null` = no fixed level:
+//   COMPANY = root wrapper; POSITION = personal-capacity/titled post resolved
+//   from its title (مدير عام→GM, مدير عام مساعد→AGM, project/dept manager→DM).
+// SECTION (Section Head) is the deepest *unit* level; below it are individual
+// positions (SP/JP/FR) attached to a unit, not their own org-chart boxes.
+export const DEPT_TYPE_TO_ORG_LEVEL: Record<DepartmentType, OrgLevel | null> = {
+  'COMPANY': null,
+  'EXECUTIVE': 'CEO',
+  'SECTOR': 'ACEO',
+  'GENERAL': 'GM',
+  'ASSISTANT_GENERAL': 'AGM',
+  'DEPARTMENT': 'DM',
+  'SECTION': 'SH',
+  'POSITION': null,
+};
 
 export interface Department {
   id: string;
@@ -326,6 +449,11 @@ export interface Assessment {
   // string packed into `comment`; that format is still parsed at read-time for
   // legacy docs only. Present only on annual-appraisal records.
   appraisalAnswers?: boolean[];
+  // Per-question interview ratings. When an INTERVIEW / PRACTICAL_DEMO skill has
+  // predefined Evaluation Guide questions, the interviewer rates each one (1-5)
+  // and the record's `score` is the (weight-aware) average of these. Present
+  // only on interview records that were scored question-by-question.
+  questionScores?: { questionId: string; score: number }[];
 }
 
 export interface Nomination {

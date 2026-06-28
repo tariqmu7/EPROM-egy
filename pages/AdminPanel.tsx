@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef, useLayoutEffect } from 'react';
 import { dataService } from '../services/store';
 import { useStoreData } from '../hooks/useStoreData';
-import { User, Role, JobProfile, Skill, JobProfileSkill, OrgLevel, ORG_LEVEL_LABELS, Department, DepartmentType, ORG_HIERARCHY_ORDER, PROFICIENCY_LABELS, Project, EvaluationQuestion } from '../types';
+import { User, Role, JobProfile, Skill, JobProfileSkill, OrgLevel, ORG_LEVEL_LABELS, Department, DepartmentType, DEPT_TYPE_TO_ORG_LEVEL, ORG_HIERARCHY_ORDER, PROFICIENCY_LABELS, Project, EvaluationQuestion, SkillAssessmentMethod, DEFAULT_RATER_WEIGHTS, ASSESSMENT_METHOD_LABELS, ASSESSMENT_FREQUENCY_LABELS } from '../types';
 import { PROFICIENCY_DEFINITIONS } from '../constants';
-import { Plus, Users, Briefcase, ChevronRight, CheckCircle, Shield, ShieldCheck, X, Save, Trash2, ArrowLeft, UserPlus, Building2, Search, Edit2, UserCheck, AlertCircle, Layers, BookOpen, MoreHorizontal, LayoutGrid, Activity, Eye, AlertTriangle, FileSpreadsheet, MapPin, TrendingUp } from 'lucide-react';
+import { Plus, Users, Briefcase, ChevronRight, CheckCircle, Shield, ShieldCheck, X, Save, Trash2, ArrowLeft, UserPlus, Building2, Search, Edit2, UserCheck, AlertCircle, Layers, BookOpen, MoreHorizontal, LayoutGrid, Activity, Eye, AlertTriangle, FileSpreadsheet, MapPin, TrendingUp, Calendar, Link2 } from 'lucide-react';
 import { SearchableSelect, Option } from '../components/SearchableSelect';
 import { BulkUpload } from '../components/BulkUpload';
 import { AdminAnalytics } from './AdminAnalytics';
-import { AssessmentManagement } from './AssessmentManagement';
-import { AssessmentInstructionManagement } from './AssessmentInstructionManagement';
+import { AnnualAppraisalAdmin } from './AnnualAppraisalAdmin';
+import { AssessmentMethodEditor } from '../components/AssessmentMethodEditor';
 import { AuditTrail } from './AuditTrail';
 
 // --- Reusable Form Wrapper ---
@@ -94,69 +94,52 @@ const SkillDetailsModal: React.FC<{ skill: Skill; onClose: () => void }> = ({ sk
                             <Activity size={14} /> Assessment Methodology
                         </h4>
                         {(() => {
-                          const instructions = dataService.getSkillInstructions(skill.id);
-                          if (instructions.length === 0) {
+                          const methods = dataService.getSkillAssessmentMethods(skill.id);
+                          if (methods.length === 0) {
                             return (
                               <div className="bg-slate-50 p-6 border border-slate-200 text-sm text-slate-500 italic">
-                                No assessment instruction assigned — scored as 360° / OJT by default.
+                                No assessment method defined — scored as 360° / OJT by default.
                               </div>
                             );
                           }
-                          return instructions.map(instr => (
-                            <div key={instr.id} className="bg-slate-50 p-6 border border-slate-200 space-y-6">
+                          return methods.map((m, mi) => (
+                            <div key={m.id || mi} className="bg-slate-50 p-6 border border-slate-200 space-y-6">
                                 <div className="flex justify-between items-start gap-4 pb-4 border-b border-slate-200/60">
                                     <div>
-                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">{instr.name}</span>
-                                        {instr.assessmentQuestion && <span className="text-xs text-slate-600 italic">{instr.assessmentQuestion}</span>}
+                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">Method {mi + 1}</span>
+                                        {m.assessmentQuestion && <span className="text-xs text-slate-600 italic">{m.assessmentQuestion}</span>}
                                     </div>
-                                    <span className="text-xs font-black text-blue-700 uppercase tracking-widest bg-blue-50 px-2 py-1 border border-blue-100 whitespace-nowrap">{instr.method.replace(/_/g, ' ')}</span>
+                                    <span className="text-xs font-black text-blue-700 uppercase tracking-widest bg-blue-50 px-2 py-1 border border-blue-100 whitespace-nowrap">{ASSESSMENT_METHOD_LABELS[m.method]}</span>
                                 </div>
 
-                                {instr.assessmentLink && (
+                                <div className="flex flex-wrap gap-4 pb-4 border-b border-slate-200/60 text-[11px]">
+                                    <span className="inline-flex items-center gap-1.5 text-slate-600">
+                                        <Calendar size={12} className="text-slate-400" />
+                                        <span className="font-bold text-slate-500 uppercase tracking-widest">When:</span> {ASSESSMENT_FREQUENCY_LABELS[m.frequency]}
+                                    </span>
+                                    <span className="inline-flex items-center gap-1.5 text-slate-600">
+                                        <Users size={12} className="text-slate-400" />
+                                        <span className="font-bold text-slate-500 uppercase tracking-widest">Who:</span> {m.audience.replace(/_/g, ' ')}
+                                    </span>
+                                </div>
+
+                                {m.assessmentLink && (
                                     <div className="flex justify-between items-center pb-4 border-b border-slate-200/60">
-                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Resource Link</span>
-                                        <a href={instr.assessmentLink} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-700 hover:underline flex items-center gap-1">
+                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5"><Link2 size={12} /> Link</span>
+                                        <a href={m.assessmentLink} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-700 hover:underline flex items-center gap-1">
                                             Open Resource <ChevronRight size={12} />
                                         </a>
                                     </div>
                                 )}
 
-                                {instr.evaluationQuestions && instr.evaluationQuestions.length > 0 && (
+                                {m.questions && m.questions.length > 0 && (
                                     <div className="space-y-3">
-                                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Examination Questions</p>
+                                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Question Bank</p>
                                         <div className="space-y-3">
-                                            {instr.evaluationQuestions.map((q, i) => (
+                                            {m.questions.map((q, i) => (
                                                 <div key={q.id} className="text-sm bg-white p-4 border border-slate-200">
                                                     <p className="font-bold text-slate-900 mb-2">{i+1}. {q.text}</p>
                                                     {q.expectedCriteria && <p className="text-[10px] text-slate-500 uppercase font-bold bg-slate-50 p-2 border-l-2 border-slate-300">Guide: {q.expectedCriteria}</p>}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {instr.interviewQuestions && instr.interviewQuestions.length > 0 && (
-                                    <div className="space-y-3">
-                                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Interview Panel Questions</p>
-                                        <div className="space-y-3">
-                                            {instr.interviewQuestions.map((q, i) => (
-                                                <div key={q.id} className="text-sm bg-white p-4 border border-slate-200">
-                                                    <p className="font-bold text-slate-900 mb-2">{i+1}. {q.text}</p>
-                                                    {q.expectedCriteria && <p className="text-[10px] text-slate-500 uppercase font-bold bg-slate-50 p-2 border-l-2 border-slate-300">Criteria: {q.expectedCriteria}</p>}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {instr.threeSixtyQuestions && instr.threeSixtyQuestions.length > 0 && (
-                                    <div className="space-y-3">
-                                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">360° Evaluation Points</p>
-                                        <div className="space-y-3">
-                                            {instr.threeSixtyQuestions.map((q, i) => (
-                                                <div key={q.id} className="text-sm bg-white p-4 border border-slate-200">
-                                                    <p className="font-bold text-slate-900 mb-2">{i+1}. {q.text}</p>
-                                                    {q.expectedCriteria && <p className="text-[10px] text-slate-500 uppercase font-bold bg-slate-50 p-2 border-l-2 border-slate-300">Focus: {q.expectedCriteria}</p>}
                                                 </div>
                                             ))}
                                         </div>
@@ -356,6 +339,12 @@ const UserForm: React.FC<{ initialData?: User | null, currentUser: User, onSave:
   const selectedJobProfile = jobProfiles.find(j => j.id === formData.jobProfileId);
   const contextDepartmentId = selectedJobProfile ? selectedJobProfile.departmentId : formData.departmentId;
 
+  // One position = one profile = one org level. The Hierarchy Level stays
+  // editable, but if the admin sets it to something that disagrees with the
+  // assigned job profile, we surface an error and block the save (no silent
+  // mis-assignment). Empty until a profile is chosen and a level is set.
+  const orgLevelMismatch = !!(selectedJobProfile?.orgLevel && formData.orgLevel && selectedJobProfile.orgLevel !== formData.orgLevel);
+
   const managerOptions: Option[] = potentialManagers
     .filter(u => {
         if (u.id === initialData?.id) return false; 
@@ -415,11 +404,17 @@ const UserForm: React.FC<{ initialData?: User | null, currentUser: User, onSave:
               }
           }
 
+          // One position = one profile = one org level. Selecting a profile
+          // derives the employee's hierarchy level from it so the two can never
+          // be mis-assigned. (The store enforces this on save too.)
+          const newOrgLevel = job?.orgLevel || prev.orgLevel;
+
           return {
               ...prev,
               jobProfileId: val,
               departmentId: newDeptId,
               generalDepartmentId: newGenDeptId,
+              orgLevel: newOrgLevel,
               managerId: newManagerId
           };
       });
@@ -482,6 +477,10 @@ const UserForm: React.FC<{ initialData?: User | null, currentUser: User, onSave:
       return;
     }
     setEmployeeIdError('');
+
+    // Guard against a Hierarchy Level that conflicts with the assigned job
+    // profile's org level — the position defines the level.
+    if (orgLevelMismatch) return;
 
     const user: User = {
       id: initialData?.id || Math.random().toString(36).substr(2, 9),
@@ -654,14 +653,21 @@ const UserForm: React.FC<{ initialData?: User | null, currentUser: User, onSave:
                         disabled={formData.role === Role.CEO}
                     />
                     <div className="md:col-span-2">
-                        <SearchableSelect 
+                        <SearchableSelect
                             label="Hierarchy Level"
                             placeholder="Select Hierarchy Level..."
                             options={ORG_HIERARCHY_ORDER.map(level => ({ value: level, label: `${ORG_LEVEL_LABELS[level]} (${level})` }))}
-                            value={formData.orgLevel || ''} 
+                            value={formData.orgLevel || ''}
                             onChange={handleOrgLevelChange}
                         />
-                        <p className="text-[10px] text-slate-600 mt-1">Defines the employee's band/grade within the department structure.</p>
+                        {orgLevelMismatch ? (
+                            <p className="text-[11px] font-bold text-red-600 mt-1 flex items-center gap-1">
+                                <AlertTriangle size={12} />
+                                Must match the job profile "{selectedJobProfile?.title}" ({selectedJobProfile?.orgLevel}). Set it to {selectedJobProfile?.orgLevel} or change the job profile.
+                            </p>
+                        ) : (
+                            <p className="text-[10px] text-slate-600 mt-1">Defines the employee's band/grade within the department structure. Must match the assigned job profile's level.</p>
+                        )}
                     </div>
                 </div>
             </div>
@@ -699,7 +705,7 @@ const UserForm: React.FC<{ initialData?: User | null, currentUser: User, onSave:
 
             <div className="pt-6 flex justify-end gap-3 border-t border-slate-100">
                 <button type="button" onClick={onCancel} className="px-6 py-2 text-slate-600 hover:bg-slate-100 rounded-sm transition-colors font-bold uppercase tracking-wide text-xs">Cancel</button>
-                <button type="submit" disabled={isSubmitting} className={`px-6 py-2 text-white rounded-sm transition-all flex items-center gap-2 font-bold uppercase tracking-wide text-xs hover: disabled:opacity-50 disabled:cursor-not-allowed ${isPending ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-700 hover:bg-blue-800'}`}>
+                <button type="submit" disabled={isSubmitting || orgLevelMismatch} className={`px-6 py-2 text-white rounded-sm transition-all flex items-center gap-2 font-bold uppercase tracking-wide text-xs hover: disabled:opacity-50 disabled:cursor-not-allowed ${isPending ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-700 hover:bg-blue-800'}`}>
                     {isPending ? <UserCheck size={16} /> : <Save size={16} />}
                     {isSubmitting ? 'Saving...' : isPending ? 'Approve & Activate' : 'Save Employee'}
                 </button>
@@ -710,6 +716,33 @@ const UserForm: React.FC<{ initialData?: User | null, currentUser: User, onSave:
 };
 
 const SKILL_CATEGORIES = ['Technical', 'Behavioral', 'Safety', 'Management', 'Soft Skills'];
+
+// Per-profile exam pass-mark override for one required skill. Placeholder shows
+// the skill's own default passing score (from its WRITTEN_EXAM method) so the
+// admin sees what applies when this field is left blank.
+const PassingScoreInput: React.FC<{
+  skillId: string;
+  value?: number;
+  onChange: (skillId: string, raw: string) => void;
+}> = ({ skillId, value, onChange }) => {
+  const examDefault = dataService.getSkillAssessmentMethods(skillId)
+    .find(m => m.method === 'WRITTEN_EXAM' && typeof m.passingScorePercent === 'number')?.passingScorePercent;
+  const placeholder = typeof examDefault === 'number' ? `${examDefault} (default)` : 'e.g. 70';
+  return (
+    <div className="flex flex-col min-w-[110px]">
+      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Passing %</label>
+      <input
+        type="number"
+        min={0}
+        max={100}
+        value={value ?? ''}
+        placeholder={placeholder}
+        onChange={(e) => onChange(skillId, e.target.value)}
+        className="border border-slate-300 rounded-none px-2 py-1.5 text-sm w-full focus:outline-none focus:ring-1 focus:ring-slate-400"
+      />
+    </div>
+  );
+};
 
 const JobForm: React.FC<{ initialData?: JobProfile | null, onSave: (j: JobProfile) => void, onCancel: () => void, isSubmitting?: boolean }> = ({ initialData, onSave, onCancel, isSubmitting }) => {
   const [formData, setFormData] = useState<Partial<JobProfile>>(initialData || { orgLevel: 'JP', requiredSkills: [] });
@@ -727,9 +760,34 @@ const JobForm: React.FC<{ initialData?: JobProfile | null, onSave: (j: JobProfil
     return filtered.map(s => ({ value: s.id, label: s.name, subLabel: s.category }));
   }, [allSkills, skillCategoryFilter]);
 
+  // A position can't sit above the unit it belongs to (org-hierarchy ordering).
+  const placement = dataService.validateJobProfilePlacement(formData.orgLevel, formData.departmentId);
+
+  // The Department / Position implies an org level (from its structural type or
+  // title). Admins may override the Org Level, but we warn when it doesn't match.
+  const selectedDept = departments.find(d => d.id === formData.departmentId);
+  const impliedLevel = dataService.getDepartmentOrgLevel(selectedDept);
+  const orgLevelMismatch = !!(placement.ok && formData.orgLevel && impliedLevel && formData.orgLevel !== impliedLevel);
+
+  // Selecting a Department/Position derives the Org Level from the node's
+  // structural type (the level is a property of the org-chart box, never guessed
+  // from the title). The admin can still override it afterwards — for a unit that
+  // holds several position bands (a Section head + its SP/JP/FR staff) they pick
+  // the band below. Picking the dept gives the correct default with one action.
+  const handleDepartmentChange = (val: string) => {
+    const dept = departments.find(d => d.id === val);
+    const derived = dataService.getDepartmentOrgLevel(dept);
+    setFormData(prev => ({
+      ...prev,
+      departmentId: val,
+      orgLevel: derived || prev.orgLevel,
+    }));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.title || !formData.departmentId || !formData.orgLevel) return;
+    if (!placement.ok) return;
 
     onSave({
       id: initialData?.id || Math.random().toString(36).substr(2, 9),
@@ -751,6 +809,22 @@ const JobForm: React.FC<{ initialData?: JobProfile | null, onSave: (j: JobProfil
   const handleUpdateReq = (skillId: string, level: number) => {
     const current = formData.requiredSkills || [];
     setFormData({ ...formData, requiredSkills: current.map(r => r.skillId === skillId ? { ...r, requiredLevel: level } : r) });
+  };
+
+  // Per-profile exam pass-mark override for a skill. Empty clears the override
+  // (the skill's own default passing score then applies).
+  const handleUpdatePassingScore = (skillId: string, raw: string) => {
+    const current = formData.requiredSkills || [];
+    const trimmed = raw.trim();
+    const pct = trimmed === '' ? undefined : Math.min(100, Math.max(0, Math.round(Number(trimmed))));
+    setFormData({
+      ...formData,
+      requiredSkills: current.map(r => {
+        if (r.skillId !== skillId) return r;
+        const { passingScorePercent, ...rest } = r;
+        return pct === undefined || Number.isNaN(pct) ? rest : { ...rest, passingScorePercent: pct };
+      })
+    });
   };
 
   const handleRemoveReq = (skillId: string) => {
@@ -784,23 +858,36 @@ const JobForm: React.FC<{ initialData?: JobProfile | null, onSave: (j: JobProfil
           <input required className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none transition-all" 
             value={formData.title || ''} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="e.g. Mechanical Engineer"/>
         </div>
-        {initialData?.departmentId ? (
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Department / Position</label>
-            <div className="w-full px-3 py-2 bg-slate-100 text-slate-700 border border-slate-200 rounded-sm font-semibold flex items-center gap-2">
-              <Building2 size={14} className="text-slate-400" />
-              {departments.find(d => d.id === initialData.departmentId)?.name || 'This unit'}
-            </div>
+        <SearchableSelect label="Department / Position" options={deptOptions} value={formData.departmentId || ''} onChange={handleDepartmentChange} />
+        <div>
+          <SearchableSelect
+            label="Org Level"
+            options={ORG_HIERARCHY_ORDER.map(level => ({ value: level, label: `${ORG_LEVEL_LABELS[level]} (${level})` }))}
+            value={formData.orgLevel || ''}
+            onChange={val => setFormData({...formData, orgLevel: val as OrgLevel})}
+          />
+          {impliedLevel && !orgLevelMismatch && (
+            <p className="mt-1 text-[11px] text-slate-500">
+              Auto-set from "{selectedDept?.name}" ({ORG_LEVEL_LABELS[impliedLevel]} / {impliedLevel}). Change it only for a lower band (e.g. SP/JP/FR) inside the same unit.
+            </p>
+          )}
+        </div>
+        {!placement.ok && (
+          <div className="md:col-span-2 flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-sm text-red-700 text-xs font-medium">
+            <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+            <span>{placement.error}</span>
           </div>
-        ) : (
-          <SearchableSelect label="Department / Position" options={deptOptions} value={formData.departmentId || ''} onChange={val => setFormData({...formData, departmentId: val})} />
         )}
-        <SearchableSelect
-          label="Org Level"
-          options={ORG_HIERARCHY_ORDER.map(level => ({ value: level, label: `${ORG_LEVEL_LABELS[level]} (${level})` }))}
-          value={formData.orgLevel || ''}
-          onChange={val => setFormData({...formData, orgLevel: val as OrgLevel})}
-        />
+        {orgLevelMismatch && (
+          <div className="md:col-span-2 flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-sm text-amber-800 text-xs font-medium">
+            <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+            <span>
+              The selected Org Level ({ORG_LEVEL_LABELS[formData.orgLevel!]} / {formData.orgLevel}) doesn't match the
+              {' '}level implied by "{selectedDept?.name}" ({ORG_LEVEL_LABELS[impliedLevel!]} / {impliedLevel}).
+              You can still save, but consider setting the Org Level to {impliedLevel} to keep it consistent with the org chart.
+            </span>
+          </div>
+        )}
         <div className="md:col-span-2">
           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Description</label>
           <textarea className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none" rows={2}
@@ -874,13 +961,16 @@ const JobForm: React.FC<{ initialData?: JobProfile | null, onSave: (j: JobProfil
                                     <p className="font-bold text-slate-900 text-sm">{skill?.name}</p>
                                  </div>
                                  <div className="flex items-center gap-2 min-w-[120px]">
-                                     <SearchableSelect 
-                                        label="Target Level" 
+                                     <SearchableSelect
+                                        label="Target Level"
                                         options={[1,2,3,4,5].map(v => ({ value: v.toString(), label: v.toString() }))}
-                                        value={req.requiredLevel.toString()} 
+                                        value={req.requiredLevel.toString()}
                                         onChange={(val) => handleUpdateReq(req.skillId, parseInt(val))}
                                      />
                                  </div>
+                                 {dataService.skillHasMethod(req.skillId, 'WRITTEN_EXAM') && (
+                                   <PassingScoreInput skillId={req.skillId} value={req.passingScorePercent} onChange={handleUpdatePassingScore} />
+                                 )}
                                  <button type="button" onClick={() => handleRemoveReq(req.skillId)} className="text-slate-500 hover:text-slate-600 p-1 transition-colors"><X size={16} /></button>
                               </div>
                             );
@@ -907,13 +997,16 @@ const JobForm: React.FC<{ initialData?: JobProfile | null, onSave: (j: JobProfil
                                   <p className="text-[10px] text-slate-500 uppercase">{skill?.category}</p>
                                </div>
                                <div className="flex items-center gap-2 min-w-[120px]">
-                                   <SearchableSelect 
-                                      label="Target Level" 
+                                   <SearchableSelect
+                                      label="Target Level"
                                       options={[1,2,3,4,5].map(v => ({ value: v.toString(), label: v.toString() }))}
-                                      value={req.requiredLevel.toString()} 
+                                      value={req.requiredLevel.toString()}
                                       onChange={(val) => handleUpdateReq(req.skillId, parseInt(val))}
                                    />
                                </div>
+                               {dataService.skillHasMethod(req.skillId, 'WRITTEN_EXAM') && (
+                                 <PassingScoreInput skillId={req.skillId} value={req.passingScorePercent} onChange={handleUpdatePassingScore} />
+                               )}
                                <button type="button" onClick={() => handleRemoveReq(req.skillId)} className="text-slate-500 hover:text-slate-600 p-1 transition-colors"><X size={16} /></button>
                             </div>
                           );
@@ -928,7 +1021,7 @@ const JobForm: React.FC<{ initialData?: JobProfile | null, onSave: (j: JobProfil
 
       <div className="pt-6 flex justify-end gap-3 border-t border-slate-100">
           <button type="button" onClick={onCancel} className="px-6 py-2 text-slate-600 hover:bg-slate-100 rounded-sm font-bold uppercase tracking-wide text-xs transition-colors">Cancel</button>
-          <button type="submit" disabled={isSubmitting} className="px-6 py-2 bg-blue-700 text-white rounded-sm font-bold uppercase tracking-wide text-xs hover:bg-blue-800 flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+          <button type="submit" disabled={isSubmitting || !placement.ok} className="px-6 py-2 bg-blue-700 text-white rounded-sm font-bold uppercase tracking-wide text-xs hover:bg-blue-800 flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
              <Save size={16} /> {isSubmitting ? 'Saving...' : 'Save Profile'}
           </button>
       </div>
@@ -1030,7 +1123,9 @@ const QuestionManager: React.FC<{
   );
 };
 
-// --- Skill Form (Unchanged) ---
+// --- Skill Form (Competency Standard) ---
+// Two top-level sections: the competency standard (identity + proficiency
+// levels) and the inline assessment methods (how & when the skill is assessed).
 const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => void, onCancel: () => void, isSubmitting?: boolean }> = ({ initialData, onSave, onCancel, isSubmitting }) => {
   const defaultLevels = {
     1: { level: 1, description: '', requiredCertificates: [] },
@@ -1042,22 +1137,58 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
 
   const [formData, setFormData] = useState<Partial<Skill>>(initialData || { levels: defaultLevels });
   const [activeTab, setActiveTab] = useState(1);
+  const [section, setSection] = useState<'STANDARD' | 'METHODS'>('STANDARD');
 
-  const activeInstructions = dataService.getAllAssessmentInstructions().filter(i => i.status === 'ACTIVE');
-  const selectedInstructionIds = formData.assessmentInstructionIds || [];
-  const toggleInstruction = (id: string) => {
-    setFormData(prev => {
-      const cur = prev.assessmentInstructionIds || [];
-      return {
-        ...prev,
-        assessmentInstructionIds: cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id]
-      };
-    });
-  };
+  // Resolve the methods to edit: stored inline blocks, or a one-time synthesis
+  // from any legacy linked instructions so existing config is editable inline.
+  const [assessmentMethods, setAssessmentMethods] = useState<SkillAssessmentMethod[]>(
+    () => initialData ? dataService.getSkillAssessmentMethods(initialData.id) : []
+  );
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.category) return;
+
+    // Normalise each block: keep only the schedule/audience sub-fields relevant
+    // to its choices, and drop the question bank for evidence-based methods.
+    const cleanMethods: SkillAssessmentMethod[] = assessmentMethods.map(m => {
+      const isExam = m.method === 'WRITTEN_EXAM';
+      const isRater = m.method === 'OJT_OBSERVATION' || m.method === 'THREE_SIXTY_EVALUATION';
+      const hasAssessor = m.method === 'INTERVIEW' || m.method === 'PRACTICAL_DEMO' || m.method === 'THREE_SIXTY_EVALUATION';
+      const isEvidence = m.method === 'WORK_RECORD_REVIEW';
+      // Normalize rater weights (default when blank); 0..100 each.
+      const rw = m.raterWeights || DEFAULT_RATER_WEIGHTS;
+      const clampW = (n: number) => Math.min(100, Math.max(0, Math.round(n || 0)));
+
+      return {
+        id: m.id,
+        method: m.method,
+        assessmentQuestion: m.assessmentQuestion?.trim() || '',
+        assessmentLink: isExam || m.method === 'INTERVIEW' || m.method === 'PRACTICAL_DEMO'
+          ? (m.assessmentLink || '') : '',
+        questions: isEvidence ? [] : (m.questions || []),
+        // --- standards-based per-method controls (pruned by method type) ---
+        ...(isExam ? {
+          passingScorePercent: Math.min(100, Math.max(0, Math.round(m.passingScorePercent ?? 0))),
+          timeLimitMinutes: Math.max(0, Math.round(m.timeLimitMinutes ?? 0)),
+          questionCount: Math.max(0, Math.round(m.questionCount ?? 0))
+        } : {}),
+        ...(isRater ? {
+          raterWeights: { self: clampW(rw.self), peer: clampW(rw.peer), manager: clampW(rw.manager) }
+        } : {}),
+        ...(hasAssessor ? { assessorRole: m.assessorRole || 'DIRECT_MANAGER' } : {}),
+        ...(isEvidence ? {
+          evidenceValidityMonths: Math.max(0, Math.round(m.evidenceValidityMonths ?? 0)),
+          minEvidenceCount: Math.max(0, Math.round(m.minEvidenceCount ?? 0))
+        } : {}),
+        frequency: m.frequency,
+        ...(m.frequency === 'ANNUAL_FIXED_DATE' ? { fixedMonth: m.fixedMonth || 1, fixedDay: m.fixedDay || 1 } : {}),
+        audience: m.audience,
+        audienceOrgLevels: m.audience === 'ORG_LEVELS' ? (m.audienceOrgLevels || []) : [],
+        audienceDepartmentIds: m.audience === 'DEPARTMENTS' ? (m.audienceDepartmentIds || []) : []
+      };
+    });
+
     onSave({
        ...(initialData || {}),
        id: initialData?.id || Math.random().toString(36).substr(2, 9),
@@ -1066,9 +1197,10 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
        subcategory: formData.subcategory,
        levels: formData.levels as any,
        status: 'APPROVED',
-       // Method & questions live on reusable Assessment Instructions; scheduling
-       // lives on Assessment Plans. The Skill form only links instructions.
-       assessmentInstructionIds: formData.assessmentInstructionIds || []
+       // How AND when this skill is assessed now lives inline on the skill.
+       assessmentMethods: cleanMethods,
+       // Drop the deprecated reusable-instruction link.
+       assessmentInstructionIds: []
     } as Skill);
   };
 
@@ -1084,6 +1216,22 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
 
   return (
     <form onSubmit={handleSubmit} className="p-8 space-y-8 bg-white text-sm">
+       {/* Section tabs: Competency Standard vs Assessment Methods */}
+       <div className="bg-slate-100 p-1 rounded-sm flex gap-1">
+          <button type="button" onClick={() => setSection('STANDARD')}
+             className={`flex-1 py-2.5 text-xs font-bold uppercase tracking-wider rounded-sm transition-all flex items-center justify-center gap-2 ${section === 'STANDARD' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>
+             <BookOpen size={14} /> Competency Standard
+          </button>
+          <button type="button" onClick={() => setSection('METHODS')}
+             className={`flex-1 py-2.5 text-xs font-bold uppercase tracking-wider rounded-sm transition-all flex items-center justify-center gap-2 ${section === 'METHODS' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}>
+             <Activity size={14} /> Assessment Methods
+             {assessmentMethods.length > 0 && (
+               <span className="text-[10px] bg-blue-600 text-white px-1.5 py-0.5 rounded-full">{assessmentMethods.length}</span>
+             )}
+          </button>
+       </div>
+
+       <div className={section === 'STANDARD' ? '' : 'hidden'}>
        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="md:col-span-2 bg-slate-50 p-4 border border-slate-200 rounded-none mb-2">
               <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-1">Auto-Generated Identifier</p>
@@ -1091,7 +1239,7 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
                   <span className="text-xl font-black text-blue-700 tracking-tight">
                       {dataService.generateSkillCode({ 
                           name: formData.name || 'Untitled', 
-                          category: formData.category || 'General',
+                          category: formData.category || 'Technical',
                           subcategory: formData.subcategory || '',
                           id: '',
                           levels: {},
@@ -1117,7 +1265,7 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
                 { value: 'Behavioral', label: 'Behavioral' }
               ]}
               value={formData.category || ''}
-              onChange={val => setFormData({...formData, category: val})}
+              onChange={val => setFormData({...formData, category: val as Skill['category']})}
               placeholder="Select Category..."
             />
          </div>
@@ -1138,60 +1286,13 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
               placeholder="Select Subcategory..."
             />
          </div>
-          <div className="md:col-span-2">
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center justify-between">
-              <span>Assessment Instructions</span>
-              <span className="text-slate-400 font-medium normal-case">{selectedInstructionIds.length} selected — a skill may use several methods</span>
-            </label>
-            <p className="text-xs text-slate-500 mb-3 leading-relaxed">
-              Method, prompt and question banks are defined as reusable <span className="font-bold text-slate-800">Assessment Instructions</span>. Pick one or more to assess this skill. Skills with none are scored as 360° / OJT by default.
-            </p>
-            <div className="border border-slate-300 rounded-sm bg-white max-h-60 overflow-y-auto custom-scrollbar">
-              {activeInstructions.length === 0 ? (
-                <div className="p-6 text-center text-sm text-slate-500 italic">
-                  No active assessment instructions yet. Create them under the <span className="font-bold text-slate-700">Instructions</span> tab.
-                </div>
-              ) : activeInstructions.map(instr => {
-                const checked = selectedInstructionIds.includes(instr.id);
-                return (
-                  <label
-                    key={instr.id}
-                    className={`flex items-start gap-3 px-4 py-3 text-sm cursor-pointer border-l-2 transition-colors ${
-                      checked ? 'bg-blue-50 border-blue-600' : 'border-transparent hover:bg-slate-50'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      className="mt-1 accent-blue-700"
-                      checked={checked}
-                      onChange={() => toggleInstruction(instr.id)}
-                    />
-                    <div>
-                      <div className="font-bold text-slate-900">{instr.name}</div>
-                      <div className="text-xs text-slate-500 mt-0.5">
-                        {instr.method.replace(/_/g, ' ')}
-                        {instr.assessmentQuestion ? ` — ${instr.assessmentQuestion}` : ''}
-                      </div>
-                    </div>
-                  </label>
-                );
-              })}
-            </div>
-         </div>
-
-         <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-slate-700 mb-1">Assessment Scheduling</label>
-            <div className="w-full px-3 py-2 border border-slate-200 bg-slate-50 rounded-sm text-xs text-slate-600 leading-relaxed">
-              Frequency &amp; recurrence are configured in <span className="font-bold text-slate-800">Assessment Management</span> by attaching this skill to a plan.
-            </div>
-         </div>
        </div>
 
        <div className="border-t border-slate-300 pt-6">
           <h4 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
              <BookOpen size={18} className="text-slate-900"/> Proficiency Definition
           </h4>
-          
+
           <div className="bg-slate-100 p-1 rounded-none flex mb-6">
              {[1,2,3,4,5].map(lvl => (
                 <button key={lvl} type="button" onClick={() => setActiveTab(lvl)}
@@ -1220,6 +1321,12 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
                 />
              </div>
           </div>
+       </div>
+       </div>
+
+       {/* Assessment Methods section */}
+       <div className={section === 'METHODS' ? '' : 'hidden'}>
+          <AssessmentMethodEditor methods={assessmentMethods} onChange={setAssessmentMethods} />
        </div>
 
        <div className="pt-6 flex justify-end gap-3 border-t border-slate-100">
@@ -1254,6 +1361,7 @@ const DepartmentForm: React.FC<{ initialData?: Department | null, onSave: (d: De
     
     const typeOptions = [
         { value: 'GENERAL', label: 'General Department' },
+        { value: 'ASSISTANT_GENERAL', label: 'Assistant General Manager' },
         { value: 'DEPARTMENT', label: 'Department' },
         { value: 'SECTION', label: 'Section' }
     ];
@@ -1266,6 +1374,10 @@ const DepartmentForm: React.FC<{ initialData?: Department | null, onSave: (d: De
     
     const behavioralSkills = dataService.getAllSkills().filter(s => s.category === 'Behavioral');
 
+    // Enforce org-hierarchy ordering: a child unit must sit below its parent.
+    const resolvedParentId = parentId === 'EPROM' ? undefined : (parentId || undefined);
+    const placement = dataService.validateUnitPlacement(type, resolvedParentId);
+
     const handleToggleSkill = (skillId: string) => {
         setBehavioralSkillIds(prev => 
             prev.includes(skillId) ? prev.filter(id => id !== skillId) : [...prev, skillId]
@@ -1274,6 +1386,7 @@ const DepartmentForm: React.FC<{ initialData?: Department | null, onSave: (d: De
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        if (!placement.ok) return;
         onSave({
             id: initialData?.id || Math.random().toString(36).substr(2, 9),
             name,
@@ -1309,13 +1422,20 @@ const DepartmentForm: React.FC<{ initialData?: Department | null, onSave: (d: De
                         value={nameAr} onChange={e => setNameAr(e.target.value)} placeholder="اختياري" />
                 </div>
 
-                <SearchableSelect
-                    label="Hierarchy Level / Type"
-                    options={typeOptions} 
-                    value={type} 
-                    onChange={(v) => setType(v as DepartmentType)} 
-                    placeholder="Select Type..." 
-                />
+                <div>
+                    <SearchableSelect
+                        label="Hierarchy Level / Type"
+                        options={typeOptions}
+                        value={type}
+                        onChange={(v) => setType(v as DepartmentType)}
+                        placeholder="Select Type..."
+                    />
+                    {type && DEPT_TYPE_TO_ORG_LEVEL[type] && (
+                        <p className="mt-1 text-[11px] text-slate-500">
+                            Positions in this unit are <span className="font-bold">{ORG_LEVEL_LABELS[DEPT_TYPE_TO_ORG_LEVEL[type]!]} ({DEPT_TYPE_TO_ORG_LEVEL[type]})</span> and below — order: CEO › ACEO › GM › AGM › DM › SH › SP › JP › FR.
+                        </p>
+                    )}
+                </div>
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1327,14 +1447,21 @@ const DepartmentForm: React.FC<{ initialData?: Department | null, onSave: (d: De
                     placeholder="Select Project..." 
                 />
 
-                <SearchableSelect 
-                    label="Parent Unit / Organization" 
-                    options={parentOptions} 
-                    value={parentId || 'EPROM'} 
-                    onChange={setParentId} 
-                    placeholder="Select Parent..." 
+                <SearchableSelect
+                    label="Parent Unit / Organization"
+                    options={parentOptions}
+                    value={parentId || 'EPROM'}
+                    onChange={setParentId}
+                    placeholder="Select Parent..."
                 />
             </div>
+
+            {!placement.ok && (
+                <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-sm text-red-700 text-xs font-medium">
+                    <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+                    <span>{placement.error}</span>
+                </div>
+            )}
 
 
             <SearchableSelect label="Parent Manager (Direct Dept. Manager)" options={managerOptions} value={managerId} onChange={setManagerId} placeholder="Select Manager..." />
@@ -1366,7 +1493,7 @@ const DepartmentForm: React.FC<{ initialData?: Department | null, onSave: (d: De
 
             <div className="pt-6 flex justify-end gap-3 border-t border-slate-100">
                 <button type="button" onClick={onCancel} className="px-6 py-2 text-slate-600 hover:bg-slate-100 rounded-sm font-bold uppercase tracking-wide text-xs transition-colors">Cancel</button>
-                <button type="submit" disabled={isSubmitting} className="px-6 py-2 bg-blue-700 text-white rounded-sm font-bold uppercase tracking-wide text-xs hover:bg-blue-800 flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                <button type="submit" disabled={isSubmitting || !placement.ok} className="px-6 py-2 bg-blue-700 text-white rounded-sm font-bold uppercase tracking-wide text-xs hover:bg-blue-800 flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
                     <Save size={16} /> {isSubmitting ? 'Saving...' : 'Save Dept'}
                 </button>
             </div>
@@ -1686,7 +1813,7 @@ const DepartmentNode: React.FC<{
                         </button>
                         <div className="flex items-center gap-2">
                             {(dept as any).isRoot ? <Shield className="text-blue-700" size={18} /> : 
-                             (dept as Department).type === 'GENERAL' ? <Layers className="text-indigo-700" size={18} /> :
+                             (dept as Department).type === 'GENERAL' || (dept as Department).type === 'ASSISTANT_GENERAL' ? <Layers className="text-indigo-700" size={18} /> :
                              (dept as Department).type === 'SECTION' ? <LayoutGrid className="text-slate-500" size={18} /> :
                              <Building2 className="text-slate-600" size={18} />}
                             <div className="flex flex-col">
@@ -2113,7 +2240,7 @@ const DepartmentProfileView: React.FC<DepartmentProfileViewProps> = ({
 // --- Org Hierarchy: tree-list + detail panel ---
 
 const deptTypeIcon = (type?: DepartmentType) =>
-    type === 'GENERAL' ? Layers : type === 'SECTION' ? LayoutGrid : Building2;
+    type === 'GENERAL' || type === 'ASSISTANT_GENERAL' ? Layers : type === 'SECTION' ? LayoutGrid : Building2;
 
 // Per-type accent palette for unit cards (tile / left bar / type chip).
 const deptTypeStyle = (type?: DepartmentType) => {
@@ -2122,6 +2249,7 @@ const deptTypeStyle = (type?: DepartmentType) => {
         case 'EXECUTIVE':
         case 'SECTOR':     return { tile: 'bg-purple-50 text-purple-700 group-hover:bg-purple-700 group-hover:text-white', bar: 'bg-purple-400', chip: 'bg-purple-50 text-purple-600' };
         case 'GENERAL':    return { tile: 'bg-indigo-50 text-indigo-700 group-hover:bg-indigo-700 group-hover:text-white', bar: 'bg-indigo-400', chip: 'bg-indigo-50 text-indigo-600' };
+        case 'ASSISTANT_GENERAL': return { tile: 'bg-sky-50 text-sky-700 group-hover:bg-sky-700 group-hover:text-white', bar: 'bg-sky-400', chip: 'bg-sky-50 text-sky-600' };
         case 'DEPARTMENT': return { tile: 'bg-blue-50 text-blue-700 group-hover:bg-blue-700 group-hover:text-white',   bar: 'bg-blue-400',   chip: 'bg-blue-50 text-blue-600' };
         case 'SECTION':    return { tile: 'bg-teal-50 text-teal-700 group-hover:bg-teal-700 group-hover:text-white',   bar: 'bg-teal-400',   chip: 'bg-teal-50 text-teal-600' };
         default:           return { tile: 'bg-slate-100 text-slate-600 group-hover:bg-slate-700 group-hover:text-white', bar: 'bg-slate-300', chip: 'bg-slate-100 text-slate-600' };
@@ -2236,7 +2364,7 @@ const projectDeptsOf = (depts: Department[], projectId: string, isHq: boolean) =
     depts.filter(d => d.projectId === projectId || (isHq && !d.projectId));
 
 const DEPT_RANK: Record<string, number> = {
-    COMPANY: 0, EXECUTIVE: 1, SECTOR: 2, GENERAL: 3, DEPARTMENT: 4, SECTION: 5, POSITION: 6,
+    COMPANY: 0, EXECUTIVE: 1, SECTOR: 2, GENERAL: 3, ASSISTANT_GENERAL: 4, DEPARTMENT: 5, SECTION: 6, POSITION: 7,
 };
 
 // Roots of a scoped set = nodes whose parent is outside the set (or absent).
@@ -2335,13 +2463,18 @@ const CompanyOrgView: React.FC<{
     onEditProject: (p: Project) => void;
     onDeleteProject: (id: string) => void;
     onAddJobToUnit: (deptId: string) => void;
+    onAssignPersonnel: (userId: string, deptId: string) => void;
     onEditJob: (job: JobProfile) => void;
     onDeleteJob: (id: string) => void;
     selected: OrgSelection;
     setSelected: React.Dispatch<React.SetStateAction<OrgSelection>>;
-}> = ({ depts, projects, users, jobs, hqProjectId, currentUser, searchTerm = '', onEdit, onDelete, onAddChild, onAddDeptToProject, onEditUser, onPromoteUser, onAddProject, onEditProject, onDeleteProject, onAddJobToUnit, onEditJob, onDeleteJob, selected, setSelected }) => {
+}> = ({ depts, projects, users, jobs, hqProjectId, currentUser, searchTerm = '', onEdit, onDelete, onAddChild, onAddDeptToProject, onEditUser, onPromoteUser, onAddProject, onEditProject, onDeleteProject, onAddJobToUnit, onAssignPersonnel, onEditJob, onDeleteJob, selected, setSelected }) => {
     const canSeeCeo = currentUser?.role === Role.CEO || currentUser?.role === Role.ADMIN;
     const isHqProject = (p?: Project | null) => !!p && (p.id === hqProjectId || p.name.toUpperCase() === 'HQ');
+
+    // "Add Personnel" picker: assign an existing approved employee to a unit.
+    const [assignPickerDeptId, setAssignPickerDeptId] = useState<string | null>(null);
+    const [assignUserId, setAssignUserId] = useState('');
 
     // Projects ordered with the Head Office (HQ) first, then alphabetically.
     const orderedProjects = useMemo(() =>
@@ -2591,8 +2724,16 @@ const CompanyOrgView: React.FC<{
 
                             {/* Personnel roster (list) */}
                             <div>
-                                <div className="flex items-center gap-2 mb-3 text-[11px] uppercase font-black tracking-widest text-slate-500">
-                                    <Users size={14} /> Personnel ({directPersonnel.length})
+                                <div className="flex items-center justify-between mb-3">
+                                    <div className="flex items-center gap-2 text-[11px] uppercase font-black tracking-widest text-slate-500">
+                                        <Users size={14} /> Personnel ({directPersonnel.length})
+                                    </div>
+                                    <button
+                                        onClick={() => { setAssignUserId(''); setAssignPickerDeptId(selectedDept.id); }}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-700 text-white text-[10px] font-bold uppercase tracking-widest rounded-md hover:bg-blue-800 transition-all shadow-sm"
+                                    >
+                                        <Plus size={14} /> Add Personnel
+                                    </button>
                                 </div>
                                 {directPersonnel.length > 0 ? (
                                     <div className="bg-white border border-slate-200 rounded-none divide-y divide-slate-100">
@@ -2621,7 +2762,10 @@ const CompanyOrgView: React.FC<{
                                 ) : (
                                     <div className="p-8 bg-white border border-dashed border-slate-300 text-center rounded-none">
                                         <Users size={28} className="mx-auto text-slate-200 mb-2" />
-                                        <p className="text-sm text-slate-500">No personnel assigned to this unit.</p>
+                                        <p className="text-sm text-slate-500 mb-4">No personnel assigned to this unit.</p>
+                                        <button onClick={() => { setAssignUserId(''); setAssignPickerDeptId(selectedDept.id); }} className="inline-flex items-center gap-2 px-4 py-2 bg-blue-700 text-white font-bold uppercase text-[10px] tracking-widest rounded-sm hover:bg-blue-800 transition-all">
+                                            <Plus size={14} /> Add Personnel
+                                        </button>
                                     </div>
                                 )}
                             </div>
@@ -2820,6 +2964,60 @@ const CompanyOrgView: React.FC<{
                     )}
                 </div>
             </div>
+
+            {/* Add Personnel: pick an existing approved employee and re-home them
+                to this unit, searchable by name or company ID. */}
+            {assignPickerDeptId && (() => {
+                const targetDept = depts.find(d => d.id === assignPickerDeptId);
+                const candidates = users
+                    .filter(u => u.status === 'ACTIVE' && u.departmentId !== assignPickerDeptId)
+                    .sort((a, b) => a.name.localeCompare(b.name));
+                const options: Option[] = candidates.map(u => {
+                    const homeDept = depts.find(d => d.id === u.departmentId);
+                    return {
+                        value: u.id,
+                        label: u.name,
+                        subLabel: [u.employeeId != null ? `ID ${u.employeeId}` : null, homeDept?.name || 'Unassigned']
+                            .filter(Boolean).join(' · '),
+                    };
+                });
+                const close = () => { setAssignPickerDeptId(null); setAssignUserId(''); };
+                return (
+                    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4 animate-in fade-in duration-150" onClick={close}>
+                        <div className="bg-white rounded-lg shadow-2xl w-full max-w-lg" onClick={e => e.stopPropagation()}>
+                            <div className="flex items-start justify-between gap-4 p-6 border-b border-slate-200">
+                                <div>
+                                    <h3 className="text-lg font-bold text-slate-900">Add Personnel</h3>
+                                    <p className="text-sm text-slate-500 mt-0.5">
+                                        Assign an existing employee to <span dir="rtl" className="font-semibold text-slate-700">{targetDept?.nameAr || targetDept?.name}</span>.
+                                    </p>
+                                </div>
+                                <button onClick={close} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md transition-all"><X size={18} /></button>
+                            </div>
+                            <div className="p-6 space-y-2">
+                                <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Employee</label>
+                                <SearchableSelect
+                                    options={options}
+                                    value={assignUserId}
+                                    onChange={setAssignUserId}
+                                    placeholder="Search by name or ID…"
+                                />
+                                <p className="text-xs text-slate-400">{candidates.length} approved employee{candidates.length === 1 ? '' : 's'} available.</p>
+                            </div>
+                            <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-slate-200 bg-slate-50 rounded-b-lg">
+                                <button onClick={close} className="px-4 py-2 text-xs font-bold uppercase tracking-widest text-slate-600 hover:text-slate-900 transition-colors">Cancel</button>
+                                <button
+                                    disabled={!assignUserId}
+                                    onClick={() => { onAssignPersonnel(assignUserId, assignPickerDeptId); close(); }}
+                                    className="flex items-center gap-2 px-5 py-2 bg-blue-700 text-white text-xs font-bold uppercase tracking-widest rounded-md hover:bg-blue-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm"
+                                >
+                                    <Plus size={14} /> Assign to Unit
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
         </div>
     );
 };
@@ -2889,6 +3087,10 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, activeTab]);
+
+  // Admin-only screen → safe place to run the one-time migration of the legacy
+  // assessment model (instructions + plans) into inline Skill.assessmentMethods.
+  useEffect(() => { dataService.migrateAssessmentConfigToSkills(); }, []);
 
 
 
@@ -3053,6 +3255,25 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
       setFormMode(true);
   }, [depts]);
 
+  // Assign an EXISTING approved employee to a unit straight from the org chart,
+  // so admins don't have to open the Workforce tab and re-pick the unit by hand.
+  // Re-homes the employee to the unit (dept / general dept / project) and clears
+  // a job profile that no longer belongs to the new unit.
+  const handleAssignUserToUnit = useCallback(async (userId: string, deptId: string) => {
+      const user = users.find(u => u.id === userId);
+      if (!user) return;
+      const dept = depts.find(d => d.id === deptId);
+      const keepsProfile = !!user.jobProfileId && jobs.some(j => j.id === user.jobProfileId && j.departmentId === deptId);
+      await dataService.updateUser({
+        ...user,
+        departmentId: deptId,
+        generalDepartmentId: dataService.getGeneralDeptId(deptId),
+        projectId: dept?.projectId || user.projectId,
+        jobProfileId: keepsProfile ? user.jobProfileId : '',
+      });
+      setRefreshKey(k => k + 1);
+  }, [users, depts, jobs]);
+
   const handleBulkUpload = useCallback((type: 'USER' | 'JOB' | 'SKILL' | 'DEPT' | 'PROJECT') => {
     setBulkType(type);
     setShowBulkUpload(true);
@@ -3080,9 +3301,9 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
             else await dataService.addUser(item);
         }
         if (formType === 'JOB') { if (editItem?.id) await dataService.updateJobProfile(item); else await dataService.addJobProfile(item); }
-        if (formType === 'SKILL') { if (editItem) await dataService.updateSkill(item); else await dataService.addSkill(item); }
-        if (formType === 'DEPT') { if (editItem) await dataService.updateDepartment(item); else await dataService.addDepartment(item); }
-        if (formType === 'PROJECT') { if (editItem) await dataService.updateProject(item); else await dataService.addProject(item); }
+        if (formType === 'SKILL') { if (editItem?.id) await dataService.updateSkill(item); else await dataService.addSkill(item); }
+        if (formType === 'DEPT') { if (editItem?.id) await dataService.updateDepartment(item); else await dataService.addDepartment(item); }
+        if (formType === 'PROJECT') { if (editItem?.id) await dataService.updateProject(item); else await dataService.addProject(item); }
         setFormMode(false);
         setRefreshKey(k => k + 1);
       } finally {
@@ -3091,7 +3312,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
   }, [formType, editItem, users, isSubmitting]);
 
   const renderFormContent = () => {
-      const titlePrefix = editItem ? 'Edit ' : 'New ';
+      const titlePrefix = editItem?.id ? 'Edit ' : 'New ';
       
       if (formType === 'USER') return (
         <FormPage title={`${titlePrefix}Employee Profile`} onBack={() => setFormMode(false)}>
@@ -3249,6 +3470,26 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                     <div className="h-1 w-full bg-slate-600 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></div>
                 </div>
 
+                <div onClick={() => onNavigate('admin-appraisal')} className="bg-white rounded-none cursor-pointer border border-slate-300 hover: transition-all group overflow-hidden text-left">
+                     <div className="p-6">
+                        <div className="flex justify-between items-start mb-4">
+                             <div className="w-12 h-12 bg-blue-50 text-blue-700 rounded-sm flex items-center justify-center group-hover:bg-blue-700 group-hover:text-white transition-colors">
+                                <CheckCircle size={24} />
+                            </div>
+                             <span className="text-xs font-bold bg-blue-100 text-blue-800 px-2 py-1 rounded-none uppercase">Yearly</span>
+                        </div>
+                        <h3 className="font-bold text-slate-900 text-lg">Annual Appraisal</h3>
+                        <p className="text-sm text-slate-700 mt-1">Performance checklist config</p>
+
+                        <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-end gap-2">
+                            <span className="text-xs font-semibold text-slate-700 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                                Configure <ChevronRight size={14} />
+                            </span>
+                        </div>
+                    </div>
+                    <div className="h-1 w-full bg-blue-700 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></div>
+                </div>
+
                 <div className="lg:col-span-4 bg-gradient-to-br from-slate-900 to-slate-800 rounded-none  p-8 text-white relative overflow-hidden">
                     <div className="absolute top-0 right-0 -mt-10 -mr-10 h-64 w-64 rounded-none bg-blue-800/10 blur-3xl"></div>
                     <div className="relative z-10">
@@ -3329,14 +3570,9 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
       return <AdminAnalytics />;
   }
 
-  // --- ASSESSMENT MANAGEMENT VIEW ---
-  if (view === 'PLANS') {
-      return <AssessmentManagement />;
-  }
-
-  // --- ASSESSMENT INSTRUCTIONS VIEW ---
-  if (view === 'INSTRUCTIONS') {
-      return <AssessmentInstructionManagement />;
+  // --- ANNUAL APPRAISAL VIEW ---
+  if (view === 'APPRAISAL') {
+      return <AnnualAppraisalAdmin />;
   }
 
   // --- AUDIT TRAIL VIEW (ISO.1) ---
@@ -3458,6 +3694,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                        onEditProject={(p) => handleEdit('PROJECT', p)}
                        onDeleteProject={(id) => handleDelete('PROJECT', id)}
                        onAddJobToUnit={handleAddJobToUnit}
+                       onAssignPersonnel={handleAssignUserToUnit}
                        onEditJob={(j) => handleEdit('JOB', j)}
                        onDeleteJob={(id) => handleDelete('JOB', id)}
                        selected={orgSelection}

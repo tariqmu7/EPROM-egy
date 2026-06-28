@@ -43,7 +43,7 @@ vi.mock('firebase/auth', () => ({
 // ────────────────────────────────────────────────────────────────────────────
 
 import { DataService } from '../store';
-import type { User, Skill, Assessment, Evidence, AssessmentPlan, AssessmentInstruction, JobProfile, TrainingCourse, Department } from '../../types';
+import type { User, Skill, Assessment, Evidence, SkillAssessmentMethod, JobProfile, TrainingCourse, Department } from '../../types';
 import { Role } from '../../types';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -113,34 +113,20 @@ function makeEvidence(overrides: Partial<Evidence> = {}): Evidence {
   } as Evidence;
 }
 
-function makePlan(overrides: Partial<AssessmentPlan> = {}): AssessmentPlan {
+function makeMethod(overrides: Partial<SkillAssessmentMethod> = {}): SkillAssessmentMethod {
   return {
-    id: 'plan1',
-    name: 'Test Plan',
-    skillIds: ['skill1'],
+    id: 'm1',
     method: 'WRITTEN_EXAM',
     frequency: 'ONE_TIME',
     audience: 'ALL',
-    status: 'ACTIVE',
-    createdAt: '2025-01-01',
-    updatedAt: '2025-01-01',
+    questions: [],
     ...overrides,
   };
 }
 
-function makeInstruction(overrides: Partial<AssessmentInstruction> = {}): AssessmentInstruction {
-  return {
-    id: 'instr1',
-    name: 'Test Instruction',
-    method: 'OJT_OBSERVATION',
-    status: 'ACTIVE',
-    createdAt: '',
-    updatedAt: '',
-    evaluationQuestions: [],
-    interviewQuestions: [],
-    threeSixtyQuestions: [],
-    ...overrides,
-  };
+/** A skill carrying inline assessment method blocks. */
+function makeSkillWithMethods(methods: SkillAssessmentMethod[], overrides: Partial<Skill> = {}): Skill {
+  return makeSkill({ id: 'skill1', assessmentMethods: methods, ...overrides });
 }
 
 // ─── getUserSkillScore ───────────────────────────────────────────────────────
@@ -185,6 +171,38 @@ describe('getUserSkillScore', () => {
       ],
     });
     // (2×0.1 + 3×0.3 + 4×0.6) / (0.1+0.3+0.6) = (0.2+0.9+2.4)/1 = 3.5 → rounds to 4
+    expect(svc.getUserSkillScore('u1', 'skill-ojt')).toBe(4);
+  });
+
+  it('360 path — custom rater weights override the default blend', () => {
+    // Skill with an OJT block weighting manager 100% (self/peer 0%).
+    const skill = makeSkillWithMethods(
+      [makeMethod({ method: 'OJT_OBSERVATION', audience: 'ALL', raterWeights: { self: 0, peer: 0, manager: 100 } })],
+      { id: 'skill-ojt-weighted' }
+    );
+    inject(svc, {
+      skills: [skill],
+      users: [makeUser()],
+      assessments: [
+        makeAssessment({ id: 'w-self', skillId: 'skill-ojt-weighted', type: 'SELF',    score: 1 }),
+        makeAssessment({ id: 'w-peer', skillId: 'skill-ojt-weighted', type: 'PEER',    score: 1 }),
+        makeAssessment({ id: 'w-mgr',  skillId: 'skill-ojt-weighted', type: 'MANAGER', score: 5 }),
+      ],
+    });
+    // Manager-only weighting → score is the manager rating (5), ignoring self/peer.
+    expect(svc.getUserSkillScore('u1', 'skill-ojt-weighted')).toBe(5);
+  });
+
+  it('360 path — falls back to default blend when no rater weights configured', () => {
+    inject(svc, {
+      users: [makeUser()],
+      assessments: [
+        makeAssessment({ id: 'd-self', skillId: 'skill-ojt', type: 'SELF',    score: 2 }),
+        makeAssessment({ id: 'd-peer', skillId: 'skill-ojt', type: 'PEER',    score: 3 }),
+        makeAssessment({ id: 'd-mgr',  skillId: 'skill-ojt', type: 'MANAGER', score: 4 }),
+      ],
+    });
+    // Same as the default 10/30/60 blend → 3.5 rounds to 4.
     expect(svc.getUserSkillScore('u1', 'skill-ojt')).toBe(4);
   });
 
@@ -235,32 +253,33 @@ describe('getUserSkillScore', () => {
 
 describe('getNextAssessmentDate', () => {
   let svc: DataService;
-  const SKILL = makeSkill({ id: 'skill1', assessmentMethod: 'WRITTEN_EXAM' });
   const USER = makeUser();
+
+  // Inject the target skill carrying the given inline assessment method blocks.
+  const withMethods = (methods: SkillAssessmentMethod[]) =>
+    inject(svc, { skills: [makeSkillWithMethods(methods)] });
 
   beforeEach(() => {
     svc = makeSvc();
     inject(svc, {
-      skills: [SKILL],
+      skills: [makeSkill({ id: 'skill1' })],
       users: [USER],
       assessments: [],
       evidences: [],
-      assessmentPlans: [],
-      assessmentInstructions: [],
     });
   });
 
-  it('returns null when no active plan covers the skill', () => {
+  it('returns null when no method block schedules the skill', () => {
     expect(svc.getNextAssessmentDate('u1', 'skill1')).toBeNull();
   });
 
   it('ONE_TIME frequency always returns null (never recurs)', () => {
-    inject(svc, { assessmentPlans: [makePlan({ frequency: 'ONE_TIME' })] });
+    withMethods([makeMethod({ frequency: 'ONE_TIME' })]);
     expect(svc.getNextAssessmentDate('u1', 'skill1')).toBeNull();
   });
 
   it('WEEKLY frequency — overdue when never assessed', () => {
-    inject(svc, { assessmentPlans: [makePlan({ frequency: 'WEEKLY' })] });
+    withMethods([makeMethod({ frequency: 'WEEKLY' })]);
     const date = svc.getNextAssessmentDate('u1', 'skill1');
     expect(date).not.toBeNull();
     expect(date!.getTime()).toBeLessThanOrEqual(Date.now());
@@ -268,10 +287,8 @@ describe('getNextAssessmentDate', () => {
 
   it('WEEKLY frequency — schedules 7 days after last assessment', () => {
     const lastDate = new Date('2025-01-01');
-    inject(svc, {
-      assessmentPlans: [makePlan({ frequency: 'WEEKLY' })],
-      assessments: [makeAssessment({ date: lastDate.toISOString() })],
-    });
+    withMethods([makeMethod({ frequency: 'WEEKLY' })]);
+    inject(svc, { assessments: [makeAssessment({ date: lastDate.toISOString() })] });
     const date = svc.getNextAssessmentDate('u1', 'skill1')!;
     const expected = new Date(lastDate);
     expected.setDate(expected.getDate() + 7);
@@ -280,10 +297,8 @@ describe('getNextAssessmentDate', () => {
 
   it('MONTHLY frequency — schedules 1 month after last assessment', () => {
     const lastDate = new Date('2025-01-01');
-    inject(svc, {
-      assessmentPlans: [makePlan({ frequency: 'MONTHLY' })],
-      assessments: [makeAssessment({ date: lastDate.toISOString() })],
-    });
+    withMethods([makeMethod({ frequency: 'MONTHLY' })]);
+    inject(svc, { assessments: [makeAssessment({ date: lastDate.toISOString() })] });
     const date = svc.getNextAssessmentDate('u1', 'skill1')!;
     const expected = new Date(lastDate);
     expected.setMonth(expected.getMonth() + 1);
@@ -292,10 +307,8 @@ describe('getNextAssessmentDate', () => {
 
   it('QUARTERLY frequency — schedules 3 months after last assessment', () => {
     const lastDate = new Date('2025-01-01');
-    inject(svc, {
-      assessmentPlans: [makePlan({ frequency: 'QUARTERLY' })],
-      assessments: [makeAssessment({ date: lastDate.toISOString() })],
-    });
+    withMethods([makeMethod({ frequency: 'QUARTERLY' })]);
+    inject(svc, { assessments: [makeAssessment({ date: lastDate.toISOString() })] });
     const date = svc.getNextAssessmentDate('u1', 'skill1')!;
     const expected = new Date(lastDate);
     expected.setMonth(expected.getMonth() + 3);
@@ -303,60 +316,52 @@ describe('getNextAssessmentDate', () => {
   });
 
   it('ANYTIME_ANNUAL — overdue when never assessed this year', () => {
-    inject(svc, { assessmentPlans: [makePlan({ frequency: 'ANYTIME_ANNUAL' })] });
+    withMethods([makeMethod({ frequency: 'ANYTIME_ANNUAL' })]);
     const date = svc.getNextAssessmentDate('u1', 'skill1')!;
     expect(date.getTime()).toBeLessThanOrEqual(Date.now());
   });
 
   it('ANYTIME_ANNUAL — assessed this year: next due at start of next year', () => {
     const thisYear = new Date().getFullYear();
-    inject(svc, {
-      assessmentPlans: [makePlan({ frequency: 'ANYTIME_ANNUAL' })],
-      assessments: [makeAssessment({ date: `${thisYear}-01-15` })],
-    });
+    withMethods([makeMethod({ frequency: 'ANYTIME_ANNUAL' })]);
+    inject(svc, { assessments: [makeAssessment({ date: `${thisYear}-01-15` })] });
     const date = svc.getNextAssessmentDate('u1', 'skill1')!;
     expect(date.getFullYear()).toBe(thisYear + 1);
   });
 
   it('CERTIFICATE_BASED — overdue when no approved evidence with expiryDate', () => {
-    inject(svc, { assessmentPlans: [makePlan({ frequency: 'CERTIFICATE_BASED' })] });
+    withMethods([makeMethod({ frequency: 'CERTIFICATE_BASED' })]);
     const date = svc.getNextAssessmentDate('u1', 'skill1')!;
     expect(date.getTime()).toBeLessThanOrEqual(Date.now());
   });
 
   it('CERTIFICATE_BASED — due date equals evidence expiry', () => {
     const expiry = '2027-03-15';
-    inject(svc, {
-      assessmentPlans: [makePlan({ frequency: 'CERTIFICATE_BASED' })],
-      evidences: [makeEvidence({ expiryDate: expiry })],
-    });
+    withMethods([makeMethod({ frequency: 'CERTIFICATE_BASED' })]);
+    inject(svc, { evidences: [makeEvidence({ expiryDate: expiry })] });
     const date = svc.getNextAssessmentDate('u1', 'skill1')!;
     expect(date.toISOString().slice(0, 10)).toBe(expiry);
   });
 
-  it('picks the earliest date when multiple plans apply', () => {
+  it('picks the earliest date when multiple method blocks apply', () => {
     const soon = new Date();
     soon.setDate(soon.getDate() + 7);
     const later = new Date();
     later.setMonth(later.getMonth() + 3);
-    inject(svc, {
-      assessments: [
-        makeAssessment({ id: 'a-w', date: soon.toISOString() }),
-      ],
-      assessmentPlans: [
-        makePlan({ id: 'p1', frequency: 'WEEKLY' }),
-        makePlan({ id: 'p2', frequency: 'QUARTERLY' }),
-      ],
-    });
+    withMethods([
+      makeMethod({ id: 'm-w', frequency: 'WEEKLY' }),
+      makeMethod({ id: 'm-q', frequency: 'QUARTERLY' }),
+    ]);
+    inject(svc, { assessments: [makeAssessment({ id: 'a-w', date: soon.toISOString() })] });
     const date = svc.getNextAssessmentDate('u1', 'skill1')!;
     // Weekly is sooner than quarterly
     expect(date.getTime()).toBeLessThan(later.getTime());
   });
 });
 
-// ─── isUserInPlanAudience ───────────────────────────────────────────────────
+// ─── isUserInAudience ────────────────────────────────────────────────────────
 
-describe('isUserInPlanAudience', () => {
+describe('isUserInAudience', () => {
   let svc: DataService;
 
   const EMPLOYEE = makeUser({ id: 'emp1', orgLevel: 'SP', departmentId: 'dept1' });
@@ -368,48 +373,47 @@ describe('isUserInPlanAudience', () => {
     inject(svc, {
       users: [EMPLOYEE, FRESH, MANAGER],
       departments: [],
-      assessmentInstructions: [],
     });
   });
 
   it('ALL — matches every user', () => {
-    const plan = makePlan({ audience: 'ALL' });
-    expect(svc.isUserInPlanAudience('emp1', plan)).toBe(true);
-    expect(svc.isUserInPlanAudience('fresh1', plan)).toBe(true);
-    expect(svc.isUserInPlanAudience('mgr1', plan)).toBe(true);
+    const m = makeMethod({ audience: 'ALL' });
+    expect(svc.isUserInAudience('emp1', m)).toBe(true);
+    expect(svc.isUserInAudience('fresh1', m)).toBe(true);
+    expect(svc.isUserInAudience('mgr1', m)).toBe(true);
   });
 
   it('FRESH_ONLY — only FR org level', () => {
-    const plan = makePlan({ audience: 'FRESH_ONLY' });
-    expect(svc.isUserInPlanAudience('fresh1', plan)).toBe(true);
-    expect(svc.isUserInPlanAudience('emp1', plan)).toBe(false);
+    const m = makeMethod({ audience: 'FRESH_ONLY' });
+    expect(svc.isUserInAudience('fresh1', m)).toBe(true);
+    expect(svc.isUserInAudience('emp1', m)).toBe(false);
   });
 
   it('MANAGERS_ONLY — managerial org levels are included', () => {
-    const plan = makePlan({ audience: 'MANAGERS_ONLY' });
+    const m = makeMethod({ audience: 'MANAGERS_ONLY' });
     // SH is in managerialLevels
-    expect(svc.isUserInPlanAudience('mgr1', plan)).toBe(true);
+    expect(svc.isUserInAudience('mgr1', m)).toBe(true);
     // SP is not
-    expect(svc.isUserInPlanAudience('emp1', plan)).toBe(false);
+    expect(svc.isUserInAudience('emp1', m)).toBe(false);
   });
 
   it('ORG_LEVELS — matches specified org levels', () => {
-    const plan = makePlan({ audience: 'ORG_LEVELS', audienceOrgLevels: ['SP', 'JP'] });
-    expect(svc.isUserInPlanAudience('emp1', plan)).toBe(true);
-    expect(svc.isUserInPlanAudience('fresh1', plan)).toBe(false);
-    expect(svc.isUserInPlanAudience('mgr1', plan)).toBe(false);
+    const m = makeMethod({ audience: 'ORG_LEVELS', audienceOrgLevels: ['SP', 'JP'] });
+    expect(svc.isUserInAudience('emp1', m)).toBe(true);
+    expect(svc.isUserInAudience('fresh1', m)).toBe(false);
+    expect(svc.isUserInAudience('mgr1', m)).toBe(false);
   });
 
   it('DEPARTMENTS — matches specified department IDs', () => {
-    const plan = makePlan({ audience: 'DEPARTMENTS', audienceDepartmentIds: ['dept1'] });
-    expect(svc.isUserInPlanAudience('emp1', plan)).toBe(true);
-    expect(svc.isUserInPlanAudience('fresh1', plan)).toBe(true);
-    expect(svc.isUserInPlanAudience('mgr1', plan)).toBe(false);
+    const m = makeMethod({ audience: 'DEPARTMENTS', audienceDepartmentIds: ['dept1'] });
+    expect(svc.isUserInAudience('emp1', m)).toBe(true);
+    expect(svc.isUserInAudience('fresh1', m)).toBe(true);
+    expect(svc.isUserInAudience('mgr1', m)).toBe(false);
   });
 
   it('returns false for unknown user', () => {
-    const plan = makePlan({ audience: 'ALL' });
-    expect(svc.isUserInPlanAudience('nonexistent', plan)).toBe(false);
+    const m = makeMethod({ audience: 'ALL' });
+    expect(svc.isUserInAudience('nonexistent', m)).toBe(false);
   });
 });
 
@@ -518,7 +522,7 @@ describe('generateCareerPath', () => {
     });
     const plan = svc.generateCareerPath('u1')!;
     const levels = plan.roadmap.map(r => r.level);
-    expect(levels).toEqual(['DM', 'AGM', 'GM', 'CEO']);
+    expect(levels).toEqual(['DM', 'AGM', 'GM', 'ACEO', 'CEO']);
   });
 });
 
@@ -859,6 +863,49 @@ describe('code generation', () => {
       id: 'job1', title: 'Senior Field Engineer', departmentId: 'dept1', orgLevel: 'SP', requiredSkills: [],
     } as unknown as JobProfile);
     expect(code).toBe('ENG-SFE');
+  });
+});
+
+// ─── job-profile / hierarchy-level reconciliation ─────────────────────────────
+
+describe('orgLevel reconciliation', () => {
+  let svc: DataService;
+
+  const JOB = {
+    id: 'job1', title: 'Field Engineer', description: '', departmentId: 'dept1',
+    orgLevel: 'JP', requiredSkills: [],
+  } as unknown as JobProfile;
+
+  beforeEach(async () => {
+    svc = makeSvc();
+    inject(svc, { jobs: [JOB], users: [], departments: [{ id: 'dept1', name: 'Eng', type: 'DEPARTMENT', managerId: '' }] });
+    const fs = await import('firebase/firestore');
+    (fs.setDoc as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    (fs.updateDoc as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+  });
+
+  it('addUser derives orgLevel from the assigned job profile, overriding a mismatched value', async () => {
+    const user = makeUser({ jobProfileId: 'job1', orgLevel: 'SP' }); // SP conflicts with JOB's JP
+    await svc.addUser(user);
+    expect(user.orgLevel).toBe('JP');
+  });
+
+  it('updateUser keeps the user orgLevel pinned to the profile level', async () => {
+    const user = makeUser({ jobProfileId: 'job1', orgLevel: 'GM' });
+    await svc.updateUser(user);
+    expect(user.orgLevel).toBe('JP');
+  });
+
+  it('leaves orgLevel untouched when no job profile is assigned', async () => {
+    const user = makeUser({ jobProfileId: undefined, departmentId: '', orgLevel: 'SP' });
+    await svc.addUser(user);
+    expect(user.orgLevel).toBe('SP');
+  });
+
+  it('getUserOrgLevelMismatch flags a conflict and returns the expected level', () => {
+    expect(svc.getUserOrgLevelMismatch({ jobProfileId: 'job1', orgLevel: 'SP' })).toBe('JP');
+    expect(svc.getUserOrgLevelMismatch({ jobProfileId: 'job1', orgLevel: 'JP' })).toBeNull();
+    expect(svc.getUserOrgLevelMismatch({ jobProfileId: undefined, orgLevel: 'SP' })).toBeNull();
   });
 });
 

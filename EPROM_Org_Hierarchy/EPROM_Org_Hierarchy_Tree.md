@@ -1,126 +1,124 @@
 # EPROM Organizational Hierarchy — Head Office (Tree Chart)
 
 - **المصرية لتشغيل وصيانة المشروعات (المركز الرئيسي)**<br>*Egyptian Maintenance Company for Operation & Maintenance of Projects (EPROM), Head Office*
-  - **رئيس مجلس الإدارة والعضو المنتدب**<br>*Chairman & Managing Director*
-    - **نائب رئيس مجلس الإدارة (1)**<br>*Vice Chairman of the Board*
-    - **مساعد رئيس الشركة للشئون الإدارية**<br>*Assistant to Company President for Administrative Affairs*
-      - **مدير عام الموارد البشرية**<br>*General Manager of Human Resources*
-        - **التنظيم وتخطيط القوى العاملة**<br>*Organization & Workforce Planning*
-        - **شئون العاملين**<br>*Personnel Affairs*
-        - **الإستحقاقات**<br>*Entitlements*
-        - **التأمينات الاجتماعية والمعاشات**<br>*Social Insurance & Pensions*
-      - **مدير عام العلاقات والخدمات العامة**<br>*General Manager of Public Relations & General Services*
-        - **العلاقات العامة**<br>*Public Relations*
-        - **الخدمات الإدارية**<br>*Administrative Services*
-      - **مدير عام التدريب**<br>*General Manager of Training*
-        - **إعداد وتخطيط التدريب**<br>*Training Preparation & Planning*
-        - **البحوث وتطوير التدريب**<br>*Research & Training Development*
-      - **مدير عام الإتصال والعلاقات الحكومية**<br>*General Manager of Communication & Government Relations*
-        - **الإتصال**<br>*Communication*
-        - **العلاقات الحكومية**<br>*Government Relations*
-      - **مدير عام بالشئون الإدارية (1)**<br>*General Manager, Administrative Affairs*
-      - **مدير عام بالإدارة (1)**<br>*General Manager within the department*
-      - **مدير عام مساعد الشئون الإدارية بالقاهرة (1)**<br>*Assistant General Manager, Cairo Administrative Affairs*
-      - **مدير عام مساعد بصفة شخصية (1)**<br>*Assistant General Manager, personal capacity*
-    - **مساعد رئيس الشركة للخدمات الفنية وتنمية الأعمال**<br>*Assistant to Company President for Technical Services & Business Development*
-      - **مدير عام المهمات والعقود**<br>*General Manager of Supplies & Contracts*
-        - **المشتريات**<br>*Purchasing*
-        - **المخازن**<br>*Warehouses*
-        - **العقود**<br>*Contracts*
-        - **مدير عام بالإدارة (1)**<br>*General Manager within the department*
-        - **مدير عام مساعد بصفة شخصية (4)**<br>*Assistant General Manager, personal capacity*
-      - **مدير عام تنمية الأعمال والتعاقدات الخارجية**<br>*General Manager of Business Development & External Contracting*
-        - **تنمية الأعمال وبرامج التسويق**<br>*Business Development & Marketing Programs*
-        - **العقود والعروض الخارجية ومتابعة عقود المشروعات**<br>*External Contracts/Bids & Project Contract Follow-up*
-      - **مدير عام بصفة شخصية (1)**<br>*General Manager, personal capacity*
-      - **مدير عام مساعد بصفة شخصية (4)**<br>*Assistant General Manager, personal capacity*
-    - **مساعد رئيس الشركة للشئون المالية**<br>*Assistant to Company President for Financial Affairs*
-      - **مدير عام الشئون المالية**<br>*General Manager of Financial Affairs*
-        - **التكاليف ومراقبة المشروعات والمقبوضات**<br>*Costs, Project Control & Receivables*
-        - **الحسابات والموازنة**<br>*Accounts & Budget*
-        - **الأجور وإستحقاقات العاملين**<br>*Wages & Employee Entitlements*
-        - **التمويل والضرائب**<br>*Finance & Taxes*
-        - **المدفوعات**<br>*Payments*
-        - **مدير عام مساعد بالإدارة (1)**<br>*Assistant General Manager within the department*
-      - **مدير عام بصفة شخصية (1)**<br>*General Manager, personal capacity*
-      - **مدير عام مساعد بالإدارة بصفة شخصية (3)**<br>*Assistant General Manager within the department, personal capacity*
-    - **مساعد رئيس الشركة للشئون الهندسية**<br>*Assistant to Company President for Engineering Affairs*
-      - **مدير عام نظم المعلومات المتكاملة**<br>*General Manager of Integrated Information Systems*
-        - **البنية التحتية والشبكات وتشغيل وصيانة الأجهزة**<br>*Infrastructure, Networks & Hardware Operation/Maintenance*
-        - **قواعد المعلومات والبرمجيات**<br>*Databases & Software*
-        - **البرمجيات وصيانة الأجهزة والشبكات بالقاهرة**<br>*Software & Hardware/Network Maintenance (Cairo)*
-        - **مدير عام مساعد بصفة شخصية (2)**<br>*Assistant General Manager, personal capacity*
-    - **مساعد رئيس الشركة للعمليات**<br>*Assistant to Company President for Operations*
-      - **مدير عام المكتب الفني للوثائق**<br>*General Manager of Technical Office for Documents*
-        - **المكتب الفني للشئون الهندسية**<br>*Technical Office, Engineering Affairs*
-        - **المكتب الفني لنظم التحكم**<br>*Technical Office, Control Systems*
-        - **المكتب الفني للتفتيش الهندسي (الدعم الفني)**<br>*Technical Office, Engineering Inspection (Technical Support)*
-        - **مدير عام بصفة شخصية (1)**<br>*General Manager, personal capacity*
-        - **مدير عام مساعد بصفة شخصية (1)**<br>*Assistant General Manager, personal capacity*
-    - **مساعد رئيس الشركة للشئون الفنية**<br>*Assistant to Company President for Technical Affairs*
-      - **مدير عام الدعم الفني للمشروعات**<br>*General Manager of Technical Support for Projects*
-        - **الدعم الفني للمرافق والمستودعات**<br>*Technical Support for Utilities & Storage*
-        - **الدعم الفني للعمليات**<br>*Technical Support for Operations*
-        - **الدعم الفني لمتابعة تقييم الأداء وبرامج العمل**<br>*Technical Support for Performance Evaluation & Work Programs*
-        - **مدير عام بصفة شخصية (1)**<br>*General Manager, personal capacity*
-      - **مدير عام التشغيل بمدن القناة وسيناء**<br>*General Manager of Operations: Canal Cities & Sinai*
-        - **التشغيل**<br>*Operations*
-        - **الصيانة**<br>*Maintenance*
-        - **التفتيش الهندسي والتآكل**<br>*Engineering Inspection & Corrosion*
-        - **السلامة والصحة المهنية وحماية البيئة والجودة**<br>*HSE & Quality*
-        - **المعامل الكيميائية**<br>*Chemical Laboratories*
-      - **مدير عام التشغيل بالمنطقة الجنوبية**<br>*General Manager of Operations: Southern Region*
-        - **التشغيل**<br>*Operations*
-        - **الصيانة**<br>*Maintenance*
-        - **التفتيش الهندسي والتآكل**<br>*Engineering Inspection & Corrosion*
-        - **السلامة والصحة المهنية وحماية البيئة والجودة**<br>*HSE & Quality*
-        - **المعامل الكيميائية**<br>*Chemical Laboratories*
-      - **مدير عام التشغيل بالمنطقة الغربية**<br>*General Manager of Operations: Western Region*
-        - **التشغيل**<br>*Operations*
-        - **الصيانة**<br>*Maintenance*
-        - **التفتيش الهندسي والتآكل**<br>*Engineering Inspection & Corrosion*
-        - **السلامة والصحة المهنية وحماية البيئة والجودة**<br>*HSE & Quality*
-        - **المعامل الكيميائية**<br>*Chemical Laboratories*
-      - **مدير عام بصفة شخصية (1)**<br>*General Manager, personal capacity*
-      - **مدير عام مساعد بصفة شخصية (1)**<br>*Assistant General Manager, personal capacity*
-    - **مساعد رئيس الشركة للصيانة الميكانيكية والتفتيش الهندسي**<br>*Assistant to Company President for Mechanical Maintenance & Engineering Inspection*
-    - **مدير عام المتابعة الفنية (مكتب القاهرة)**<br>*General Manager of Technical Follow-up, Cairo Office*
-      - **الدراسات الفنية**<br>*Technical Studies*
-      - **متابعة الشئون الهندسية**<br>*Engineering Affairs Follow-up*
-    - **مدير عام الأمن**<br>*General Manager of Security*
-      - **مدير عام مساعد الأمن (1)**<br>*Assistant General Manager, Security*
-    - **مدير عام الشئون القانونية**<br>*General Manager of Legal Affairs*
-      - **القضايا**<br>*Litigation*
-      - **التحقيقات**<br>*Investigations*
-      - **مدير عام مساعد بصفة شخصية (2)**<br>*Assistant General Manager, personal capacity*
-    - **مدير عام الأمانة العامة وسكرتارية رئيس مجلس الإدارة**<br>*General Manager of General Secretariat & Board Chairman Secretariat*
-      - **الأمانة العامة لمجلس الإدارة**<br>*General Secretariat of the Board*
-      - **سكرتارية رئيس مجلس الإدارة**<br>*Board Chairman's Secretariat*
-      - **مدير عام مساعد بصفة شخصية (1)**<br>*Assistant General Manager, personal capacity*
-    - **مدير عام بالإدارة العامة للصيانة العامة — بمشروع المصرية للتكرير (ERC project)**<br>*General Manager, General Maintenance (at ERC refining project)*
-    - **مدير عام الشئون الطبية**<br>*General Manager of Medical Affairs*
-      - **الطب الوقائي**<br>*Preventive Medicine*
-      - **الطب العلاجي**<br>*Curative Medicine*
-    - **مدير عام ترشيد الطاقة**<br>*General Manager of Energy Rationalization*
-      - **تنفيذ مشروعات رفع كفاءة الطاقة**<br>*Energy Efficiency Project Implementation*
-      - **دراسات رفع كفاءة الطاقة**<br>*Energy Efficiency Studies*
-    - **مدير عام نظم الجودة**<br>*General Manager of Quality Systems*
-      - **مدير عام مساعد نظم الجودة (1)**<br>*Assistant General Manager, Quality Systems*
-    - **مدير عام سلامة العمليات**<br>*General Manager of Process Safety*
-      - **السلامة الفنية ومنع الخسائر**<br>*Technical Safety & Loss Prevention*
-      - **السلامة التشغيلية**<br>*Operational Safety*
-    - **مدير عام بصفة شخصية (9)**<br>*General Manager, personal capacity (9)*
-    - **مدير عام مساعد المراجعة الداخلية**<br>*Assistant General Manager of Internal Audit*
-    - **مدير عام مساعد السلامة والصحة المهنية وحماية البيئة**<br>*Assistant General Manager of Health, Safety & Environment (HSE)*
-    - **مدير عام مساعد المتابعة الإدارية لمساعدي رئيس الشركة**<br>*Assistant General Manager of Administrative Follow-up for the President's Assistants*
-    - **مدير عام مساعد أنشطة المسئولية المجتمعية**<br>*Assistant General Manager of Corporate Social Responsibility (CSR)*
-    - **مدير عام مساعد بصفة شخصية (10)**<br>*Assistant General Manager, personal capacity (10)*
-    - **مدير مشروع السخنة**<br>*Project Manager, Sokhna*
-    - **مدير مشروع الإستيرنكس**<br>*Project Manager, Esterenex*
-    - **مدير مشروع أموك**<br>*Project Manager, AMOC*
-    - **مدير مشروع إيلاب**<br>*Project Manager, ELAB*
-    - **مدير مشروع ميدور**<br>*Project Manager, MIDOR*
-    - **مدير مشروع المصرية للتكرير**<br>*Project Manager, ERC (Egyptian Refining Company)*
-    - **خبير / رئيس شركة (3)**<br>*Expert / Company President grade*
-    - **خبير / نائب رئيس شركة (1)**<br>*Expert / Vice President grade*
-    - **خبير / مساعد رئيس شركة (15)**<br>*Expert / Assistant President grade*
+  - **1 رئيس مجلس الإدارة والعضو المنتدب**<br>*Chairman & Managing Director*
+    - **1.1 نائب رئيس مجلس الإدارة (1)**<br>*Vice Chairman of the Board*
+    - **1.2 مساعد رئيس الشركة للشئون الإدارية**<br>*Assistant to Company President for Administrative Affairs*
+      - **1.2.1 مدير عام الموارد البشرية**<br>*General Manager of Human Resources*
+        - **1.2.1.1 التنظيم وتخطيط القوى العاملة**<br>*Organization & Workforce Planning*
+        - **1.2.1.2 شئون العاملين**<br>*Personnel Affairs*
+        - **1.2.1.3 الإستحقاقات**<br>*Entitlements*
+        - **1.2.1.4 التأمينات الاجتماعية والمعاشات**<br>*Social Insurance & Pensions*
+      - **1.2.2 مدير عام العلاقات والخدمات العامة**<br>*General Manager of Public Relations & General Services*
+        - **1.2.2.1 العلاقات العامة**<br>*Public Relations*
+        - **1.2.2.2 الخدمات الإدارية**<br>*Administrative Services*
+      - **1.2.3 مدير عام التدريب**<br>*General Manager of Training*
+        - **1.2.3.1 إعداد وتخطيط التدريب**<br>*Training Preparation & Planning*
+        - **1.2.3.2 البحوث وتطوير التدريب**<br>*Research & Training Development*
+      - **1.2.4 مدير عام الإتصال والعلاقات الحكومية**<br>*General Manager of Communication & Government Relations*
+        - **1.2.4.1 الإتصال**<br>*Communication*
+        - **1.2.4.2 العلاقات الحكومية**<br>*Government Relations*
+      - **1.2.5 مدير عام بالشئون الإدارية (1)**<br>*General Manager, Administrative Affairs*
+      - **1.2.6 مدير عام بالإدارة (1)**<br>*General Manager within the department*
+      - **1.2.7 مدير عام مساعد الشئون الإدارية بالقاهرة (1)**<br>*Assistant General Manager, Cairo Administrative Affairs*
+      - **1.2.8 مدير عام مساعد بصفة شخصية (1)**<br>*Assistant General Manager, personal capacity*
+    - **1.3 مساعد رئيس الشركة للخدمات الفنية وتنمية الأعمال**<br>*Assistant to Company President for Technical Services & Business Development*
+      - **1.3.1 مدير عام المهمات والعقود**<br>*General Manager of Supplies & Contracts*
+        - **1.3.1.1 المشتريات**<br>*Purchasing*
+        - **1.3.1.2 المخازن**<br>*Warehouses*
+        - **1.3.1.3 العقود**<br>*Contracts*
+        - **1.3.1.4 مدير عام بصفة شخصية (1)**<br>*General Manager, personal capacity*
+        - **1.3.1.5 مدير عام مساعد بصفة شخصية (4)**<br>*Assistant General Manager, personal capacity*
+      - **1.3.2 مدير عام تنمية الأعمال والتعاقدات الخارجية**<br>*General Manager of Business Development & External Contracting*
+        - **1.3.2.1 تنمية الأعمال وبرامج التسويق**<br>*Business Development & Marketing Programs*
+        - **1.3.2.2 العقود والعروض الخارجية ومتابعة عقود المشروعات**<br>*External Contracts/Bids & Project Contract Follow-up*
+    - **1.4 مساعد رئيس الشركة للشئون المالية**<br>*Assistant to Company President for Financial Affairs*
+      - **1.4.1 مدير عام الشئون المالية**<br>*General Manager of Financial Affairs*
+        - **1.4.1.1 التكاليف ومراقبة المشروعات والمقبوضات**<br>*Costs, Project Control & Receivables*
+        - **1.4.1.2 الحسابات والموازنة**<br>*Accounts & Budget*
+        - **1.4.1.3 الأجور وإستحقاقات العاملين**<br>*Wages & Employee Entitlements*
+        - **1.4.1.4 التمويل والضرائب**<br>*Finance & Taxes*
+        - **1.4.1.5 المدفوعات**<br>*Payments*
+        - **1.4.1.6 مدير عام مساعد بالإدارة (1)**<br>*Assistant General Manager within the department*
+      - **1.4.2 مدير عام بصفة شخصية (1)**<br>*General Manager, personal capacity*
+      - **1.4.3 مدير عام مساعد بالإدارة بصفة شخصية (3)**<br>*Assistant General Manager within the department, personal capacity*
+    - **1.5 مساعد رئيس الشركة للشئون الهندسية**<br>*Assistant to Company President for Engineering Affairs*
+      - **1.5.1 مدير عام نظم المعلومات المتكاملة**<br>*General Manager of Integrated Information Systems*
+        - **1.5.1.1 البنية التحتية والشبكات وتشغيل وصيانة الأجهزة**<br>*Infrastructure, Networks & Hardware Operation/Maintenance*
+        - **1.5.1.2 قواعد المعلومات والبرمجيات**<br>*Databases & Software*
+        - **1.5.1.3 البرمجيات وصيانة الأجهزة والشبكات بالقاهرة**<br>*Software & Hardware/Network Maintenance (Cairo)*
+        - **1.5.1.4 مدير عام مساعد بصفة شخصية (2)**<br>*Assistant General Manager, personal capacity*
+    - **1.6 مساعد رئيس الشركة للعمليات**<br>*Assistant to Company President for Operations*
+      - **1.6.1 مدير عام المكتب الفني للوثائق**<br>*General Manager of Technical Office for Documents*
+        - **1.6.1.1 المكتب الفني للشئون الهندسية**<br>*Technical Office, Engineering Affairs*
+        - **1.6.1.2 المكتب الفني لنظم التحكم**<br>*Technical Office, Control Systems*
+        - **1.6.1.3 المكتب الفني للتفتيش الهندسي (الدعم الفني)**<br>*Technical Office, Engineering Inspection (Technical Support)*
+        - **1.6.1.4 مدير عام بصفة شخصية (1)**<br>*General Manager, personal capacity*
+        - **1.6.1.5 مدير عام مساعد بصفة شخصية (1)**<br>*Assistant General Manager, personal capacity*
+    - **1.7 مساعد رئيس الشركة للشئون الفنية**<br>*Assistant to Company President for Technical Affairs*
+      - **1.7.1 مدير عام الدعم الفني للمشروعات**<br>*General Manager of Technical Support for Projects*
+        - **1.7.1.1 الدعم الفني للمرافق والمستودعات**<br>*Technical Support for Utilities & Storage*
+        - **1.7.1.2 الدعم الفني للعمليات**<br>*Technical Support for Operations*
+        - **1.7.1.3 الدعم الفني لمتابعة تقييم الأداء وبرامج العمل**<br>*Technical Support for Performance Evaluation & Work Programs*
+        - **1.7.1.4 مدير عام بصفة شخصية (1)**<br>*General Manager, personal capacity*
+      - **1.7.2 مدير عام التشغيل بمدن القناة وسيناء**<br>*General Manager of Operations: Canal Cities & Sinai*
+        - **1.7.2.1 التشغيل**<br>*Operations*
+        - **1.7.2.2 الصيانة**<br>*Maintenance*
+        - **1.7.2.3 التفتيش الهندسي والتآكل**<br>*Engineering Inspection & Corrosion*
+        - **1.7.2.4 السلامة والصحة المهنية وحماية البيئة والجودة**<br>*HSE & Quality*
+        - **1.7.2.5 المعامل الكيميائية**<br>*Chemical Laboratories*
+      - **1.7.3 مدير عام التشغيل بالمنطقة الجنوبية**<br>*General Manager of Operations: Southern Region*
+        - **1.7.3.1 التشغيل**<br>*Operations*
+        - **1.7.3.2 الصيانة**<br>*Maintenance*
+        - **1.7.3.3 التفتيش الهندسي والتآكل**<br>*Engineering Inspection & Corrosion*
+        - **1.7.3.4 السلامة والصحة المهنية وحماية البيئة والجودة**<br>*HSE & Quality*
+        - **1.7.3.5 المعامل الكيميائية**<br>*Chemical Laboratories*
+      - **1.7.4 مدير عام التشغيل بالمنطقة الغربية**<br>*General Manager of Operations: Western Region*
+        - **1.7.4.1 التشغيل**<br>*Operations*
+        - **1.7.4.2 الصيانة**<br>*Maintenance*
+        - **1.7.4.3 التفتيش الهندسي والتآكل**<br>*Engineering Inspection & Corrosion*
+        - **1.7.4.4 السلامة والصحة المهنية وحماية البيئة والجودة**<br>*HSE & Quality*
+        - **1.7.4.5 المعامل الكيميائية**<br>*Chemical Laboratories*
+      - **1.7.5 مدير عام بصفة شخصية (1)**<br>*General Manager, personal capacity*
+      - **1.7.6 مدير عام مساعد بصفة شخصية (1)**<br>*Assistant General Manager, personal capacity*
+    - **1.8 مساعد رئيس الشركة للصيانة الميكانيكية والتفتيش الهندسي**<br>*Assistant to Company President for Mechanical Maintenance & Engineering Inspection*
+    - **1.9 مدير عام المتابعة الفنية (مكتب القاهرة)**<br>*General Manager of Technical Follow-up, Cairo Office*
+      - **1.9.1 الدراسات الفنية**<br>*Technical Studies*
+      - **1.9.2 متابعة الشئون الهندسية**<br>*Engineering Affairs Follow-up*
+    - **1.10 مدير عام الأمن**<br>*General Manager of Security*
+      - **1.10.1 مدير عام مساعد الأمن (1)**<br>*Assistant General Manager, Security*
+    - **1.11 مدير عام الشئون القانونية**<br>*General Manager of Legal Affairs*
+      - **1.11.1 القضايا**<br>*Litigation*
+      - **1.11.2 التحقيقات**<br>*Investigations*
+      - **1.11.3 مدير عام مساعد بصفة شخصية (2)**<br>*Assistant General Manager, personal capacity*
+    - **1.12 مدير عام الأمانة العامة وسكرتارية رئيس مجلس الإدارة**<br>*General Manager of General Secretariat & Board Chairman Secretariat*
+      - **1.12.1 الأمانة العامة لمجلس الإدارة**<br>*General Secretariat of the Board*
+      - **1.12.2 سكرتارية رئيس مجلس الإدارة**<br>*Board Chairman's Secretariat*
+      - **1.12.3 مدير عام مساعد بصفة شخصية (1)**<br>*Assistant General Manager, personal capacity*
+    - **1.13 مدير عام بالإدارة العامة للصيانة العامة — بمشروع المصرية للتكرير (ERC project)**<br>*General Manager, General Maintenance (at ERC refining project)*
+    - **1.14 مدير عام الشئون الطبية**<br>*General Manager of Medical Affairs*
+      - **1.14.1 الطب الوقائي**<br>*Preventive Medicine*
+      - **1.14.2 الطب العلاجي**<br>*Curative Medicine*
+    - **1.15 مدير عام ترشيد الطاقة**<br>*General Manager of Energy Rationalization*
+      - **1.15.1 تنفيذ مشروعات رفع كفاءة الطاقة**<br>*Energy Efficiency Project Implementation*
+      - **1.15.2 دراسات رفع كفاءة الطاقة**<br>*Energy Efficiency Studies*
+    - **1.16 مدير عام نظم الجودة**<br>*General Manager of Quality Systems*
+      - **1.16.1 مدير عام مساعد نظم الجودة (1)**<br>*Assistant General Manager, Quality Systems*
+    - **1.17 مدير عام سلامة العمليات**<br>*General Manager of Process Safety*
+      - **1.17.1 السلامة الفنية ومنع الخسائر**<br>*Technical Safety & Loss Prevention*
+      - **1.17.2 السلامة التشغيلية**<br>*Operational Safety*
+    - **1.18 مدير عام بصفة شخصية (9)**<br>*General Manager, personal capacity (9)*
+    - **1.19 مدير عام مساعد المراجعة الداخلية**<br>*Assistant General Manager of Internal Audit*
+    - **1.20 مدير عام مساعد السلامة والصحة المهنية وحماية البيئة**<br>*Assistant General Manager of Health, Safety & Environment (HSE)*
+    - **1.21 مدير عام مساعد المتابعة الإدارية لمساعدي رئيس الشركة**<br>*Assistant General Manager of Administrative Follow-up for the President's Assistants*
+    - **1.22 مدير عام مساعد أنشطة المسئولية المجتمعية**<br>*Assistant General Manager of Corporate Social Responsibility (CSR)*
+    - **1.23 مدير عام مساعد بصفة شخصية (10)**<br>*Assistant General Manager, personal capacity (10)*
+    - **1.24 مدير مشروع السخنة**<br>*Project Manager, Sokhna*
+    - **1.25 مدير مشروع الإستيرنكس**<br>*Project Manager, Esterenex*
+    - **1.26 مدير مشروع أموك**<br>*Project Manager, AMOC*
+    - **1.27 مدير مشروع إيلاب**<br>*Project Manager, ELAB*
+    - **1.28 مدير مشروع ميدور**<br>*Project Manager, MIDOR*
+    - **1.29 مدير مشروع المصرية للتكرير**<br>*Project Manager, ERC (Egyptian Refining Company)*
+    - **1.30 خبير / رئيس شركة (3)**<br>*Expert / Company President grade*
+    - **1.31 خبير / نائب رئيس شركة (1)**<br>*Expert / Vice President grade*
+    - **1.32 خبير / مساعد رئيس شركة (15)**<br>*Expert / Assistant President grade*

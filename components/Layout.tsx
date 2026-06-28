@@ -2,7 +2,7 @@ import React, { memo, useState, useRef, useEffect } from 'react';
 import { User, Role, ORG_LEVEL_LABELS } from '../types';
 import { Logo } from './Logo';
 import { dataService } from '../services/store';
-import { LogOut, LayoutDashboard, ClipboardList, ClipboardCheck, ShieldCheck, UserCircle, Users, Building2, Briefcase, Activity, Grid, UploadCloud, CheckSquare, Star, Monitor, MessageSquare, Menu, X, Settings, Languages, ChevronDown, LucideIcon } from 'lucide-react';
+import { LogOut, LayoutDashboard, ShieldCheck, BadgeCheck, UserCircle, Users, Building2, Briefcase, Activity, Grid, UploadCloud, CheckSquare, Star, Monitor, MessageSquare, Menu, X, Settings, Languages, ChevronDown, LucideIcon } from 'lucide-react';
 import { NotificationBell } from './NotificationBell';
 import { useI18n } from '../i18n/I18nContext';
 import { LOCALES } from '../i18n/translations';
@@ -15,7 +15,7 @@ interface LayoutProps {
   children: React.ReactNode;
 }
 
-const EVAL_TABS = new Set(['evaluations', 'online-assessments', 'interviews', 'emp-assessment', 'evidence-portal']);
+const EVAL_TABS = new Set(['evaluations', 'online-assessments', 'interviews', 'emp-assessment', 'emp-appraisal', 'evidence-portal']);
 
 const NavItem = memo(({ id, label, icon: Icon, activeTab, onSwitchTab }: { id: string, label: string, icon: LucideIcon, activeTab: string, onSwitchTab: (tab: string) => void }) => {
   const isActive = activeTab === id || (id === 'evaluations' && EVAL_TABS.has(activeTab));
@@ -118,8 +118,7 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
       ? [
           { id: 'admin-dashboard', label: t('nav.overview'), icon: LayoutDashboard },
           { id: 'admin-analytics', label: t('nav.analytics'), icon: Activity },
-          { id: 'admin-assessments', label: t('nav.assessments'), icon: ClipboardList },
-          { id: 'admin-instructions', label: t('nav.instructions'), icon: ClipboardCheck },
+          { id: 'admin-appraisal', label: t('nav.appraisal'), icon: CheckSquare },
         ]
       : user.role === Role.CEO
       ? [
@@ -138,6 +137,7 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
   // Items that go inside the combined dropdown button
   const dropdownTabs: { id: string; label: string; icon: LucideIcon }[] = [
     ...(user.role === Role.ADMIN ? [{ id: 'admin-audit', label: t('nav.auditTrail'), icon: ShieldCheck }] : []),
+    { id: 'methodology', label: t('nav.methodology'), icon: BadgeCheck },
     { id: 'settings', label: t('nav.settings'), icon: Settings },
   ];
 

@@ -40,7 +40,7 @@ EPROM-egy/
 │   ├── BehavioralAssessment.tsx  # 360° self/peer/manager
 │   ├── EvidencePortal.tsx
 │   ├── CompetencyMatrix.tsx
-│   ├── AssessmentManagement.tsx  # Admin: Assessment Plans (method/frequency/audience → skills)
+│   ├── (assessment config lives inline on each Skill — see SkillForm in AdminPanel + components/AssessmentMethodEditor.tsx)
 │   └── SupervisorApproval.tsx
 └── components/
     ├── Layout.tsx        # Sidebar nav + header
@@ -59,18 +59,20 @@ EPROM-egy/
 | Collection | Purpose |
 |---|---|
 | `users` | Employee profiles: role, orgLevel, departmentId, managerId, jobProfileId |
-| `skills` | Competency catalog with 5-level proficiency scale and assessment method |
+| `skills` | Competency catalog with 5-level proficiency scale. Each skill owns its assessment definition inline via `assessmentMethods: SkillAssessmentMethod[]` — each block pairs *how* (method + prompt / link / question bank) with *when* (frequency) and *who* (audience). Configured in the **Competency Standard** form (SkillForm). Supersedes the old `assessmentInstructions` + `assessmentPlans` split |
 | `jobProfiles` | **One position = one profile.** Each box/position in the org chart is its own job profile, scoped to a single `orgLevel` with a flat `requiredSkills: { skillId, requiredLevel }[]` list |
 | `assessments` | Score records per user/skill/cycle (Self, Peer, Manager, Exam, Interview, etc.) |
 | `evidences` | Work records submitted by employees, approved by managers |
 | `assessmentCycles` | Time-bound evaluation periods (ACTIVE / CLOSED). Read-only now — historical appraisal labelling only; no admin UI writes cycles since the Assessment Engine was removed |
-| `assessmentPlans` | **Assessment Management** — defines how/when a set of skills is assessed: method, frequency (one-time / annual-fixed-date / anytime-annual / quarterly / monthly / weekly / certificate-based) and target audience (all / fresh / managers / org-levels / departments). Single source of truth for assessment scheduling |
+| `assessmentPlans` | **@deprecated** — superseded by inline `Skill.assessmentMethods`. Retained only for legacy parsing + the one-time migration, and for the company-wide `ANNUAL_APPRAISAL` config still read by Behavioral Assessment |
 | `departments` | Org units with hierarchy (General → Department → Section) |
 | `notifications` | In-app alerts per user |
 | `trainingCourses` | Courses linked to skills for ITP recommendations |
 
 ### Org Hierarchy (OrgLevel enum)
-`CEO` → `GM` → `AGM` → `DM` → `SH` → `SP` → `JP` → `FR`
+`CEO` → `ACEO` → `GM` → `AGM` → `DM` → `SH` → `SP` → `JP` → `FR`
+
+A job profile's `orgLevel` is **derived from the org-chart node's structural type** (`COMPANY` / `EXECUTIVE` / `SECTOR` / `GENERAL` / `DEPARTMENT` / `POSITION`), never inferred from the position name or who it reports to. Mapping: `EXECUTIVE→CEO`, `SECTOR→ACEO`, `GENERAL→GM`, `DEPARTMENT→SH`, `POSITION→by title`. Full table in [`job_profiles/README.md`](job_profiles/README.md).
 
 ### User Roles
 - `ADMIN` — full system management
@@ -105,7 +107,7 @@ Auto-generates training recommendations from skill gaps, linked to courses in `t
 Aggregates skill gaps across a whole department for L&D planning.
 
 ### Assessment Scheduling (`getNextAssessmentDate`)
-Plan-driven (Assessment Engine removed). For a user+skill it finds every **ACTIVE** `assessmentPlan` whose `skillIds` includes the skill and whose `audience` matches the user (`isUserInPlanAudience`), computes each plan's next-due date from its `frequency`, and returns the **earliest** (most urgent) one. No applicable plan ⇒ `null` ⇒ skill is treated as one-time and never becomes due again. Feeds `getEmployeeAssessmentQueue` and the OnlineAssessments / ManagerialInterviews / EvidencePortal due-date displays. `CERTIFICATE_BASED` plans drive evidence expiry via `isSkillCertificateBasedForUser`. The legacy per-skill `assessmentFrequency`/`periodicInterval` fields are deprecated (kept optional for legacy doc parsing, no longer written or read).
+Driven by each skill's inline `assessmentMethods`. For a user+skill it takes every method block whose `audience` matches the user (`isUserInAudience` / `getApplicableMethodsForUserSkill`), computes each block's next-due date from its `frequency`, and returns the **earliest** (most urgent) one. No applicable block ⇒ `null` ⇒ skill is treated as one-time and never becomes due again. Feeds `getEmployeeAssessmentQueue` and the OnlineAssessments / ManagerialInterviews / EvidencePortal due-date displays. `CERTIFICATE_BASED` blocks drive evidence expiry via `isSkillCertificateBasedForUser`. Resolution is legacy-safe: `getSkillAssessmentMethods` falls back to synthesizing blocks from deprecated linked instructions / per-skill fields until the one-time `migrateAssessmentConfigToSkills` runs (admin-triggered).
 
 ---
 
@@ -127,7 +129,7 @@ Plan-driven (Assessment Engine removed). For a user+skill it finds every **ACTIV
 2. **Employee** takes assessments (online/360°/interview) and submits evidence → scores recorded
 3. **Manager** reviews evidence, conducts interviews, rates subordinates in 360° evaluations
 4. **System** calculates skill gaps → generates ITP and career path
-5. **Admin** defines **Assessment Plans** (Assessment Management): attaches one or many skills to a plan with a method, recurrence frequency, and target audience. Plans drive when each employee's skills become due for re-assessment
+5. **Admin** configures each skill's assessment inline in the **Competency Standard** form (Assessment Methods tab): one or more method blocks, each defining *how* (method + prompt / link / question bank), *when* (frequency) and *who* (audience). These blocks drive when each employee's skills become due for re-assessment
 
 ---
 
@@ -140,7 +142,7 @@ Routing is tab-based state in `App.tsx` (no React Router). `activeTab` drives wh
 | `emp-dashboard` | EmployeeDashboard | Employee |
 | `evaluations` | EvaluationsHub | Employee |
 | `manager-dashboard` | ManagerDashboard | Manager |
-| `admin-dashboard/users/jobs/skills/depts/assessments/analytics` | AdminPanel | Admin |
+| `admin-dashboard/users/jobs/skills/depts/analytics` | AdminPanel | Admin |
 | `ceo-dashboard` | CEOPanel | CEO |
 
 ---

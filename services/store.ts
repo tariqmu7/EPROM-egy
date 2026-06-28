@@ -1,4 +1,4 @@
-import { User, Role, JobProfile, Skill, Project, Department, Assessment, ActivityLog, ORG_HIERARCHY_ORDER, ORG_LEVEL_NUMBERS, Notification, AssessmentCycle, Nomination, IndividualTrainingPlan, TrainingRecommendation, OrgLevel, Evidence, PromotionRequirement, CareerProgressionPlan, CareerLevelProgress, TrainingCourse, ScheduledAssessment, AssessmentMethod, UserStatus, Certificate, CareerHistoryEntry, SkillLevel, EvaluationQuestion, AssessmentPlan, AssessmentInstruction, JobProfileSkill } from '../types';
+import { User, Role, JobProfile, Skill, Project, Department, Assessment, ActivityLog, ORG_HIERARCHY_ORDER, ORG_LEVEL_NUMBERS, Notification, AssessmentCycle, Nomination, IndividualTrainingPlan, TrainingRecommendation, OrgLevel, Evidence, PromotionRequirement, CareerProgressionPlan, CareerLevelProgress, TrainingCourse, ScheduledAssessment, AssessmentMethod, UserStatus, Certificate, CareerHistoryEntry, SkillLevel, EvaluationQuestion, AssessmentPlan, AssessmentInstruction, SkillAssessmentMethod, AssessmentFrequency, AssessmentAudience, JobProfileSkill, DepartmentType, DEPT_TYPE_TO_ORG_LEVEL, RaterWeights, DEFAULT_RATER_WEIGHTS } from '../types';
 import { db, auth } from '../firebase';
 import {
   collection,
@@ -560,7 +560,7 @@ export class DataService {
     let directReportIds: string[] = [];
 
     if (!isPrivileged && profile) {
-      const managerialLevels: OrgLevel[] = ['CEO', 'GM', 'AGM', 'DM', 'SH'];
+      const managerialLevels: OrgLevel[] = ['CEO', 'ACEO', 'GM', 'AGM', 'DM', 'SH'];
       const isManagerialLevel = profile.orgLevel ? managerialLevels.includes(profile.orgLevel) : false;
       let hasSubordinates = false;
       try {
@@ -715,6 +715,7 @@ export class DataService {
             id: doc.id,
             ...data,
             levels: safeJsonField<Record<number, SkillLevel>>(data.levels, {}, `skills.levels (${doc.id})`),
+            assessmentMethods: safeJsonField<SkillAssessmentMethod[]>(data.assessmentMethods, [], `skills.assessmentMethods (${doc.id})`),
             evaluationQuestions: safeJsonField<EvaluationQuestion[]>(data.evaluationQuestions, [], `skills.evaluationQuestions (${doc.id})`),
             interviewQuestions: safeJsonField<EvaluationQuestion[]>(data.interviewQuestions, [], `skills.interviewQuestions (${doc.id})`),
             threeSixtyQuestions: safeJsonField<EvaluationQuestion[]>(data.threeSixtyQuestions, [], `skills.threeSixtyQuestions (${doc.id})`)
@@ -1345,6 +1346,7 @@ export class DataService {
     }
     if (collectionName === 'skills') {
       if (item.levels) payload.levels = JSON.stringify(item.levels);
+      if (item.assessmentMethods) payload.assessmentMethods = JSON.stringify(item.assessmentMethods);
       if (item.evaluationQuestions) payload.evaluationQuestions = JSON.stringify(item.evaluationQuestions);
       if (item.interviewQuestions) payload.interviewQuestions = JSON.stringify(item.interviewQuestions);
       if (item.threeSixtyQuestions) payload.threeSixtyQuestions = JSON.stringify(item.threeSixtyQuestions);
@@ -1367,7 +1369,7 @@ export class DataService {
 
   private validateEnums(collectionName: string, item: any) {
     const VALID_ROLES: Role[] = [Role.ADMIN, Role.EMPLOYEE, Role.CEO];
-    const VALID_ORG_LEVELS: OrgLevel[] = ['CEO', 'GM', 'AGM', 'DM', 'SH', 'SP', 'JP', 'FR'];
+    const VALID_ORG_LEVELS: OrgLevel[] = ['CEO', 'ACEO', 'GM', 'AGM', 'DM', 'SH', 'SP', 'JP', 'FR'];
     const VALID_ASSESSMENT_METHODS: AssessmentMethod[] = ['WRITTEN_EXAM', 'PRACTICAL_DEMO', 'OJT_OBSERVATION', 'INTERVIEW', 'WORK_RECORD_REVIEW', 'THREE_SIXTY_EVALUATION'];
     const VALID_ASSESSMENT_TYPES = ['SELF', 'PEER', 'MANAGER', 'UPWARD', 'WRITTEN_EXAM', 'PRACTICAL_DEMO', 'INTERVIEW', 'WORK_RECORD_REVIEW'];
 
@@ -1480,7 +1482,7 @@ export class DataService {
     if (hasSubordinates) return true;
 
     // Default fallback to hierarchy level
-    const managerialLevels: OrgLevel[] = ['CEO', 'GM', 'AGM', 'DM', 'SH'];
+    const managerialLevels: OrgLevel[] = ['CEO', 'ACEO', 'GM', 'AGM', 'DM', 'SH'];
     return user.orgLevel ? managerialLevels.includes(user.orgLevel) : false;
   }
 
@@ -1744,11 +1746,14 @@ export class DataService {
     return { writtenExams, managerialInterviews, evaluations360, workRecords };
   }
 
-  // Does an Assessment Plan's audience include this user?
-  isUserInPlanAudience(userId: string, plan: AssessmentPlan): boolean {
+  // Does a method block's audience include this user?
+  isUserInAudience(
+    userId: string,
+    m: { audience: AssessmentAudience; audienceOrgLevels?: OrgLevel[]; audienceDepartmentIds?: string[] }
+  ): boolean {
     const user = this.getUserById(userId);
     if (!user) return false;
-    switch (plan.audience) {
+    switch (m.audience) {
       case 'ALL':
         return true;
       case 'FRESH_ONLY':
@@ -1756,42 +1761,58 @@ export class DataService {
       case 'MANAGERS_ONLY':
         return this.isManager(user);
       case 'ORG_LEVELS':
-        return !!user.orgLevel && (plan.audienceOrgLevels || []).includes(user.orgLevel);
+        return !!user.orgLevel && (m.audienceOrgLevels || []).includes(user.orgLevel);
       case 'DEPARTMENTS':
-        return (plan.audienceDepartmentIds || []).includes(user.departmentId);
+        return (m.audienceDepartmentIds || []).includes(user.departmentId);
       default:
         return false;
     }
   }
 
-  // Active plans that cover a skill and apply to the given user.
-  getApplicablePlansForUserSkill(userId: string, skillId: string): AssessmentPlan[] {
-    return this.assessmentPlans.filter(p =>
-      p.status === 'ACTIVE' &&
-      p.skillIds.includes(skillId) &&
-      this.isUserInPlanAudience(userId, p)
-    );
+  // Per-skill assessment method blocks whose audience applies to the user.
+  getApplicableMethodsForUserSkill(userId: string, skillId: string): SkillAssessmentMethod[] {
+    return this.getSkillAssessmentMethods(skillId)
+      .filter(m => this.isUserInAudience(userId, m));
   }
 
-  // All active plans referencing a skill (audience-agnostic; used for admin display).
-  getAssessmentPlansForSkill(skillId: string): AssessmentPlan[] {
-    return this.assessmentPlans.filter(p => p.skillIds.includes(skillId));
+  // The 360°/OJT rater blend (self/peer/manager) to apply for this user+skill.
+  // Reads the first applicable OJT/360 method block that carries raterWeights;
+  // falls back to DEFAULT_RATER_WEIGHTS so behavior is unchanged when unset.
+  getRaterWeightsForUserSkill(userId: string, skillId: string): RaterWeights {
+    const block = this.getApplicableMethodsForUserSkill(userId, skillId).find(m =>
+      (m.method === 'OJT_OBSERVATION' || m.method === 'THREE_SIXTY_EVALUATION') && m.raterWeights);
+    return block?.raterWeights || DEFAULT_RATER_WEIGHTS;
   }
 
-  // True when an active plan applicable to this user schedules the skill
-  // as certificate-based (evidence carries an expiry date).
+  // The exam pass mark (0-100) for a user+skill: the job profile's per-skill
+  // override (JobProfileSkill.passingScorePercent) when set, otherwise the
+  // skill's own WRITTEN_EXAM default. null when neither is configured.
+  getPassingScoreForUserSkill(userId: string, skillId: string): number | null {
+    const user = this.getUserById(userId);
+    const job = user?.jobProfileId ? this.getJobProfile(user.jobProfileId) : undefined;
+    const profileReq = job
+      ? this.getEffectiveRequirements(job).find(r => r.skillId === skillId)
+      : undefined;
+    if (typeof profileReq?.passingScorePercent === 'number') return profileReq.passingScorePercent;
+    const examDefault = this.getSkillAssessmentMethods(skillId)
+      .find(m => m.method === 'WRITTEN_EXAM' && typeof m.passingScorePercent === 'number');
+    return typeof examDefault?.passingScorePercent === 'number' ? examDefault.passingScorePercent : null;
+  }
+
+  // True when an applicable method block schedules the skill as
+  // certificate-based (evidence carries an expiry date).
   isSkillCertificateBasedForUser(userId: string, skillId: string): boolean {
-    return this.getApplicablePlansForUserSkill(userId, skillId)
-      .some(p => p.frequency === 'CERTIFICATE_BASED');
+    return this.getApplicableMethodsForUserSkill(userId, skillId)
+      .some(m => m.frequency === 'CERTIFICATE_BASED');
   }
 
-  // Next due date for one plan/user/skill, or null if it never recurs.
-  private computePlanNextDueDate(plan: AssessmentPlan, userId: string, skillId: string): Date | null {
-    if (plan.frequency === 'ONE_TIME') return null;
+  // Next due date for one method block/user/skill, or null if it never recurs.
+  private computeMethodNextDueDate(m: SkillAssessmentMethod, userId: string, skillId: string): Date | null {
+    if (m.frequency === 'ONE_TIME') return null;
 
     const now = new Date();
 
-    if (plan.frequency === 'CERTIFICATE_BASED') {
+    if (m.frequency === 'CERTIFICATE_BASED') {
       const userEvidences = this.evidences.filter(e =>
         e.userId === userId && e.skillId === skillId && e.status === 'APPROVED' && e.expiryDate);
       if (userEvidences.length === 0) return now; // due until a valid certificate exists
@@ -1805,9 +1826,9 @@ export class DataService {
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     const lastDate = userAssessments.length > 0 ? new Date(userAssessments[0].date) : null;
 
-    if (plan.frequency === 'ANNUAL_FIXED_DATE') {
-      const month = (plan.fixedMonth ?? 1) - 1; // JS months are 0-based
-      const day = plan.fixedDay ?? 1;
+    if (m.frequency === 'ANNUAL_FIXED_DATE') {
+      const month = (m.fixedMonth ?? 1) - 1; // JS months are 0-based
+      const day = m.fixedDay ?? 1;
       // Most recent occurrence of the fixed date on/before today.
       let lastDue = new Date(now.getFullYear(), month, day);
       if (lastDue > now) lastDue = new Date(now.getFullYear() - 1, month, day);
@@ -1819,7 +1840,7 @@ export class DataService {
       return next;
     }
 
-    if (plan.frequency === 'ANYTIME_ANNUAL') {
+    if (m.frequency === 'ANYTIME_ANNUAL') {
       if (!lastDate || lastDate.getFullYear() < now.getFullYear()) return now;
       return new Date(now.getFullYear() + 1, 0, 1); // due again at the start of next year
     }
@@ -1827,22 +1848,22 @@ export class DataService {
     // Rolling intervals: WEEKLY / MONTHLY / QUARTERLY
     if (!lastDate) return now; // never assessed → due now
     const next = new Date(lastDate);
-    if (plan.frequency === 'WEEKLY') next.setDate(next.getDate() + 7);
-    else if (plan.frequency === 'MONTHLY') next.setMonth(next.getMonth() + 1);
-    else if (plan.frequency === 'QUARTERLY') next.setMonth(next.getMonth() + 3);
+    if (m.frequency === 'WEEKLY') next.setDate(next.getDate() + 7);
+    else if (m.frequency === 'MONTHLY') next.setMonth(next.getMonth() + 1);
+    else if (m.frequency === 'QUARTERLY') next.setMonth(next.getMonth() + 3);
     return next;
   }
 
-  // Earliest (most urgent) next-due date across every plan that applies to
-  // this user+skill. Returns null when no active plan schedules the skill —
-  // a skill with no plan is treated as one-time and never becomes due again.
+  // Earliest (most urgent) next-due date across every method block that applies
+  // to this user+skill. Returns null when no block schedules the skill — a skill
+  // with no recurring method is treated as one-time and never becomes due again.
   getNextAssessmentDate(userId: string, skillId: string): Date | null {
-    const plans = this.getApplicablePlansForUserSkill(userId, skillId);
-    if (plans.length === 0) return null;
+    const methods = this.getApplicableMethodsForUserSkill(userId, skillId);
+    if (methods.length === 0) return null;
 
     let earliest: Date | null = null;
-    for (const plan of plans) {
-      const due = this.computePlanNextDueDate(plan, userId, skillId);
+    for (const m of methods) {
+      const due = this.computeMethodNextDueDate(m, userId, skillId);
       if (!due) continue;
       if (!earliest || due < earliest) earliest = due;
     }
@@ -1936,11 +1957,30 @@ export class DataService {
   }
   // When a user is attached to a unit but has no job profile, and that unit has
   // exactly one profile, adopt it. Multi-profile units stay manual (ambiguous).
+  // Then reconcile the user's hierarchy level with the assigned profile:
+  // one position = one profile = one orgLevel, so the employee's orgLevel is
+  // *derived* from the profile and can never drift out of sync. This is the
+  // authoritative guard against mis-assignments — every write path (Admin form,
+  // bulk import, seed scripts) routes through add/updateUser, hence through here.
   private autoAssignJobProfile(user: User) {
     if (user.departmentId && !user.jobProfileId) {
       const deptJobs = this.getJobProfilesByDepartment(user.departmentId);
       if (deptJobs.length === 1) user.jobProfileId = deptJobs[0].id;
     }
+    if (user.jobProfileId) {
+      const profile = this.getJobProfile(user.jobProfileId);
+      if (profile?.orgLevel) user.orgLevel = profile.orgLevel;
+    }
+  }
+
+  // UI helper: does this user's stored orgLevel disagree with the org level of
+  // their assigned job profile? Returns the profile's expected level when there
+  // is a mismatch (so callers can warn / auto-correct), otherwise null.
+  getUserOrgLevelMismatch(user: Pick<User, 'jobProfileId' | 'orgLevel'>): OrgLevel | null {
+    if (!user.jobProfileId) return null;
+    const profile = this.getJobProfile(user.jobProfileId);
+    if (!profile?.orgLevel) return null;
+    return profile.orgLevel !== user.orgLevel ? profile.orgLevel : null;
   }
 
   // Returns the required skills for a job profile (position). Each position is
@@ -1990,15 +2030,84 @@ export class DataService {
     return this.getGeneralDeptId(dept.parentId, _visited);
   }
 
+  // --- Org-hierarchy placement rules ---------------------------------------
+  // The org chart must stay strictly ordered (CEO → ACEO → GM → AGM → DM → SH →
+  // SP → JP → FR). A child unit must sit *below* its parent, and a position's
+  // job-profile org level must not sit *above* the unit it belongs to. SECTION
+  // (Section Head) is the deepest unit level; SP/JP/FR are individual positions
+  // attached to a unit. These resolvers are the single source for that check;
+  // the Admin forms call them to block invalid placements before saving.
+
+  // The org level a department node implies. Unit types come from
+  // DEPT_TYPE_TO_ORG_LEVEL; POSITION nodes are resolved from their title.
+  getDepartmentOrgLevel(dept: Department | undefined | null): OrgLevel | null {
+    if (!dept) return null;
+    if (dept.type === 'POSITION') return this.parsePositionOrgLevel(dept);
+    return dept.type ? (DEPT_TYPE_TO_ORG_LEVEL[dept.type] ?? null) : null;
+  }
+
+  // Resolve a titled (POSITION) node's org level from its name. Order matters:
+  // "assistant general manager" (مدير عام مساعد) must be tested before the
+  // plain "general manager" (مدير عام) substring.
+  private parsePositionOrgLevel(dept: Department): OrgLevel | null {
+    const t = `${dept.name || ''} ${dept.nameAr || ''}`.toLowerCase();
+    if (/assistant general manager/.test(t) || t.includes('مدير عام مساعد')) return 'AGM';
+    if (/general manager/.test(t) || t.includes('مدير عام')) return 'GM';
+    if (/\bmanager\b/.test(t) || t.includes('مدير')) return 'DM';
+    return null;
+  }
+
+  // Validate that a unit of `childType` may be nested under `parentId`.
+  // Rule: the child's implied level must be strictly below the parent's. A unit
+  // cannot be created under a Section Head (SH) — that is the deepest unit level.
+  // Unknown parent level (POSITION/COMPANY/missing) ⇒ allowed (cannot determine).
+  validateUnitPlacement(childType: DepartmentType | undefined, parentId: string | undefined): { ok: boolean; error?: string } {
+    if (!parentId) return { ok: true }; // top-level unit under the root org
+    const childLevel = childType ? DEPT_TYPE_TO_ORG_LEVEL[childType] : null;
+    if (!childLevel) return { ok: true }; // can't constrain a level-less type
+    const parent = this.departments.find(d => d.id === parentId);
+    const parentLevel = this.getDepartmentOrgLevel(parent);
+    if (!parent || !parentLevel) return { ok: true };
+    const childIdx = ORG_LEVEL_NUMBERS[childLevel];
+    const parentIdx = ORG_LEVEL_NUMBERS[parentLevel];
+    if (childIdx <= parentIdx) {
+      const reason = childIdx === parentIdx
+        ? `same level as its parent (${parentLevel})`
+        : `above its parent (${childLevel} sits above ${parentLevel})`;
+      return {
+        ok: false,
+        error: `A ${childType} unit (${childLevel}) can't be placed under "${parent.name}" (${parentLevel}) — it would be ${reason}. A child unit must sit below its parent in the hierarchy.`,
+      };
+    }
+    return { ok: true };
+  }
+
+  // Validate that a job profile at `orgLevel` may belong to `departmentId`.
+  // Rule: the profile must not sit above the unit it is attached to. The unit's
+  // head occupies the unit level; people in it are at or below it (SP/JP/FR).
+  validateJobProfilePlacement(orgLevel: OrgLevel | undefined, departmentId: string | undefined): { ok: boolean; error?: string } {
+    if (!orgLevel || !departmentId) return { ok: true };
+    const dept = this.departments.find(d => d.id === departmentId);
+    const unitLevel = this.getDepartmentOrgLevel(dept);
+    if (!dept || !unitLevel) return { ok: true };
+    if (ORG_LEVEL_NUMBERS[orgLevel] < ORG_LEVEL_NUMBERS[unitLevel]) {
+      return {
+        ok: false,
+        error: `A ${orgLevel} profile can't belong to "${dept.name}" (${unitLevel}) — a position can't sit above its own unit. Use ${unitLevel} or a lower level (e.g. SP/JP/FR).`,
+      };
+    }
+    return { ok: true };
+  }
+
   getSubordinates(managerId: string) {
     // A user reports to this person if EITHER their explicit Direct Manager
     // (User.managerId) is set to them, OR they belong to a Direct Department /
     // Section this person manages (Department.managerId). Restricted to
-    // DEPARTMENT / SECTION so a GENERAL-dept owner (e.g. a GM) does not pull a
-    // whole org branch in as direct reports.
+    // ASSISTANT_GENERAL / DEPARTMENT / SECTION so a GENERAL-dept owner (e.g. a
+    // GM) does not pull a whole org branch in as direct reports.
     const managedDeptIds = new Set(
       this.departments
-        .filter(d => d.managerId === managerId && (d.type === 'DEPARTMENT' || d.type === 'SECTION'))
+        .filter(d => d.managerId === managerId && (d.type === 'ASSISTANT_GENERAL' || d.type === 'DEPARTMENT' || d.type === 'SECTION'))
         .map(d => d.id)
     );
 
@@ -2055,12 +2164,16 @@ export class DataService {
         const avgPeer = peerA.length > 0 ? peerA.reduce((s, a) => s + a.score, 0) / peerA.length : null;
         const avgMgr = mgrA.length > 0 ? mgrA.reduce((s, a) => s + a.score, 0) / mgrA.length : null;
 
+        // 360° blend is admin-configurable per skill (see SkillAssessmentMethod
+        // .raterWeights); defaults to Self 10 / Peer 30 / Mgr 60. Weights are
+        // re-normalized over the rater types that actually submitted.
+        const rw = this.getRaterWeightsForUserSkill(userId, skillId);
         let totalWeight = 0;
         let weightedScore = 0;
 
-        if (avgSelf !== null) { weightedScore += avgSelf * 0.10; totalWeight += 0.10; }
-        if (avgPeer !== null) { weightedScore += avgPeer * 0.30; totalWeight += 0.30; }
-        if (avgMgr  !== null) { weightedScore += avgMgr  * 0.60; totalWeight += 0.60; }
+        if (avgSelf !== null) { weightedScore += avgSelf * rw.self; totalWeight += rw.self; }
+        if (avgPeer !== null) { weightedScore += avgPeer * rw.peer; totalWeight += rw.peer; }
+        if (avgMgr  !== null) { weightedScore += avgMgr  * rw.manager; totalWeight += rw.manager; }
 
         result = totalWeight === 0 ? 0 : Math.round(weightedScore / totalWeight);
       }
@@ -2188,40 +2301,63 @@ export class DataService {
     await this.logActivity('Deleted Assessment Instruction', instruction?.name || id);
   }
 
-  // --- ASSESSMENT RESOLUTION (instruction-aware, legacy-safe) ---
+  // --- ASSESSMENT RESOLUTION (per-skill, legacy-safe) ---
 
-  // Active instructions a skill is assessed by. Falls back to a synthesized
-  // instruction from the deprecated per-skill fields when none are linked
-  // (covers any not-yet-migrated docs).
-  getSkillInstructions(skillId: string): AssessmentInstruction[] {
+  // The assessment method blocks defined inline on a skill. Falls back to a
+  // synthesized block from the deprecated linked-instruction / per-skill fields
+  // when none are set (covers any not-yet-migrated docs).
+  getSkillAssessmentMethods(skillId: string): SkillAssessmentMethod[] {
     const skill = this.getSkill(skillId);
     if (!skill) return [];
-    const ids = skill.assessmentInstructionIds || [];
-    const resolved = ids
+    if ((skill.assessmentMethods || []).length > 0) return skill.assessmentMethods!;
+    return this.synthesizeLegacyMethods(skill);
+  }
+
+  // Build per-skill method blocks from the deprecated linked AssessmentInstruction
+  // docs or the old per-skill fields, so resolution keeps working before the
+  // one-time migration runs. Defaults frequency/audience (scheduling lived on
+  // separate plans, so legacy blocks recur only if a matching plan still does).
+  private synthesizeLegacyMethods(skill: Skill): SkillAssessmentMethod[] {
+    const fromInstruction = (i: AssessmentInstruction): SkillAssessmentMethod => ({
+      id: `legacy-instr:${i.id}`,
+      method: i.method,
+      assessmentQuestion: i.assessmentQuestion,
+      assessmentLink: i.assessmentLink,
+      questions: [
+        ...(i.evaluationQuestions || []),
+        ...(i.interviewQuestions || []),
+        ...(i.threeSixtyQuestions || []),
+        ...(i.annualAppraisalQuestions || [])
+      ],
+      frequency: 'ONE_TIME',
+      audience: 'ALL'
+    });
+
+    const linked = (skill.assessmentInstructionIds || [])
       .map(id => this.assessmentInstructions.find(i => i.id === id))
       .filter((i): i is AssessmentInstruction => !!i && i.status === 'ACTIVE');
-    if (resolved.length > 0) return resolved;
+    if (linked.length > 0) return linked.map(fromInstruction);
 
     if (skill.assessmentMethod || skill.assessmentQuestion || skill.assessmentLink) {
       return [{
         id: `legacy:${skill.id}`,
-        name: `${skill.name} (legacy)`,
         method: skill.assessmentMethod || 'OJT_OBSERVATION',
         assessmentQuestion: skill.assessmentQuestion,
         assessmentLink: skill.assessmentLink,
-        evaluationQuestions: skill.evaluationQuestions || [],
-        interviewQuestions: skill.interviewQuestions || [],
-        threeSixtyQuestions: skill.threeSixtyQuestions || [],
-        status: 'ACTIVE',
-        createdAt: '',
-        updatedAt: ''
+        questions: [
+          ...(skill.evaluationQuestions || []),
+          ...(skill.interviewQuestions || []),
+          ...(skill.threeSixtyQuestions || [])
+        ],
+        frequency: 'ONE_TIME',
+        audience: 'ALL'
       }];
     }
     return [];
   }
 
   getSkillMethods(skillId: string): AssessmentMethod[] {
-    return Array.from(new Set(this.getSkillInstructions(skillId).map(i => i.method)));
+    return Array.from(new Set(this.getSkillAssessmentMethods(skillId).map(m => m.method)));
   }
 
   skillHasMethod(skillId: string, method: AssessmentMethod): boolean {
@@ -2231,46 +2367,35 @@ export class DataService {
   // The method that drives single-method consumers (scoring, queue bucket).
   // Defaults to OJT_OBSERVATION so an unconfigured skill still routes to 360.
   getSkillPrimaryMethod(skillId: string): AssessmentMethod {
-    return this.getSkillInstructions(skillId)[0]?.method || 'OJT_OBSERVATION';
+    return this.getSkillAssessmentMethods(skillId)[0]?.method || 'OJT_OBSERVATION';
   }
 
   getSkillAssessmentLink(skillId: string): string | undefined {
-    const exam = this.getSkillInstructions(skillId).find(i => i.method === 'WRITTEN_EXAM' && i.assessmentLink);
-    return exam?.assessmentLink || this.getSkillInstructions(skillId).find(i => i.assessmentLink)?.assessmentLink;
+    const methods = this.getSkillAssessmentMethods(skillId);
+    const exam = methods.find(m => m.method === 'WRITTEN_EXAM' && m.assessmentLink);
+    return exam?.assessmentLink || methods.find(m => m.assessmentLink)?.assessmentLink;
   }
 
   getSkillAssessmentQuestion(skillId: string): string | undefined {
-    return this.getSkillInstructions(skillId).find(i => i.assessmentQuestion)?.assessmentQuestion;
+    return this.getSkillAssessmentMethods(skillId).find(m => m.assessmentQuestion)?.assessmentQuestion;
   }
 
-  // One-time, idempotent migration of the deprecated per-skill assessment
-  // fields into reusable AssessmentInstruction docs. Identical configs are
-  // de-duplicated into one shared instruction. Admin-only screens call this
-  // (skills + instructions are admin-write); safe to invoke repeatedly.
-  private instructionMigrationRan = false;
-  async migrateSkillsToInstructions(): Promise<void> {
-    if (this.instructionMigrationRan) return;
-    this.instructionMigrationRan = true;
+  // One-time, idempotent migration of the deprecated assessment model
+  // (AssessmentInstruction "how" + AssessmentPlan "when" + legacy per-skill
+  // fields) into inline Skill.assessmentMethods blocks. Admin-only screens call
+  // this (skills are admin-write); safe to invoke repeatedly. Company-wide
+  // ANNUAL_APPRAISAL plans are intentionally left as plans (the Behavioral
+  // Assessment page still reads them) and are not folded into any skill.
+  private assessmentMigrationRan = false;
+  async migrateAssessmentConfigToSkills(): Promise<void> {
+    if (this.assessmentMigrationRan) return;
+    this.assessmentMigrationRan = true;
 
-    const signature = (cfg: {
-      method: AssessmentMethod; assessmentQuestion?: string; assessmentLink?: string;
-      evaluationQuestions?: EvaluationQuestion[]; interviewQuestions?: EvaluationQuestion[]; threeSixtyQuestions?: EvaluationQuestion[];
-    }) => JSON.stringify([
-      cfg.method,
-      cfg.assessmentQuestion || '',
-      cfg.assessmentLink || '',
-      cfg.evaluationQuestions || [],
-      cfg.interviewQuestions || [],
-      cfg.threeSixtyQuestions || []
-    ]);
-
-    // Index existing instructions by signature so re-runs reuse them.
-    const bySignature = new Map<string, AssessmentInstruction>();
-    this.assessmentInstructions.forEach(i => bySignature.set(signature(i), i));
-
+    // Skills that have no inline blocks yet but carry some legacy config.
     const pending = this.skills.filter(s =>
-      (s.assessmentInstructionIds || []).length === 0 &&
-      (s.assessmentMethod || s.assessmentQuestion || s.assessmentLink ||
+      (s.assessmentMethods || []).length === 0 &&
+      ((s.assessmentInstructionIds || []).length > 0 ||
+       s.assessmentMethod || s.assessmentQuestion || s.assessmentLink ||
        (s.evaluationQuestions || []).length || (s.interviewQuestions || []).length ||
        (s.threeSixtyQuestions || []).length));
 
@@ -2278,38 +2403,47 @@ export class DataService {
 
     try {
       for (const skill of pending) {
-        const cfg = {
-          method: skill.assessmentMethod || 'OJT_OBSERVATION' as AssessmentMethod,
-          assessmentQuestion: skill.assessmentQuestion,
-          assessmentLink: skill.assessmentLink,
-          evaluationQuestions: skill.evaluationQuestions || [],
-          interviewQuestions: skill.interviewQuestions || [],
-          threeSixtyQuestions: skill.threeSixtyQuestions || []
-        };
-        const sig = signature(cfg);
-        let instruction = bySignature.get(sig);
-        if (!instruction) {
-          const methodLabel = cfg.method.replace(/_/g, ' ');
-          instruction = await this.addAssessmentInstruction({
-            name: `${methodLabel} — ${skill.category || 'General'}`,
-            description: 'Auto-migrated from legacy per-skill assessment settings.',
-            method: cfg.method,
-            assessmentQuestion: cfg.assessmentQuestion,
-            assessmentLink: cfg.assessmentLink,
-            evaluationQuestions: cfg.evaluationQuestions,
-            interviewQuestions: cfg.interviewQuestions,
-            threeSixtyQuestions: cfg.threeSixtyQuestions,
-            status: 'ACTIVE'
-          });
-          bySignature.set(sig, instruction);
+        // "How" blocks from linked instructions / legacy fields.
+        const blocks = this.synthesizeLegacyMethods(skill);
+        if (blocks.length === 0) continue;
+
+        // Overlay "when"/"who" from any active plan covering this skill, matched
+        // by method. Plans without a matching block still seed a block so the
+        // schedule is preserved.
+        const plans = this.assessmentPlans.filter(p =>
+          p.status === 'ACTIVE' && p.method !== 'ANNUAL_APPRAISAL' && p.skillIds.includes(skill.id));
+
+        for (const plan of plans) {
+          const match = blocks.find(b => b.method === plan.method);
+          const schedule = {
+            frequency: plan.frequency,
+            fixedMonth: plan.fixedMonth,
+            fixedDay: plan.fixedDay,
+            audience: plan.audience,
+            audienceOrgLevels: plan.audienceOrgLevels,
+            audienceDepartmentIds: plan.audienceDepartmentIds
+          };
+          if (match) {
+            Object.assign(match, schedule);
+          } else {
+            blocks.push({
+              id: `mig:${plan.id}`,
+              method: plan.method,
+              questions: [],
+              ...schedule
+            });
+          }
         }
-        await this.updateItem('skills', { ...skill, assessmentInstructionIds: [instruction.id] });
+
+        // Strip undefined so Firestore accepts the payload.
+        const clean = blocks.map(b => JSON.parse(JSON.stringify(b)) as SkillAssessmentMethod);
+        await this.updateItem('skills', { ...skill, assessmentMethods: clean });
       }
-      await this.logActivity('Migrated Skills to Assessment Instructions', `${pending.length} skill(s)`);
+      await this.logActivity('Migrated assessment config to skills', `${pending.length} skill(s)`);
     } catch (e) {
       // Non-admin or transient failure — allow a later admin session to retry.
-      this.instructionMigrationRan = false;
-      console.error('migrateSkillsToInstructions failed', e);
+      this.assessmentMigrationRan = false;
+      console.error('migrateAssessmentConfigToSkills failed', e);
     }
   }
 

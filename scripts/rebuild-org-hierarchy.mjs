@@ -29,16 +29,26 @@ const BASE = `https://firestore.googleapis.com/v1/${DOC_PATH}`;      // full URL
 
 // --- The org chart (verbatim from Tree.md). Node shape: ---
 //   [id, type, arabic, english, children?]
-// Types: COMPANY > EXECUTIVE > SECTOR > GENERAL > DEPARTMENT/POSITION.
+// Types: COMPANY > EXECUTIVE > SECTOR > GENERAL > ASSISTANT_GENERAL > DEPARTMENT > SECTION / POSITION.
 // POSITION = an individual/titled post (personal-capacity GM, project manager,
 // expert) rather than an organisational unit.
+//
+// This structural `type` is the SINGLE source for a position's job-profile
+// `orgLevel` (never infer org level from a node's name or who it reports to):
+//   EXECUTIVE → CEO · SECTOR → ACEO · GENERAL → GM · ASSISTANT_GENERAL → AGM ·
+//   DEPARTMENT → DM · SECTION → SH (deepest unit) · POSITION → by title
+//   (مدير عام→GM, مدير عام مساعد→AGM, project/dept mgr→DM).
+// Every organisational sub-unit directly under a GM (مدير عام) is an
+// ASSISTANT_GENERAL (AGM) box — the `d-*` ids are retained as stable
+// identifiers only; the `type` is what fixes the org level.
+// Mapping table: job_profiles/README.md.
 
 const REGIONAL = (p) => [
-  [`d-${p}-ops`,   'DEPARTMENT', 'التشغيل', 'Operations'],
-  [`d-${p}-maint`, 'DEPARTMENT', 'الصيانة', 'Maintenance'],
-  [`d-${p}-insp`,  'DEPARTMENT', 'التفتيش الهندسي والتآكل', 'Engineering Inspection & Corrosion'],
-  [`d-${p}-hse`,   'DEPARTMENT', 'السلامة والصحة المهنية وحماية البيئة والجودة', 'HSE & Quality'],
-  [`d-${p}-lab`,   'DEPARTMENT', 'المعامل الكيميائية', 'Chemical Laboratories'],
+  [`d-${p}-ops`,   'ASSISTANT_GENERAL', 'التشغيل', 'Operations'],
+  [`d-${p}-maint`, 'ASSISTANT_GENERAL', 'الصيانة', 'Maintenance'],
+  [`d-${p}-insp`,  'ASSISTANT_GENERAL', 'التفتيش الهندسي والتآكل', 'Engineering Inspection & Corrosion'],
+  [`d-${p}-hse`,   'ASSISTANT_GENERAL', 'السلامة والصحة المهنية وحماية البيئة والجودة', 'HSE & Quality'],
+  [`d-${p}-lab`,   'ASSISTANT_GENERAL', 'المعامل الكيميائية', 'Chemical Laboratories'],
 ];
 
 // NOTE: Tree.md has a COMPANY root (EPROM Head Office) above the Chairman, but the
@@ -52,22 +62,22 @@ const TREE = [
       // --- Assistant to President: Administrative Affairs ---
       ['sec-admin', 'SECTOR', 'مساعد رئيس الشركة للشئون الإدارية', 'Assistant to Company President for Administrative Affairs', [
         ['g-hr', 'GENERAL', 'مدير عام الموارد البشرية', 'General Manager of Human Resources', [
-          ['d-hr-org',  'DEPARTMENT', 'التنظيم وتخطيط القوى العاملة', 'Organization & Workforce Planning'],
-          ['d-hr-pers', 'DEPARTMENT', 'شئون العاملين', 'Personnel Affairs'],
-          ['d-hr-ent',  'DEPARTMENT', 'الإستحقاقات', 'Entitlements'],
-          ['d-hr-ins',  'DEPARTMENT', 'التأمينات الاجتماعية والمعاشات', 'Social Insurance & Pensions'],
+          ['d-hr-org',  'ASSISTANT_GENERAL', 'التنظيم وتخطيط القوى العاملة', 'Organization & Workforce Planning'],
+          ['d-hr-pers', 'ASSISTANT_GENERAL', 'شئون العاملين', 'Personnel Affairs'],
+          ['d-hr-ent',  'ASSISTANT_GENERAL', 'الإستحقاقات', 'Entitlements'],
+          ['d-hr-ins',  'ASSISTANT_GENERAL', 'التأمينات الاجتماعية والمعاشات', 'Social Insurance & Pensions'],
         ]],
         ['g-pr', 'GENERAL', 'مدير عام العلاقات والخدمات العامة', 'General Manager of Public Relations & General Services', [
-          ['d-pr-pr',  'DEPARTMENT', 'العلاقات العامة', 'Public Relations'],
-          ['d-pr-adm', 'DEPARTMENT', 'الخدمات الإدارية', 'Administrative Services'],
+          ['d-pr-pr',  'ASSISTANT_GENERAL', 'العلاقات العامة', 'Public Relations'],
+          ['d-pr-adm', 'ASSISTANT_GENERAL', 'الخدمات الإدارية', 'Administrative Services'],
         ]],
         ['g-train', 'GENERAL', 'مدير عام التدريب', 'General Manager of Training', [
-          ['d-train-prep', 'DEPARTMENT', 'إعداد وتخطيط التدريب', 'Training Preparation & Planning'],
-          ['d-train-rd',   'DEPARTMENT', 'البحوث وتطوير التدريب', 'Research & Training Development'],
+          ['d-train-prep', 'ASSISTANT_GENERAL', 'إعداد وتخطيط التدريب', 'Training Preparation & Planning'],
+          ['d-train-rd',   'ASSISTANT_GENERAL', 'البحوث وتطوير التدريب', 'Research & Training Development'],
         ]],
         ['g-comm', 'GENERAL', 'مدير عام الإتصال والعلاقات الحكومية', 'General Manager of Communication & Government Relations', [
-          ['d-comm-comm', 'DEPARTMENT', 'الإتصال', 'Communication'],
-          ['d-comm-gov',  'DEPARTMENT', 'العلاقات الحكومية', 'Government Relations'],
+          ['d-comm-comm', 'ASSISTANT_GENERAL', 'الإتصال', 'Communication'],
+          ['d-comm-gov',  'ASSISTANT_GENERAL', 'العلاقات الحكومية', 'Government Relations'],
         ]],
         ['p-admin-gm-affairs',    'POSITION', 'مدير عام بالشئون الإدارية (1)', 'General Manager, Administrative Affairs'],
         ['p-admin-gm-dept',       'POSITION', 'مدير عام بالإدارة (1)', 'General Manager within the department'],
@@ -78,26 +88,43 @@ const TREE = [
       // --- Assistant to President: Technical Services & Business Development ---
       ['sec-techsvc', 'SECTOR', 'مساعد رئيس الشركة للخدمات الفنية وتنمية الأعمال', 'Assistant to Company President for Technical Services & Business Development', [
         ['g-supply', 'GENERAL', 'مدير عام المهمات والعقود', 'General Manager of Supplies & Contracts', [
-          ['d-supply-purch', 'DEPARTMENT', 'المشتريات', 'Purchasing'],
-          ['d-supply-wh',    'DEPARTMENT', 'المخازن', 'Warehouses'],
-          ['d-supply-contr', 'DEPARTMENT', 'العقود', 'Contracts'],
+          ['d-supply-purch', 'ASSISTANT_GENERAL', 'المشتريات', 'Purchasing'],
+          ['d-supply-wh',    'ASSISTANT_GENERAL', 'المخازن', 'Warehouses'],
+          ['d-supply-contr', 'ASSISTANT_GENERAL', 'العقود', 'Contracts'],
           ['p-supply-gm-pers',     'POSITION', 'مدير عام بصفة شخصية (1)', 'General Manager, personal capacity'],
           ['p-supply-asstgm-pers', 'POSITION', 'مدير عام مساعد بصفة شخصية (4)', 'Assistant General Manager, personal capacity'],
         ]],
         ['g-bizdev', 'GENERAL', 'مدير عام تنمية الأعمال والتعاقدات الخارجية', 'General Manager of Business Development & External Contracting', [
-          ['d-bizdev-mkt', 'DEPARTMENT', 'تنمية الأعمال وبرامج التسويق', 'Business Development & Marketing Programs'],
-          ['d-bizdev-ext', 'DEPARTMENT', 'العقود والعروض الخارجية ومتابعة عقود المشروعات', 'External Contracts/Bids & Project Contract Follow-up'],
+          // Each AGM unit splits into two Department-Manager (DEPARTMENT) units,
+          // and each DEPARTMENT owns one same-named SECTION (Section Head + the
+          // SP/JP/FR staff inside it). Source: org chart approved 2026-06-22.
+          ['d-bizdev-mkt', 'ASSISTANT_GENERAL', 'تنمية الأعمال وبرامج التسويق', 'Business Development & Marketing Programs', [
+            ['dept-bizdev-mkt-programs', 'DEPARTMENT', 'برامج التسويق', 'Marketing Programs', [
+              ['sect-bizdev-mkt-programs', 'SECTION', 'برامج التسويق', 'Marketing Programs'],
+            ]],
+            ['dept-bizdev-mkt-bd', 'DEPARTMENT', 'تنمية الأعمال', 'Business Development', [
+              ['sect-bizdev-mkt-bd', 'SECTION', 'تنمية الأعمال', 'Business Development'],
+            ]],
+          ]],
+          ['d-bizdev-ext', 'ASSISTANT_GENERAL', 'العقود والعروض الخارجية ومتابعة عقود المشروعات', 'External Contracts/Bids & Project Contract Follow-up', [
+            ['dept-bizdev-ext-followup', 'DEPARTMENT', 'متابعة عقود المشروعات', 'Project Contract Follow-up', [
+              ['sect-bizdev-ext-followup', 'SECTION', 'متابعة عقود المشروعات', 'Project Contract Follow-up'],
+            ]],
+            ['dept-bizdev-ext-contracts', 'DEPARTMENT', 'العقود والعروض الخارجية', 'External Contracts & Offers', [
+              ['sect-bizdev-ext-contracts', 'SECTION', 'العقود والعروض الخارجية', 'External Contracts & Offers'],
+            ]],
+          ]],
         ]],
       ]],
 
       // --- Assistant to President: Financial Affairs ---
       ['sec-fin', 'SECTOR', 'مساعد رئيس الشركة للشئون المالية', 'Assistant to Company President for Financial Affairs', [
         ['g-fin', 'GENERAL', 'مدير عام الشئون المالية', 'General Manager of Financial Affairs', [
-          ['d-fin-cost', 'DEPARTMENT', 'التكاليف ومراقبة المشروعات والمقبوضات', 'Costs, Project Control & Receivables'],
-          ['d-fin-acct', 'DEPARTMENT', 'الحسابات والموازنة', 'Accounts & Budget'],
-          ['d-fin-wage', 'DEPARTMENT', 'الأجور وإستحقاقات العاملين', 'Wages & Employee Entitlements'],
-          ['d-fin-tax',  'DEPARTMENT', 'التمويل والضرائب', 'Finance & Taxes'],
-          ['d-fin-pay',  'DEPARTMENT', 'المدفوعات', 'Payments'],
+          ['d-fin-cost', 'ASSISTANT_GENERAL', 'التكاليف ومراقبة المشروعات والمقبوضات', 'Costs, Project Control & Receivables'],
+          ['d-fin-acct', 'ASSISTANT_GENERAL', 'الحسابات والموازنة', 'Accounts & Budget'],
+          ['d-fin-wage', 'ASSISTANT_GENERAL', 'الأجور وإستحقاقات العاملين', 'Wages & Employee Entitlements'],
+          ['d-fin-tax',  'ASSISTANT_GENERAL', 'التمويل والضرائب', 'Finance & Taxes'],
+          ['d-fin-pay',  'ASSISTANT_GENERAL', 'المدفوعات', 'Payments'],
           ['p-fin-asstgm-dept', 'POSITION', 'مدير عام مساعد بالإدارة (1)', 'Assistant General Manager within the department'],
         ]],
         ['p-fin-gm-pers',          'POSITION', 'مدير عام بصفة شخصية (1)', 'General Manager, personal capacity'],
@@ -107,9 +134,9 @@ const TREE = [
       // --- Assistant to President: Engineering Affairs ---
       ['sec-eng', 'SECTOR', 'مساعد رئيس الشركة للشئون الهندسية', 'Assistant to Company President for Engineering Affairs', [
         ['g-iis', 'GENERAL', 'مدير عام نظم المعلومات المتكاملة', 'General Manager of Integrated Information Systems', [
-          ['d-iis-infra', 'DEPARTMENT', 'البنية التحتية والشبكات وتشغيل وصيانة الأجهزة', 'Infrastructure, Networks & Hardware Operation/Maintenance'],
-          ['d-iis-db',    'DEPARTMENT', 'قواعد المعلومات والبرمجيات', 'Databases & Software'],
-          ['d-iis-cairo', 'DEPARTMENT', 'البرمجيات وصيانة الأجهزة والشبكات بالقاهرة', 'Software & Hardware/Network Maintenance (Cairo)'],
+          ['d-iis-infra', 'ASSISTANT_GENERAL', 'البنية التحتية والشبكات وتشغيل وصيانة الأجهزة', 'Infrastructure, Networks & Hardware Operation/Maintenance'],
+          ['d-iis-db',    'ASSISTANT_GENERAL', 'قواعد المعلومات والبرمجيات', 'Databases & Software'],
+          ['d-iis-cairo', 'ASSISTANT_GENERAL', 'البرمجيات وصيانة الأجهزة والشبكات بالقاهرة', 'Software & Hardware/Network Maintenance (Cairo)'],
           ['p-iis-asstgm-pers', 'POSITION', 'مدير عام مساعد بصفة شخصية (2)', 'Assistant General Manager, personal capacity'],
         ]],
       ]],
@@ -117,9 +144,9 @@ const TREE = [
       // --- Assistant to President: Operations ---
       ['sec-ops', 'SECTOR', 'مساعد رئيس الشركة للعمليات', 'Assistant to Company President for Operations', [
         ['g-techoff', 'GENERAL', 'مدير عام المكتب الفني للوثائق', 'General Manager of Technical Office for Documents', [
-          ['d-techoff-eng',  'DEPARTMENT', 'المكتب الفني للشئون الهندسية', 'Technical Office, Engineering Affairs'],
-          ['d-techoff-ctrl', 'DEPARTMENT', 'المكتب الفني لنظم التحكم', 'Technical Office, Control Systems'],
-          ['d-techoff-insp', 'DEPARTMENT', 'المكتب الفني للتفتيش الهندسي (الدعم الفني)', 'Technical Office, Engineering Inspection (Technical Support)'],
+          ['d-techoff-eng',  'ASSISTANT_GENERAL', 'المكتب الفني للشئون الهندسية', 'Technical Office, Engineering Affairs'],
+          ['d-techoff-ctrl', 'ASSISTANT_GENERAL', 'المكتب الفني لنظم التحكم', 'Technical Office, Control Systems'],
+          ['d-techoff-insp', 'ASSISTANT_GENERAL', 'المكتب الفني للتفتيش الهندسي (الدعم الفني)', 'Technical Office, Engineering Inspection (Technical Support)'],
           ['p-techoff-gm-pers',     'POSITION', 'مدير عام بصفة شخصية (1)', 'General Manager, personal capacity'],
           ['p-techoff-asstgm-pers', 'POSITION', 'مدير عام مساعد بصفة شخصية (1)', 'Assistant General Manager, personal capacity'],
         ]],
@@ -128,9 +155,9 @@ const TREE = [
       // --- Assistant to President: Technical Affairs ---
       ['sec-tech', 'SECTOR', 'مساعد رئيس الشركة للشئون الفنية', 'Assistant to Company President for Technical Affairs', [
         ['g-techsup', 'GENERAL', 'مدير عام الدعم الفني للمشروعات', 'General Manager of Technical Support for Projects', [
-          ['d-techsup-util', 'DEPARTMENT', 'الدعم الفني للمرافق والمستودعات', 'Technical Support for Utilities & Storage'],
-          ['d-techsup-ops',  'DEPARTMENT', 'الدعم الفني للعمليات', 'Technical Support for Operations'],
-          ['d-techsup-perf', 'DEPARTMENT', 'الدعم الفني لمتابعة تقييم الأداء وبرامج العمل', 'Technical Support for Performance Evaluation & Work Programs'],
+          ['d-techsup-util', 'ASSISTANT_GENERAL', 'الدعم الفني للمرافق والمستودعات', 'Technical Support for Utilities & Storage'],
+          ['d-techsup-ops',  'ASSISTANT_GENERAL', 'الدعم الفني للعمليات', 'Technical Support for Operations'],
+          ['d-techsup-perf', 'ASSISTANT_GENERAL', 'الدعم الفني لمتابعة تقييم الأداء وبرامج العمل', 'Technical Support for Performance Evaluation & Work Programs'],
           ['p-techsup-gm-pers', 'POSITION', 'مدير عام بصفة شخصية (1)', 'General Manager, personal capacity'],
         ]],
         ['g-canal', 'GENERAL', 'مدير عام التشغيل بمدن القناة وسيناء', 'General Manager of Operations: Canal Cities & Sinai', REGIONAL('canal')],
@@ -145,37 +172,37 @@ const TREE = [
 
       // --- Standalone units reporting to the Chairman ---
       ['g-techfollow', 'GENERAL', 'مدير عام المتابعة الفنية (مكتب القاهرة)', 'General Manager of Technical Follow-up, Cairo Office', [
-        ['d-tf-studies', 'DEPARTMENT', 'الدراسات الفنية', 'Technical Studies'],
-        ['d-tf-eng',     'DEPARTMENT', 'متابعة الشئون الهندسية', 'Engineering Affairs Follow-up'],
+        ['d-tf-studies', 'ASSISTANT_GENERAL', 'الدراسات الفنية', 'Technical Studies'],
+        ['d-tf-eng',     'ASSISTANT_GENERAL', 'متابعة الشئون الهندسية', 'Engineering Affairs Follow-up'],
       ]],
       ['g-security', 'GENERAL', 'مدير عام الأمن', 'General Manager of Security', [
         ['p-security-asstgm', 'POSITION', 'مدير عام مساعد الأمن (1)', 'Assistant General Manager, Security'],
       ]],
       ['g-legal', 'GENERAL', 'مدير عام الشئون القانونية', 'General Manager of Legal Affairs', [
-        ['d-legal-lit', 'DEPARTMENT', 'القضايا', 'Litigation'],
-        ['d-legal-inv', 'DEPARTMENT', 'التحقيقات', 'Investigations'],
+        ['d-legal-lit', 'ASSISTANT_GENERAL', 'القضايا', 'Litigation'],
+        ['d-legal-inv', 'ASSISTANT_GENERAL', 'التحقيقات', 'Investigations'],
         ['p-legal-asstgm-pers', 'POSITION', 'مدير عام مساعد بصفة شخصية (2)', 'Assistant General Manager, personal capacity'],
       ]],
       ['g-secretariat', 'GENERAL', 'مدير عام الأمانة العامة وسكرتارية رئيس مجلس الإدارة', 'General Manager of General Secretariat & Board Chairman Secretariat', [
-        ['d-sec-board', 'DEPARTMENT', 'الأمانة العامة لمجلس الإدارة', 'General Secretariat of the Board'],
-        ['d-sec-chair', 'DEPARTMENT', 'سكرتارية رئيس مجلس الإدارة', "Board Chairman's Secretariat"],
+        ['d-sec-board', 'ASSISTANT_GENERAL', 'الأمانة العامة لمجلس الإدارة', 'General Secretariat of the Board'],
+        ['d-sec-chair', 'ASSISTANT_GENERAL', 'سكرتارية رئيس مجلس الإدارة', "Board Chairman's Secretariat"],
         ['p-secretariat-asstgm-pers', 'POSITION', 'مدير عام مساعد بصفة شخصية (1)', 'Assistant General Manager, personal capacity'],
       ]],
       ['p-erc-maint-gm', 'POSITION', 'مدير عام بالإدارة العامة للصيانة العامة — بمشروع المصرية للتكرير (ERC project)', 'General Manager, General Maintenance (at ERC refining project)'],
       ['g-medical', 'GENERAL', 'مدير عام الشئون الطبية', 'General Manager of Medical Affairs', [
-        ['d-med-prev', 'DEPARTMENT', 'الطب الوقائي', 'Preventive Medicine'],
-        ['d-med-cur',  'DEPARTMENT', 'الطب العلاجي', 'Curative Medicine'],
+        ['d-med-prev', 'ASSISTANT_GENERAL', 'الطب الوقائي', 'Preventive Medicine'],
+        ['d-med-cur',  'ASSISTANT_GENERAL', 'الطب العلاجي', 'Curative Medicine'],
       ]],
       ['g-energy', 'GENERAL', 'مدير عام ترشيد الطاقة', 'General Manager of Energy Rationalization', [
-        ['d-energy-impl',    'DEPARTMENT', 'تنفيذ مشروعات رفع كفاءة الطاقة', 'Energy Efficiency Project Implementation'],
-        ['d-energy-studies', 'DEPARTMENT', 'دراسات رفع كفاءة الطاقة', 'Energy Efficiency Studies'],
+        ['d-energy-impl',    'ASSISTANT_GENERAL', 'تنفيذ مشروعات رفع كفاءة الطاقة', 'Energy Efficiency Project Implementation'],
+        ['d-energy-studies', 'ASSISTANT_GENERAL', 'دراسات رفع كفاءة الطاقة', 'Energy Efficiency Studies'],
       ]],
       ['g-quality', 'GENERAL', 'مدير عام نظم الجودة', 'General Manager of Quality Systems', [
         ['p-quality-asstgm', 'POSITION', 'مدير عام مساعد نظم الجودة (1)', 'Assistant General Manager, Quality Systems'],
       ]],
       ['g-psafety', 'GENERAL', 'مدير عام سلامة العمليات', 'General Manager of Process Safety', [
-        ['d-ps-tech', 'DEPARTMENT', 'السلامة الفنية ومنع الخسائر', 'Technical Safety & Loss Prevention'],
-        ['d-ps-ops',  'DEPARTMENT', 'السلامة التشغيلية', 'Operational Safety'],
+        ['d-ps-tech', 'ASSISTANT_GENERAL', 'السلامة الفنية ومنع الخسائر', 'Technical Safety & Loss Prevention'],
+        ['d-ps-ops',  'ASSISTANT_GENERAL', 'السلامة التشغيلية', 'Operational Safety'],
       ]],
 
       // --- Titled posts reporting to the Chairman ---

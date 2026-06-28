@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { User, Skill, Role } from '../types';
+import { User, Skill, Role, EvaluationQuestion } from '../types';
 import { dataService } from '../services/store';
 import { useStoreData } from '../hooks/useStoreData';
 import {
@@ -13,7 +13,9 @@ import {
   ClipboardCheck,
   Search,
   ArrowRight,
-  ShieldAlert
+  ShieldAlert,
+  ListChecks,
+  HelpCircle
 } from 'lucide-react';
 
 interface ManagerialInterviewsProps {
@@ -24,6 +26,10 @@ export const ManagerialInterviews: React.FC<ManagerialInterviewsProps> = ({ curr
   const [selectedSubordinateId, setSelectedSubordinateId] = useState<string | null>(null);
   const [selectedSkillId, setSelectedSkillId] = useState<string | null>(null);
   const [score, setScore] = useState<number>(3);
+  // Per-question interview ratings (1-5), keyed by question id. Used when the
+  // skill defines predefined Evaluation Guide questions; the overall score is
+  // then derived from these instead of a single manual rating.
+  const [questionRatings, setQuestionRatings] = useState<Record<string, number>>({});
   const [comment, setComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
@@ -56,6 +62,50 @@ export const ManagerialInterviews: React.FC<ManagerialInterviewsProps> = ({ curr
     [selectedSubordinate, storeVersion]
   );
 
+  // Predefined interview questions for the selected subordinate + skill, pulled
+  // from the skill library's INTERVIEW / PRACTICAL_DEMO method blocks (audience-
+  // filtered for this employee). Gives the interviewer a structured script to
+  // evaluate against.
+  const interviewGuide = useMemo(() => {
+    if (!selectedSubordinateId || !selectedSkillId) return { prompts: [] as string[], questions: [] as EvaluationQuestion[] };
+    const blocks = dataService
+      .getApplicableMethodsForUserSkill(selectedSubordinateId, selectedSkillId)
+      .filter(m => m.method === 'INTERVIEW' || m.method === 'PRACTICAL_DEMO');
+    const prompts = blocks
+      .map(b => b.assessmentQuestion?.trim())
+      .filter((p): p is string => !!p);
+    const seen = new Set<string>();
+    const questions: EvaluationQuestion[] = [];
+    for (const b of blocks) {
+      for (const q of b.questions || []) {
+        if (seen.has(q.id)) continue;
+        seen.add(q.id);
+        questions.push(q);
+      }
+    }
+    return { prompts: Array.from(new Set(prompts)), questions };
+  }, [selectedSubordinateId, selectedSkillId, storeVersion]);
+
+  // When a skill has predefined questions, the overall interview score is the
+  // weight-aware average of the per-question ratings (rounded to one decimal).
+  // Falls back to a simple average when no weights are configured.
+  const hasGuideQuestions = interviewGuide.questions.length > 0;
+  const ratedCount = interviewGuide.questions.filter(q => !!questionRatings[q.id]).length;
+  const computedScore = useMemo(() => {
+    if (!hasGuideQuestions) return null;
+    const rated = interviewGuide.questions.filter(q => !!questionRatings[q.id]);
+    if (rated.length === 0) return 0;
+    const totalWeight = rated.reduce((sum, q) => sum + (q.weight && q.weight > 0 ? q.weight : 1), 0);
+    const weighted = rated.reduce((sum, q) => sum + questionRatings[q.id] * (q.weight && q.weight > 0 ? q.weight : 1), 0);
+    return Math.round((weighted / totalWeight) * 10) / 10;
+  }, [hasGuideQuestions, interviewGuide.questions, questionRatings]);
+
+  const selectSkill = (skillId: string | null) => {
+    setSelectedSkillId(skillId);
+    setQuestionRatings({});
+    setScore(3);
+  };
+
   const getSkillStatus = (userId: string, skillId: string) => {
     const assessments = dataService.getAssessments({ subjectId: userId, skillId });
     return assessments
@@ -67,23 +117,38 @@ export const ManagerialInterviews: React.FC<ManagerialInterviewsProps> = ({ curr
     e.preventDefault();
     if (!selectedSubordinateId || !selectedSkillId) return;
 
+    // When the skill has predefined questions, every one must be rated and the
+    // overall score is derived from them; otherwise fall back to the single rating.
+    let finalScore = score;
+    let questionScores: { questionId: string; score: number }[] | undefined;
+    if (hasGuideQuestions) {
+      if (ratedCount < interviewGuide.questions.length) {
+        alert('Please rate every question before submitting.');
+        return;
+      }
+      finalScore = computedScore ?? 0;
+      questionScores = interviewGuide.questions.map(q => ({ questionId: q.id, score: questionRatings[q.id] }));
+    }
+
     setIsSubmitting(true);
     try {
       await dataService.addAssessment({
         raterId: currentUser.id,
         subjectId: selectedSubordinateId,
         skillId: selectedSkillId,
-        score,
+        score: finalScore,
         comment,
         method: 'INTERVIEW',
-        type: 'INTERVIEW'
+        type: 'INTERVIEW',
+        ...(questionScores ? { questionScores } : {}),
       });
-      
+
       setSuccessMessage('Interview result recorded successfully.');
       setSelectedSkillId(null);
       setComment('');
       setScore(3);
-      
+      setQuestionRatings({});
+
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {
       console.error(err);
@@ -207,7 +272,7 @@ export const ManagerialInterviews: React.FC<ManagerialInterviewsProps> = ({ curr
             {subordinates.map(sub => (
               <button
                 key={sub.id}
-                onClick={() => { setSelectedSubordinateId(sub.id); setSelectedSkillId(null); }}
+                onClick={() => { setSelectedSubordinateId(sub.id); selectSkill(null); }}
                 className={`w-full text-left p-4 flex items-center gap-4 transition-all ${selectedSubordinateId === sub.id ? 'bg-slate-50 border-l-4 border-slate-900' : 'hover:bg-slate-50 border-l-4 border-transparent'}`}
               >
                 <div className="w-10 h-10 rounded-none bg-slate-100 border border-slate-300 flex-shrink-0 overflow-hidden">
@@ -272,7 +337,7 @@ export const ManagerialInterviews: React.FC<ManagerialInterviewsProps> = ({ curr
                         <div 
                           key={skill.id}
                           className={`p-4 border transition-all cursor-pointer relative ${isSelected ? 'border-slate-900 bg-slate-50 shadow-md ring-1 ring-slate-900' : 'border-slate-200 hover:border-slate-300'}`}
-                          onClick={() => setSelectedSkillId(skill.id)}
+                          onClick={() => selectSkill(skill.id)}
                         >
                           {isSelected && <div className="absolute top-0 right-0 p-1 bg-slate-900 text-white"><CheckCircle size={14} /></div>}
                           <div className="flex justify-between items-start gap-4">
@@ -319,25 +384,100 @@ export const ManagerialInterviews: React.FC<ManagerialInterviewsProps> = ({ curr
                         </div>
                       </div>
 
-                      <div>
-                        <label className="block text-xs font-black text-slate-900 uppercase tracking-widest mb-3">Interview Result (1-5)</label>
-                        <div className="flex gap-4">
-                          {[1, 2, 3, 4, 5].map(num => (
-                            <button
-                              key={num}
-                              type="button"
-                              onClick={() => setScore(num)}
-                              className={`w-12 h-12 flex items-center justify-center font-black text-lg transition-all border ${score === num ? 'bg-slate-900 text-white border-black scale-110 shadow-lg' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-500'}`}
-                            >
-                              {num}
-                            </button>
-                          ))}
+                      {(interviewGuide.prompts.length > 0 || interviewGuide.questions.length > 0) ? (
+                        <div className="border border-slate-300 bg-slate-50">
+                          <div className="px-4 py-3 border-b border-slate-200 bg-white flex items-center gap-2">
+                            <ListChecks size={16} className="text-blue-600" />
+                            <span className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Evaluation Guide — Predefined Questions</span>
+                          </div>
+                          <div className="p-4 space-y-4">
+                            {interviewGuide.prompts.map((prompt, i) => (
+                              <p key={`prompt-${i}`} className="text-sm text-slate-700 italic leading-relaxed">{prompt}</p>
+                            ))}
+                            {interviewGuide.questions.length > 0 && (
+                              <ol className="space-y-4">
+                                {interviewGuide.questions.map((q, i) => (
+                                  <li key={q.id} className="flex gap-3 pb-4 border-b border-slate-200 last:border-b-0 last:pb-0">
+                                    <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-slate-900 text-white text-[11px] font-black">{i + 1}</span>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-start justify-between gap-2">
+                                        <div className="min-w-0">
+                                          {q.title && <div className="text-xs font-black text-slate-900 uppercase tracking-tight">{q.title}</div>}
+                                          <p className="text-sm text-slate-800 font-medium leading-snug">{q.text}</p>
+                                        </div>
+                                        {q.weight && q.weight > 0 && (
+                                          <span className="flex-shrink-0 text-[9px] font-black uppercase tracking-tight text-slate-500 bg-white border border-slate-200 px-1.5 py-0.5">Weight {q.weight}%</span>
+                                        )}
+                                      </div>
+                                      {q.expectedCriteria && (
+                                        <p className="text-xs text-slate-500 mt-1 flex items-start gap-1.5">
+                                          <HelpCircle size={12} className="mt-0.5 flex-shrink-0 text-emerald-600" />
+                                          <span><span className="font-bold uppercase tracking-tight text-emerald-700">Look for: </span>{q.expectedCriteria}</span>
+                                        </p>
+                                      )}
+                                      <div className="mt-2 flex items-center gap-2">
+                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mr-1">Rate</span>
+                                        {[1, 2, 3, 4, 5].map(num => (
+                                          <button
+                                            key={num}
+                                            type="button"
+                                            onClick={() => setQuestionRatings(prev => ({ ...prev, [q.id]: num }))}
+                                            className={`w-8 h-8 flex items-center justify-center font-black text-sm transition-all border ${questionRatings[q.id] === num ? 'bg-slate-900 text-white border-black scale-110 shadow' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-500'}`}
+                                          >
+                                            {num}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </li>
+                                ))}
+                              </ol>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex justify-between mt-2 px-1">
-                           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Unsatisfactory</span>
-                           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Mastery</span>
+                      ) : (
+                        <div className="border border-slate-200 border-dashed bg-slate-50 px-4 py-3 flex items-center gap-2 text-slate-500">
+                          <HelpCircle size={14} />
+                          <span className="text-xs italic">No predefined questions configured for this skill. Conduct the interview based on the required proficiency level.</span>
                         </div>
-                      </div>
+                      )}
+
+                      {hasGuideQuestions ? (
+                        <div className="bg-slate-900 text-white p-4 flex items-center justify-between">
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total Interview Rating</p>
+                            <p className="text-xs text-slate-300 mt-0.5">
+                              {interviewGuide.questions.some(q => q.weight && q.weight > 0)
+                                ? 'Weighted average of the per-question ratings.'
+                                : 'Average of the per-question ratings.'}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-3xl font-black leading-none">{ratedCount === interviewGuide.questions.length ? computedScore : '—'}<span className="text-lg text-slate-400">/5</span></div>
+                            <div className="text-[9px] font-bold text-slate-400 uppercase tracking-wide mt-1">{ratedCount}/{interviewGuide.questions.length} Questions Rated</div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <label className="block text-xs font-black text-slate-900 uppercase tracking-widest mb-3">Interview Result (1-5)</label>
+                          <div className="flex gap-4">
+                            {[1, 2, 3, 4, 5].map(num => (
+                              <button
+                                key={num}
+                                type="button"
+                                onClick={() => setScore(num)}
+                                className={`w-12 h-12 flex items-center justify-center font-black text-lg transition-all border ${score === num ? 'bg-slate-900 text-white border-black scale-110 shadow-lg' : 'bg-white text-slate-600 border-slate-300 hover:border-slate-500'}`}
+                              >
+                                {num}
+                              </button>
+                            ))}
+                          </div>
+                          <div className="flex justify-between mt-2 px-1">
+                             <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Unsatisfactory</span>
+                             <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Mastery</span>
+                          </div>
+                        </div>
+                      )}
 
                       <div>
                         <label className="block text-xs font-black text-slate-900 uppercase tracking-widest mb-3">Interviewer Comments & Notes</label>
@@ -353,15 +493,15 @@ export const ManagerialInterviews: React.FC<ManagerialInterviewsProps> = ({ curr
                       <div className="flex gap-3">
                          <button
                            type="button"
-                           onClick={() => setSelectedSkillId(null)}
+                           onClick={() => selectSkill(null)}
                            className="px-6 py-3 border border-slate-300 text-slate-600 font-bold uppercase tracking-wider text-xs hover:bg-slate-50 transition-all"
                          >
                            Cancel
                          </button>
                          <button
                           type="submit"
-                          disabled={isSubmitting}
-                          className="flex-grow bg-blue-700 hover:bg-blue-800 text-white font-bold py-3 uppercase tracking-wider text-xs flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                          disabled={isSubmitting || (hasGuideQuestions && ratedCount < interviewGuide.questions.length)}
+                          className="flex-grow bg-blue-700 hover:bg-blue-800 text-white font-bold py-3 uppercase tracking-wider text-xs flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {isSubmitting ? 'Recording...' : 'Update Assessment Result'}
                           <ArrowRight size={16} />

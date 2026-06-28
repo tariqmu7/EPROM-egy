@@ -1,20 +1,18 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { dataService } from '../services/store';
 import { useStoreData } from '../hooks/useStoreData';
-import { User, Skill } from '../types';
+import { User } from '../types';
 import { PROFICIENCY_DEFINITIONS } from '../constants';
-import { Star, MessageSquare, Send, CheckCircle, User as UserIcon, Search, AlertTriangle, Check, X } from 'lucide-react';
+import { Star, MessageSquare, Send, CheckCircle, User as UserIcon, AlertTriangle } from 'lucide-react';
 
 const UserCard = ({ user, isSelected, onClick, role, isSelf }: { user: User, isSelected: boolean, onClick: () => void, role?: string, isSelf?: boolean }) => {
-  const jobProfile = user.jobProfileId ? dataService.getJobProfile(user.jobProfileId) : null;
-  
   return (
     <button
       type="button"
       onClick={onClick}
       className={`flex flex-col items-center p-4 border-2 transition-all group relative ${
-        isSelected 
-          ? 'border-slate-900 bg-slate-900 text-white shadow-xl -translate-y-1' 
+        isSelected
+          ? 'border-slate-900 bg-slate-900 text-white shadow-xl -translate-y-1'
           : 'border-slate-200 bg-white hover:border-slate-400 text-slate-800'
       }`}
     >
@@ -52,37 +50,7 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
   const [successMessage, setSuccessMessage] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
 
-  const [evalType, setEvalType] = useState<'OTHER_SKILLS' | 'ANNUAL_APPRAISAL'>('OTHER_SKILLS');
-  // Tri-state: null = not yet answered (W1.1 — no silent "all No"); true = Yes; false = No.
-  const [appraisalAnswers, setAppraisalAnswers] = useState<(boolean | null)[]>([]);
-
   const storeVersion = useStoreData();
-
-  // Active annual appraisal plan; falls back to built-in questions if none configured
-  const annualAppraisalPlan = useMemo(() => {
-    return dataService.getAllAssessmentPlans().find(
-      p => p.method === 'ANNUAL_APPRAISAL' && p.status === 'ACTIVE'
-    ) ?? null;
-  }, [storeVersion]);
-
-  const ANNUAL_APPRAISAL_QUESTIONS = useMemo(() => {
-    if (annualAppraisalPlan?.annualAppraisalQuestions?.length) {
-      return annualAppraisalPlan.annualAppraisalQuestions;
-    }
-    // Built-in fallback when no plan is configured
-    return [
-      { id: 'q1', title: "Health, Safety, and Environment (HSE) Compliance", text: "Did the employee consistently adhere to, and actively promote, all safety protocols and HSE guidelines without any recorded compliance violations this year?", weight: 10 },
-      { id: 'q2', title: "Technical Execution and Quality", text: "Did the employee successfully execute their assigned technical tasks, field operations, or project deliverables to the required quality standards?", weight: 10 },
-      { id: 'q3', title: "Problem Solving and Troubleshooting", text: "Did the employee demonstrate the ability to independently and safely resolve unexpected technical, mechanical, or operational challenges on-site or during project design?", weight: 10 },
-      { id: 'q4', title: "Multidisciplinary Collaboration", text: "Did the employee collaborate effectively across different roles (e.g., engineers working well with technicians and management) to keep projects moving smoothly?", weight: 10 },
-      { id: 'q5', title: "Operational Efficiency and Resource Management", text: "Did the employee manage company resources—such as time, field equipment, materials, or budget—efficiently and responsibly?", weight: 10 },
-      { id: 'q6', title: "Adaptability Under Pressure", text: "Did the employee adapt successfully to sudden changes in project scope, shifting site conditions, or emergency operational demands?", weight: 10 },
-      { id: 'q7', title: "Clear Technical Communication", text: "Did the employee consistently communicate critical project updates, technical data, and potential operational risks clearly to their supervisors and team members?", weight: 10 },
-      { id: 'q8', title: "Continuous Improvement and Innovation", text: "Did the employee suggest or implement any process optimizations, cost-saving measures, or new technical approaches that benefited the team or project?", weight: 10 },
-      { id: 'q9', title: "Knowledge Sharing and Mentorship", text: "Did the employee actively share their technical expertise, assist peers with complex tasks, or help guide junior staff/technicians?", weight: 10 },
-      { id: 'q10', title: "Professional Development", text: "Did the employee complete required industry training and actively work to update their technical skills or certifications relevant to the energy sector?", weight: 10 }
-    ];
-  }, [annualAppraisalPlan]);
 
   const users = useMemo(() => dataService.getPublicUsers(), [storeVersion]);
 
@@ -110,13 +78,13 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
   // The selection of behavioral competency must be related to the department of selected employee
   const availableSkills = useMemo(() => {
     if (!selectedEmployee) return [];
-    
+
     const department = dataService.getAllDepartments().find(d => d.id === selectedEmployee.departmentId);
     const jobProfile = selectedEmployee.jobProfileId ? dataService.getJobProfile(selectedEmployee.jobProfileId) : null;
 
     // 1. Get behavioral skills from Department defaults
     const deptSkillIds = department?.behavioralSkillIds || [];
-    
+
     // 2. Get skills from Job Profile requirements for this specific Hierarchy Level (orgLevel)
     const jobSkillIds = jobProfile
       ? dataService.getEffectiveRequirements(jobProfile).map(req => req.skillId)
@@ -124,97 +92,38 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
 
     // 3. Combine and deduplicate skill IDs
     const allRelevantSkillIds = Array.from(new Set([...deptSkillIds, ...jobSkillIds]));
-    
+
     // 4. Filter for relevant categories
     const targetCategories = ['Behavioral', 'Management', 'Soft Skills'];
-    
-    return dataService.getAllSkills().filter(s => 
-      targetCategories.includes(s.category) && 
+
+    return dataService.getAllSkills().filter(s =>
+      targetCategories.includes(s.category) &&
       allRelevantSkillIds.includes(s.id)
     );
   }, [selectedEmployee, storeVersion]);
 
   const existingAssessment = useMemo(() => {
     if (!selectedSubjectId || !selectedSkillId) return null;
-    return dataService.getAssessments({ 
-      raterId: currentUser.id, 
-      subjectId: selectedSubjectId, 
-      skillId: selectedSkillId 
-    }).find(Boolean) || null;
-  }, [selectedSubjectId, selectedSkillId, currentUser.id, storeVersion]);
-
-  const existingAppraisal = useMemo(() => {
-    if (!selectedSubjectId) return null;
     return dataService.getAssessments({
       raterId: currentUser.id,
       subjectId: selectedSubjectId,
-      skillId: 'annual-appraisal'
+      skillId: selectedSkillId
     }).find(Boolean) || null;
-  }, [selectedSubjectId, currentUser.id, storeVersion]);
+  }, [selectedSubjectId, selectedSkillId, currentUser.id, storeVersion]);
 
   useEffect(() => {
-    if (evalType === 'OTHER_SKILLS') {
-      if (existingAssessment) {
-        setRating(existingAssessment.score);
-        setFeedback(existingAssessment.comment || '');
-      } else {
-        setRating(0);
-        setFeedback('');
-      }
+    if (existingAssessment) {
+      setRating(existingAssessment.score);
+      setFeedback(existingAssessment.comment || '');
     } else {
-      const qCount = ANNUAL_APPRAISAL_QUESTIONS.length;
-      if (existingAppraisal) {
-        let answers: (boolean | null)[] = new Array(qCount).fill(null);
-        let parsedFeedback = existingAppraisal.comment || '';
-        if (Array.isArray(existingAppraisal.appraisalAnswers)) {
-            // Preferred: structured typed field (W1.2 / C.2).
-            const stored = existingAppraisal.appraisalAnswers;
-            answers = Array.from({ length: qCount }, (_, i) =>
-              i < stored.length ? Boolean(stored[i]) : null
-            );
-        } else if (parsedFeedback.startsWith('[APPRAISAL_DATA:')) {
-            // Legacy read-time migration: answers packed into the comment string.
-            const endIdx = parsedFeedback.indexOf(']');
-            if (endIdx !== -1) {
-                const data = parsedFeedback.substring(16, endIdx);
-                try {
-                    const parsedAnswers = JSON.parse(`[${data}]`);
-                    if (Array.isArray(parsedAnswers)) {
-                        // Pad or truncate to match current question count
-                        answers = Array.from({ length: qCount }, (_, i) =>
-                          i < parsedAnswers.length ? Boolean(parsedAnswers[i]) : null
-                        );
-                    }
-                } catch (e) {
-                    console.warn(
-                        `[BehavioralAssessment] Malformed APPRAISAL_DATA for appraisal ${existingAppraisal.id} — ` +
-                        `falling back to default answers.`,
-                        e
-                    );
-                }
-                parsedFeedback = parsedFeedback.substring(endIdx + 1).trim();
-            }
-        } else {
-            // Oldest legacy format: score was count of yes answers
-            answers = new Array(qCount).fill(false).map((_, i) => i < existingAppraisal.score);
-        }
-        setAppraisalAnswers(answers);
-        setFeedback(parsedFeedback);
-      } else {
-        setAppraisalAnswers(new Array(qCount).fill(null));
-        setFeedback('');
-      }
+      setRating(0);
+      setFeedback('');
     }
-  }, [evalType, existingAssessment, existingAppraisal, selectedSubjectId, selectedSkillId, ANNUAL_APPRAISAL_QUESTIONS]);
+  }, [existingAssessment, selectedSubjectId, selectedSkillId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (evalType === 'OTHER_SKILLS' && (!selectedSubjectId || !selectedSkillId || rating === 0)) return;
-    if (evalType === 'ANNUAL_APPRAISAL' && !selectedSubjectId) return;
-    // W1.1 — every appraisal row must be explicitly answered before submit.
-    if (evalType === 'ANNUAL_APPRAISAL' &&
-        (appraisalAnswers.length !== ANNUAL_APPRAISAL_QUESTIONS.length ||
-         appraisalAnswers.some(a => a === null))) return;
+    if (!selectedSubjectId || !selectedSkillId || rating === 0) return;
     if (isSubmitting) return;
 
     setIsSubmitting(true);
@@ -237,40 +146,21 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
             ? 'PEER'
             : 'UPWARD';
 
-      if (evalType === 'ANNUAL_APPRAISAL') {
-        const answers = appraisalAnswers.map(a => a === true);
-        const totalWeight = ANNUAL_APPRAISAL_QUESTIONS.reduce((s, q) => s + (q.weight ?? 10), 0);
-        const earnedWeight = ANNUAL_APPRAISAL_QUESTIONS.reduce((s, q, i) =>
-          s + (answers[i] ? (q.weight ?? 10) : 0), 0);
-        const score = totalWeight > 0 ? Math.round((earnedWeight / totalWeight) * 100) : 0;
-        await dataService.addAssessment({
-          raterId: currentUser.id,
-          subjectId: selectedSubjectId,
-          skillId: 'annual-appraisal',
-          score: score,
-          comment: feedback,
-          appraisalAnswers: answers,
-          method: 'OJT_OBSERVATION',
-          type: typeAssignment
-        });
-      } else {
-        await dataService.addAssessment({
-          raterId: currentUser.id,
-          subjectId: selectedSubjectId,
-          skillId: selectedSkillId,
-          score: rating,
-          comment: feedback,
-          method: 'OJT_OBSERVATION',
-          type: typeAssignment
-        });
-      }
+      await dataService.addAssessment({
+        raterId: currentUser.id,
+        subjectId: selectedSubjectId,
+        skillId: selectedSkillId,
+        score: rating,
+        comment: feedback,
+        method: 'OJT_OBSERVATION',
+        type: typeAssignment
+      });
 
       setSuccessMessage(isSelf ? 'Self-evaluation submitted successfully.' : 'Feedback submitted successfully.');
       setSelectedSubjectId('');
       setSelectedSkillId('');
       setRating(0);
       setFeedback('');
-      setAppraisalAnswers(new Array(ANNUAL_APPRAISAL_QUESTIONS.length).fill(null));
 
       setTimeout(() => setSuccessMessage(''), 3000);
     } finally {
@@ -301,7 +191,7 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
             </div>
             <div className="relative max-w-xs w-full">
               <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-              <input 
+              <input
                 type="text"
                 placeholder="Search team members..."
                 className="w-full pl-10 pr-4 py-2 bg-white border border-slate-300 text-sm focus:ring-2 focus:ring-slate-900 outline-none transition-all"
@@ -311,7 +201,7 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
             </div>
           </div>
         </div>
-        
+
         <div className="p-8 space-y-12">
           {/* Relationship Categories */}
           {[
@@ -320,7 +210,7 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
             { title: 'My Colleagues (Peers)', users: peers, role: 'Peer' },
             { title: 'My Direct Reports', users: subordinates, role: 'Team' }
           ].map((category, idx) => {
-            const filteredUsers = category.users.filter(u => 
+            const filteredUsers = category.users.filter(u =>
               u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
               u.employeeId?.toString().includes(searchTerm)
             );
@@ -336,11 +226,11 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                   {filteredUsers.map(user => (
-                    <UserCard 
-                      key={user.id} 
-                      user={user} 
-                      isSelected={selectedSubjectId === user.id} 
-                      onClick={() => setSelectedSubjectId(user.id)} 
+                    <UserCard
+                      key={user.id}
+                      user={user}
+                      isSelected={selectedSubjectId === user.id}
+                      onClick={() => setSelectedSubjectId(user.id)}
                       role={category.role}
                       isSelf={user.id === currentUser.id}
                     />
@@ -362,192 +252,84 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
         <form onSubmit={handleSubmit} className="space-y-6">
           {selectedSubjectId ? (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2">Selected Employee</label>
-                  <div className="w-full bg-slate-100 border border-slate-300 text-slate-700 text-sm rounded-sm p-3  font-medium">
-                    {selectedEmployee?.name} {selectedEmployee?.id === currentUser.id ? '(Self)' : ''}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2">Evaluation Type</label>
-                  <div className="flex bg-slate-100 border border-slate-300 rounded-sm overflow-hidden p-1">
-                    <button
-                      type="button"
-                      onClick={() => setEvalType('OTHER_SKILLS')}
-                      className={`flex-1 py-2 px-4 text-sm font-bold transition-colors rounded-sm ${
-                        evalType === 'OTHER_SKILLS' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'
-                      }`}
-                    >
-                      Other Skills Evaluation
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEvalType('ANNUAL_APPRAISAL')}
-                      className={`flex-1 py-2 px-4 text-sm font-bold transition-colors rounded-sm ${
-                        evalType === 'ANNUAL_APPRAISAL' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'
-                      }`}
-                    >
-                      Annual Appraisal
-                    </button>
-                  </div>
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Selected Employee</label>
+                <div className="w-full bg-slate-100 border border-slate-300 text-slate-700 text-sm rounded-sm p-3  font-medium">
+                  {selectedEmployee?.name} {selectedEmployee?.id === currentUser.id ? '(Self)' : ''}
                 </div>
               </div>
 
-              {evalType === 'OTHER_SKILLS' ? (
-                <>
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-2">Other Skills Evaluation</label>
-                    <select 
-                      required
-                      value={selectedSkillId}
-                      onChange={(e) => setSelectedSkillId(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-sm focus:ring-slate-900 focus:border-slate-900 block p-3 "
-                    >
-                      <option value="" disabled>Select behavior to evaluate...</option>
-                      {availableSkills.map(s => (
-                        <option key={s.id} value={s.id}>
-                          {s.code ? `[${s.code}] ` : ''}{s.name}
-                        </option>
-                      ))}
-                    </select>
-                    {availableSkills.length === 0 && (
-                      <p className="text-xs text-slate-600 mt-1">No other skills evaluations found for this department.</p>
-                    )}
-                  </div>
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-2">Behavior to Evaluate</label>
+                <select
+                  required
+                  value={selectedSkillId}
+                  onChange={(e) => setSelectedSkillId(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-sm focus:ring-slate-900 focus:border-slate-900 block p-3 "
+                >
+                  <option value="" disabled>Select behavior to evaluate...</option>
+                  {availableSkills.map(s => (
+                    <option key={s.id} value={s.id}>
+                      {s.code ? `[${s.code}] ` : ''}{s.name}
+                    </option>
+                  ))}
+                </select>
+                {availableSkills.length === 0 && (
+                  <p className="text-xs text-slate-600 mt-1">No behavioral skills found for this department.</p>
+                )}
+              </div>
 
-                  {selectedSkillId && (
-                    <div className="bg-slate-50 p-4 rounded-sm border border-slate-300">
-                      <p className="text-sm text-slate-800 font-medium italic">
-                        "{dataService.getSkillAssessmentQuestion(selectedSkillId)}"
-                      </p>
-                    </div>
-                  )}
-
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-3">Proficiency Level (1–5)</label>
-                    <div className="flex items-center gap-2">
-                      {[1, 2, 3, 4, 5].map((star) => {
-                        const def = PROFICIENCY_DEFINITIONS[star as 1 | 2 | 3 | 4 | 5];
-                        return (
-                          <button
-                            key={star}
-                            type="button"
-                            onClick={() => setRating(star)}
-                            onMouseEnter={() => setHoverRating(star)}
-                            onMouseLeave={() => setHoverRating(0)}
-                            aria-label={`Level ${star} of 5 — ${def.label}`}
-                            aria-pressed={rating === star}
-                            title={`Level ${star} — ${def.label}`}
-                            className="rounded-sm transition-transform hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2"
-                          >
-                            <Star
-                              size={32}
-                              className={`${(hoverRating || rating) >= star ? 'text-amber-400 fill-amber-400' : 'text-slate-300'} transition-colors`}
-                            />
-                          </button>
-                        );
-                      })}
-                      <span className="ml-4 text-sm font-medium text-slate-600">
-                        {rating === 0
-                          ? 'Select a proficiency level'
-                          : `${rating} — ${PROFICIENCY_DEFINITIONS[rating as 1 | 2 | 3 | 4 | 5].label}`}
-                      </span>
-                    </div>
-                    {rating > 0 && (
-                      <p className="text-xs text-slate-600 mt-2 max-w-xl">
-                        {PROFICIENCY_DEFINITIONS[rating as 1 | 2 | 3 | 4 | 5].description}
-                      </p>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm font-bold text-slate-700">Annual Appraisal Checklist</label>
-                    {(() => {
-                      const totalWeight = ANNUAL_APPRAISAL_QUESTIONS.reduce((s, q) => s + (q.weight ?? 10), 0);
-                      const earnedWeight = ANNUAL_APPRAISAL_QUESTIONS.reduce((s, q, i) =>
-                        s + (appraisalAnswers[i] === true ? (q.weight ?? 10) : 0), 0);
-                      const pct = totalWeight > 0 ? Math.round((earnedWeight / totalWeight) * 100) : 0;
-                      const answered = appraisalAnswers.filter(a => a !== null).length;
-                      const total = ANNUAL_APPRAISAL_QUESTIONS.length;
-                      const allAnswered = answered === total;
-                      return (
-                        <div className="flex items-center gap-2">
-                          <span
-                            role="status"
-                            aria-live="polite"
-                            className={`text-xs font-bold px-3 py-1 rounded-sm border ${
-                              allAnswered
-                                ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
-                                : 'text-amber-700 bg-amber-50 border-amber-200'
-                            }`}
-                          >
-                            {answered} of {total} answered
-                          </span>
-                          <span className="text-sm font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-sm border border-blue-200">
-                            Weighted Score: {pct}%
-                          </span>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                  <div className="grid grid-cols-1 gap-3">
-                    {ANNUAL_APPRAISAL_QUESTIONS.map((q, idx) => (
-                      <div key={q.id ?? idx} className={`flex items-start gap-4 p-4 border rounded-sm transition-colors ${appraisalAnswers[idx] == null ? 'border-amber-300 bg-amber-50/40' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <h4 className="text-sm font-bold text-slate-900">{idx + 1}. {q.title}</h4>
-                            {q.weight !== undefined && (
-                              <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 border border-blue-200 rounded-none">
-                                {q.weight}%
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-xs text-slate-600">{q.text}</p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                           <button
-                             type="button"
-                             aria-pressed={appraisalAnswers[idx] === true}
-                             aria-label={`Yes — ${q.title}`}
-                             onClick={() => {
-                               const newAns = [...appraisalAnswers];
-                               newAns[idx] = true;
-                               setAppraisalAnswers(newAns);
-                             }}
-                             className={`px-4 py-2 text-xs font-bold rounded-sm border transition-colors inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-1 ${appraisalAnswers[idx] === true ? 'bg-emerald-500 text-white border-emerald-600' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}
-                           >
-                             <Check size={14} aria-hidden="true" /> Yes
-                           </button>
-                           <button
-                             type="button"
-                             aria-pressed={appraisalAnswers[idx] === false}
-                             aria-label={`No — ${q.title}`}
-                             onClick={() => {
-                               const newAns = [...appraisalAnswers];
-                               newAns[idx] = false;
-                               setAppraisalAnswers(newAns);
-                             }}
-                             className={`px-4 py-2 text-xs font-bold rounded-sm border transition-colors inline-flex items-center gap-1.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-600 focus-visible:ring-offset-1 ${appraisalAnswers[idx] === false ? 'bg-rose-500 text-white border-rose-600' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}
-                           >
-                             <X size={14} aria-hidden="true" /> No
-                           </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+              {selectedSkillId && (
+                <div className="bg-slate-50 p-4 rounded-sm border border-slate-300">
+                  <p className="text-sm text-slate-800 font-medium italic">
+                    "{dataService.getSkillAssessmentQuestion(selectedSkillId)}"
+                  </p>
                 </div>
               )}
+
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-3">Proficiency Level (1–5)</label>
+                <div className="flex items-center gap-2">
+                  {[1, 2, 3, 4, 5].map((star) => {
+                    const def = PROFICIENCY_DEFINITIONS[star as 1 | 2 | 3 | 4 | 5];
+                    return (
+                      <button
+                        key={star}
+                        type="button"
+                        onClick={() => setRating(star)}
+                        onMouseEnter={() => setHoverRating(star)}
+                        onMouseLeave={() => setHoverRating(0)}
+                        aria-label={`Level ${star} of 5 — ${def.label}`}
+                        aria-pressed={rating === star}
+                        title={`Level ${star} — ${def.label}`}
+                        className="rounded-sm transition-transform hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2"
+                      >
+                        <Star
+                          size={32}
+                          className={`${(hoverRating || rating) >= star ? 'text-amber-400 fill-amber-400' : 'text-slate-300'} transition-colors`}
+                        />
+                      </button>
+                    );
+                  })}
+                  <span className="ml-4 text-sm font-medium text-slate-600">
+                    {rating === 0
+                      ? 'Select a proficiency level'
+                      : `${rating} — ${PROFICIENCY_DEFINITIONS[rating as 1 | 2 | 3 | 4 | 5].label}`}
+                  </span>
+                </div>
+                {rating > 0 && (
+                  <p className="text-xs text-slate-600 mt-2 max-w-xl">
+                    {PROFICIENCY_DEFINITIONS[rating as 1 | 2 | 3 | 4 | 5].description}
+                  </p>
+                )}
+              </div>
 
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
                   <MessageSquare size={16} className="text-slate-400" />
                   Feedback (Optional)
                 </label>
-                <textarea 
+                <textarea
                   rows={4}
                   value={feedback}
                   onChange={(e) => setFeedback(e.target.value)}
@@ -555,24 +337,22 @@ export const BehavioralAssessment: React.FC<{ currentUser: User }> = ({ currentU
                   className="w-full bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-sm focus:ring-slate-900 focus:border-slate-900 block p-3 "
                 ></textarea>
                 <p className="text-xs text-slate-600 mt-2">
-                  {evalType === 'ANNUAL_APPRAISAL'
-                    ? 'This appraisal is shared with the employee and their manager.'
-                    : 'Peer feedback is aggregated anonymously — your individual rating and identity are never shown to the employee. Managers see aggregate results only.'}
+                  Peer feedback is aggregated anonymously — your individual rating and identity are never shown to the employee. Managers see aggregate results only.
                 </p>
               </div>
 
               <div className="pt-4 border-t border-slate-300 flex justify-between items-center">
-                {((evalType === 'OTHER_SKILLS' && existingAssessment) || (evalType === 'ANNUAL_APPRAISAL' && existingAppraisal)) ? (
+                {existingAssessment ? (
                   <p className="text-sm font-medium text-emerald-600 flex items-center gap-1">
                     <CheckCircle size={16} /> Update your existing evaluation
                   </p>
                 ) : <div></div>}
                 <button
                   type="submit"
-                  disabled={isSubmitting || !selectedSubjectId || (evalType === 'OTHER_SKILLS' && (!selectedSkillId || rating === 0)) || (evalType === 'ANNUAL_APPRAISAL' && (appraisalAnswers.length !== ANNUAL_APPRAISAL_QUESTIONS.length || appraisalAnswers.some(a => a === null)))}
+                  disabled={isSubmitting || !selectedSubjectId || !selectedSkillId || rating === 0}
                   className="bg-blue-700 hover:bg-blue-800 text-white font-medium py-3 px-8 rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 "
                 >
-                  {isSubmitting ? 'Submitting...' : ((evalType === 'OTHER_SKILLS' && existingAssessment) || (evalType === 'ANNUAL_APPRAISAL' && existingAppraisal)) ? 'Update Evaluation' : 'Submit Evaluation'}
+                  {isSubmitting ? 'Submitting...' : existingAssessment ? 'Update Evaluation' : 'Submit Evaluation'}
                   {!isSubmitting && <Send size={18} />}
                 </button>
               </div>
