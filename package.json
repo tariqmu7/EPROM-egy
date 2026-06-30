@@ -24,6 +24,7 @@
     "jobs:seed:bizdev-sections": "node scripts/seed-bizdev-sections.mjs",
     "jobs:seed:agm-dm": "node scripts/seed-agm-dm-profiles.mjs",
     "check-env": "node scripts/check-env.mjs",
+    "assessments:dedup": "node scripts/dedup-assessments.mjs",
     "pricing:build": "node reporting/training-pricing/generate-pricing-calculator.mjs"
   },
   "dependencies": {
