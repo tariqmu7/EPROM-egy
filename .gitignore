@@ -28,6 +28,9 @@ firebase-applet-config.json
 # (bakes in VITE_BOOTSTRAP_ADMIN_EMAIL). Edit the template, not this file.
 firestore.rules
 
+# Reporting artifacts — generated reports/decks, not part of the app source
+reporting/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
