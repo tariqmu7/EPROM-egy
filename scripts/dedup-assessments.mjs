@@ -107,10 +107,14 @@ async function main() {
   // Only consider live records — already-archived dupes are left as-is.
   const live = all.filter(a => !a.isArchived);
 
-  // Group by the upsert key: rater + subject + skill + cycle.
+  // Group by the upsert key: rater + subject + skill + period. The period is
+  // the explicit cycleId when set, else the calendar year — so duplicates are
+  // only collapsed within the same year and distinct years stay as separate
+  // historical records (mirrors assessmentCycleBucket in services/store.ts).
+  const bucket = a => a.cycleId ? `cycle:${a.cycleId}` : `year:${new Date(a.date).getFullYear()}`;
   const groups = new Map();
   for (const a of live) {
-    const key = `${a.raterId}|${a.subjectId}|${a.skillId}|${a.cycleId || ''}`;
+    const key = `${a.raterId}|${a.subjectId}|${a.skillId}|${bucket(a)}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(a);
   }
