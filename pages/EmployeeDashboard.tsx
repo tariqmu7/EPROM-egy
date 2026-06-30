@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { User, Role, JobProfile, Skill, IndividualTrainingPlan, ORG_HIERARCHY_ORDER, ORG_LEVEL_LABELS, ScheduledAssessment, Certificate } from '../types';
+import { PROFICIENCY_DEFINITIONS } from '../constants';
 import { dataService } from '../services/store';
 import { useStoreData } from '../hooks/useStoreData';
 import { AssessmentHistoryLog } from '../components/AssessmentHistoryLog';
@@ -66,6 +67,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
   const [editingCert, setEditingCert] = useState<Partial<Certificate> | null>(null);
   const [certDeleteId, setCertDeleteId] = useState<string | null>(null);
   const [certDetailView, setCertDetailView] = useState<any | null>(null);
+  const [skillDetailView, setSkillDetailView] = useState<{ skill?: Skill; required: number; current: number; gap: number } | null>(null);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -388,6 +390,171 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
         </div>
       </div>
     )}
+
+    {/* ── Skill Requirement Detail ───────────────────────────────────────
+        Click a skill in "Position Skill Requirements" to see, level by level,
+        what the employee must demonstrate to reach the required proficiency,
+        which certificates each level needs, and the courses that build it. */}
+    {skillDetailView && (() => {
+      const sd = skillDetailView;
+      const skill = sd.skill;
+      const courses = skill ? dataService.getCoursesForSkill(skill.id) : [];
+      const COURSE_TYPE: Record<string, { label: string; cls: string }> = {
+        INTERNAL: { label: 'Internal', cls: 'bg-blue-100 text-blue-700 border-blue-200' },
+        EXTERNAL: { label: 'External', cls: 'bg-violet-100 text-violet-700 border-violet-200' },
+        OJT: { label: 'On-the-Job', cls: 'bg-amber-100 text-amber-700 border-amber-200' },
+      };
+      return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="bg-white border border-slate-300 shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+          <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+            <div className="flex items-center gap-2 min-w-0">
+              <TrendingUp size={16} className="text-blue-600 shrink-0" />
+              <span className="font-bold text-slate-900 text-sm truncate">{skill?.name || 'Skill Requirement'}</span>
+              {skill?.category && (
+                <span className="text-[10px] font-bold px-2 py-0.5 border bg-slate-100 text-slate-600 border-slate-200 uppercase shrink-0">{skill.category}</span>
+              )}
+            </div>
+            <button onClick={() => setSkillDetailView(null)} className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors rounded-none">
+              <X size={18} />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-5 space-y-5">
+            {/* Current vs required snapshot */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-3 bg-slate-50 border border-slate-100">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Your Current Level</p>
+                <p className={`text-2xl font-black ${sd.current >= sd.required ? 'text-emerald-600' : 'text-amber-600'}`}>
+                  {sd.current}<span className="text-sm text-slate-400 font-bold"> / 5</span>
+                </p>
+                <p className="text-[10px] font-bold text-slate-500 uppercase">{PROFICIENCY_DEFINITIONS[sd.current as 1|2|3|4|5]?.label || 'Not Yet Assessed'}</p>
+              </div>
+              <div className="p-3 bg-slate-50 border border-slate-100">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Required Level</p>
+                <p className="text-2xl font-black text-slate-900">{sd.required}<span className="text-sm text-slate-400 font-bold"> / 5</span></p>
+                <p className="text-[10px] font-bold text-slate-500 uppercase">{PROFICIENCY_DEFINITIONS[sd.required as 1|2|3|4|5]?.label}</p>
+              </div>
+            </div>
+
+            {sd.gap > 0 ? (
+              <div className="p-3 bg-amber-50 border-l-4 border-amber-400 flex items-center gap-2">
+                <AlertCircle size={14} className="text-amber-500 shrink-0" />
+                <p className="text-xs text-amber-800 font-semibold">You need to grow <strong>{sd.gap}</strong> level{sd.gap > 1 ? 's' : ''} to meet this position's requirement.</p>
+              </div>
+            ) : (
+              <div className="p-3 bg-emerald-50 border-l-4 border-emerald-400 flex items-center gap-2">
+                <CheckCircle size={14} className="text-emerald-500 shrink-0" />
+                <p className="text-xs text-emerald-800 font-semibold">You already meet the required proficiency for this skill.</p>
+              </div>
+            )}
+
+            {skill?.description && (
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">About This Competency</p>
+                <p className="text-sm text-slate-700 leading-relaxed">{skill.description}</p>
+              </div>
+            )}
+
+            {/* Level-by-level ladder up to the required level */}
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Proficiency Ladder — What Each Level Means</p>
+              <div className="space-y-2">
+                {[1, 2, 3, 4, 5].map(lvl => {
+                  const def = PROFICIENCY_DEFINITIONS[lvl as 1|2|3|4|5];
+                  const custom = skill?.levels?.[lvl];
+                  const isRequired = lvl === sd.required;
+                  const achieved = sd.current >= lvl;
+                  const beyond = lvl > sd.required;
+                  const certs = custom?.requiredCertificates?.filter(Boolean) || [];
+                  return (
+                    <div
+                      key={lvl}
+                      className={`p-3 border ${isRequired ? 'border-slate-900 bg-slate-50' : beyond ? 'border-slate-100 bg-white opacity-60' : 'border-slate-200 bg-white'}`}
+                    >
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className={`w-5 h-5 flex items-center justify-center text-[10px] font-black ${achieved ? 'bg-emerald-500 text-white' : isRequired ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-600'}`}>{lvl}</span>
+                          <span className="text-xs font-black text-slate-900 uppercase tracking-tight">{def?.label}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          {achieved && <span className="text-[9px] font-bold px-1.5 py-0.5 bg-emerald-100 text-emerald-700 border border-emerald-200 uppercase flex items-center gap-1"><CheckCircle size={9} /> Achieved</span>}
+                          {isRequired && <span className="text-[9px] font-bold px-1.5 py-0.5 bg-slate-900 text-white uppercase flex items-center gap-1"><Target size={9} /> Required</span>}
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-slate-600 leading-relaxed pl-7">{custom?.description?.trim() || def?.description}</p>
+                      {certs.length > 0 && (
+                        <div className="pl-7 mt-1.5 flex flex-wrap gap-1.5">
+                          {certs.map((c, i) => (
+                            <span key={i} className="text-[9px] font-bold px-1.5 py-0.5 bg-violet-50 text-violet-700 border border-violet-200 flex items-center gap-1">
+                              <Award size={9} /> {c}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Courses that build this skill */}
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                <GraduationCap size={12} /> Recommended Courses
+              </p>
+              {courses.length > 0 ? (
+                <div className="space-y-2">
+                  {courses.map(course => {
+                    const ct = COURSE_TYPE[course.type] || COURSE_TYPE.INTERNAL;
+                    return (
+                      <div key={course.id} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <BookOpen size={16} className="text-blue-600 shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-slate-800 truncate">{course.title}</p>
+                            <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider truncate">{course.provider}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 border uppercase ${ct.cls}`}>{ct.label}</span>
+                          {course.link && (
+                            <a href={course.link} target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-800" onClick={e => e.stopPropagation()}>
+                              <ExternalLink size={14} />
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="p-3 bg-slate-50 border border-dashed border-slate-200 text-center">
+                  <p className="text-xs text-slate-400 italic">
+                    {sd.gap > 0
+                      ? 'No catalogued course is linked to this skill yet. Speak with your manager about on-the-job training or an external certification to bridge the gap.'
+                      : 'No course needed — requirement already met.'}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="px-5 py-3 border-t border-slate-200 bg-slate-50 flex justify-between items-center">
+            <button
+              onClick={() => { setSkillDetailView(null); setHistorySearchTerm(skill?.name || ''); setActiveTab('HISTORY'); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-600 border border-slate-300 hover:bg-slate-100 transition-colors"
+            >
+              <HistoryIcon size={12} /> View Assessment History
+            </button>
+            <button onClick={() => setSkillDetailView(null)} className="px-4 py-2 text-xs font-bold text-white bg-slate-800 hover:bg-slate-700 transition-colors">
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+      );
+    })()}
     <div className="max-w-[1600px] mx-auto p-4 md:p-8 space-y-8 animate-in fade-in duration-500" id="printable-cv">
       
       {/* ── Page Header ────────────────────────────────────────────────── */}
@@ -697,12 +864,9 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                                 </div>
                                 <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 no-scrollbar">
                                     {skillAnalysis.map((item, idx) => (
-                                        <div 
-                                            key={idx} 
-                                            onClick={() => {
-                                                setHistorySearchTerm(item.skill?.name || '');
-                                                setActiveTab('HISTORY');
-                                            }}
+                                        <div
+                                            key={idx}
+                                            onClick={() => setSkillDetailView(item)}
                                             className="space-y-2 cursor-pointer group p-3 hover:bg-slate-50 transition-colors border border-slate-100 hover:border-slate-300"
                                         >
                                             <div className="flex justify-between items-center">

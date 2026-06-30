@@ -1999,6 +1999,8 @@ export class DataService {
   }
   getAllDepartments() { return this.departments; }
   getSkill(id: string) { return this.skills.find(s => s.id === id && !s.isArchived); }
+  getAllTrainingCourses() { return this.trainingCourses; }
+  getCoursesForSkill(skillId: string) { return this.trainingCourses.filter(c => c.linkedSkillIds.includes(skillId)); }
   getSystemLogs() { return this.logs; }
 
   // On-demand fetch of the full audit trail (ISO.1). The live listener keeps
