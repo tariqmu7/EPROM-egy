@@ -43,6 +43,12 @@ export const AssessmentHistoryLog: React.FC<AssessmentHistoryLogProps> = ({ curr
     return dataService.getAssessmentHistory(currentUser, targetUserId);
   }, [currentUser, targetUserId, storeVersion]);
 
+  // Legacy annual-appraisal records were saved with method 'OJT_OBSERVATION';
+  // resolve the effective label off the appraisal skillId so old + new rows
+  // both read "ANNUAL APPRAISAL".
+  const effectiveMethod = (item: any): string =>
+    item.skillId === 'annual-appraisal' ? 'ANNUAL_APPRAISAL' : item.method;
+
   const filteredHistory = useMemo(() => {
     return history.filter(item => {
       const skill = dataService.getSkill(item.skillId);
@@ -50,13 +56,13 @@ export const AssessmentHistoryLog: React.FC<AssessmentHistoryLogProps> = ({ curr
         skill?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         dataService.getUserById(item.raterId)?.name.toLowerCase().includes(searchTerm.toLowerCase());
       
-      const matchesMethod = methodFilter === 'ALL' || item.method === methodFilter;
+      const matchesMethod = methodFilter === 'ALL' || effectiveMethod(item) === methodFilter;
 
       return matchesSearch && matchesMethod;
     });
   }, [history, searchTerm, methodFilter, storeVersion]);
 
-  const methods = ['ALL', 'WRITTEN_EXAM', 'PRACTICAL_DEMO', 'INTERVIEW', 'OJT_OBSERVATION', 'WORK_RECORD_REVIEW'];
+  const methods = ['ALL', 'WRITTEN_EXAM', 'PRACTICAL_DEMO', 'INTERVIEW', 'OJT_OBSERVATION', 'WORK_RECORD_REVIEW', 'ANNUAL_APPRAISAL'];
 
   return (
     <div className="space-y-6">
@@ -119,14 +125,20 @@ export const AssessmentHistoryLog: React.FC<AssessmentHistoryLogProps> = ({ curr
                         </div>
                     </td>
                     <td className="px-6 py-4">
-                        <span className={`text-[10px] font-black px-2 py-0.5 border uppercase tracking-tighter ${
-                            item.method === 'WRITTEN_EXAM' ? 'bg-amber-50 text-amber-700 border-amber-100' :
-                            item.method === 'INTERVIEW' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' :
-                            item.method === 'WORK_RECORD_REVIEW' ? 'bg-blue-50 text-blue-700 border-blue-100' :
-                            'bg-slate-50 text-slate-600 border-slate-200'
-                        }`}>
-                            {item.method?.replace(/_/g, ' ') || 'EVALUATION'}
-                        </span>
+                        {(() => {
+                          const method = effectiveMethod(item);
+                          return (
+                            <span className={`text-[10px] font-black px-2 py-0.5 border uppercase tracking-tighter ${
+                                method === 'WRITTEN_EXAM' ? 'bg-amber-50 text-amber-700 border-amber-100' :
+                                method === 'INTERVIEW' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' :
+                                method === 'WORK_RECORD_REVIEW' ? 'bg-blue-50 text-blue-700 border-blue-100' :
+                                method === 'ANNUAL_APPRAISAL' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                                'bg-slate-50 text-slate-600 border-slate-200'
+                            }`}>
+                                {method?.replace(/_/g, ' ') || 'EVALUATION'}
+                            </span>
+                          );
+                        })()}
                     </td>
                     <td className="px-6 py-4">
                         <div className="space-y-1">

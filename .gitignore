@@ -30,6 +30,8 @@ firestore.rules
 
 # Reporting artifacts — generated reports/decks, not part of the app source
 reporting/
+skills/
+job_profiles/
 
 # Editor directories and files
 .vscode/*

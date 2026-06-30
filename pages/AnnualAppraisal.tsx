@@ -187,7 +187,7 @@ export const AnnualAppraisal: React.FC<{ currentUser: User }> = ({ currentUser }
         score: score,
         comment: feedback,
         appraisalAnswers: answers,
-        method: 'OJT_OBSERVATION',
+        method: 'ANNUAL_APPRAISAL',
         type: typeAssignment
       });
 
