@@ -2158,9 +2158,22 @@ export class DataService {
       }
       if (userAssessments.length === 0) { result = 0; }
       else {
-        const selfA = userAssessments.filter(a => a.type === 'SELF');
-        const peerA = userAssessments.filter(a => a.type === 'PEER');
-        const mgrA = userAssessments.filter(a => a.type === 'MANAGER');
+        // Average across *distinct raters*, counting each rater only once at
+        // their most recent rating. The 360 average is meant to blend multiple
+        // people's views (esp. peers), not multiple time points from the same
+        // person — so a rater who re-rates across cycles must not be
+        // double-counted, and the current score reflects their latest input.
+        const latestPerRater = (arr: Assessment[]) => {
+          const byRater = new Map<string, Assessment>();
+          for (const a of arr) {
+            const prev = byRater.get(a.raterId);
+            if (!prev || new Date(a.date).getTime() > new Date(prev.date).getTime()) byRater.set(a.raterId, a);
+          }
+          return [...byRater.values()];
+        };
+        const selfA = latestPerRater(userAssessments.filter(a => a.type === 'SELF'));
+        const peerA = latestPerRater(userAssessments.filter(a => a.type === 'PEER'));
+        const mgrA = latestPerRater(userAssessments.filter(a => a.type === 'MANAGER'));
 
         const avgSelf = selfA.length > 0 ? selfA.reduce((s, a) => s + a.score, 0) / selfA.length : null;
         const avgPeer = peerA.length > 0 ? peerA.reduce((s, a) => s + a.score, 0) / peerA.length : null;
@@ -2204,8 +2217,13 @@ export class DataService {
     return result;
   }
 
-  getAssessments(filters: { raterId?: string, subjectId?: string, cycleId?: string, skillId?: string }) {
+  getAssessments(filters: { raterId?: string, subjectId?: string, cycleId?: string, skillId?: string, includeArchived?: boolean }) {
     return this.assessments.filter(a => {
+      // Archived records are superseded duplicates (see dedup-assessments.mjs)
+      // — excluded by default so the Historical Record and every other reader
+      // shows one live evaluation per rater+subject+skill, matching
+      // getUserSkillScore / getAssessmentHistory. Opt in with includeArchived.
+      if (!filters.includeArchived && a.isArchived) return false;
       const matchRater = filters.raterId ? a.raterId === filters.raterId : true;
       const matchSubject = filters.subjectId ? a.subjectId === filters.subjectId : true;
       const matchCycle = filters.cycleId ? a.cycleId === filters.cycleId : true;
@@ -2566,25 +2584,37 @@ export class DataService {
     await this.persistItem('activityLogs', newLog);
   }
 
+  // The evaluation "period" an assessment belongs to, used to dedupe a rater's
+  // re-submissions: the explicit cycleId when present, otherwise the calendar
+  // year of the record's date (or the current year for an unsaved record).
+  // Same bucket ⇒ an update-in-place; a new bucket ⇒ a new historical record.
+  private assessmentCycleBucket(a: { cycleId?: string; date?: string }): string {
+    if (a.cycleId) return `cycle:${a.cycleId}`;
+    const year = a.date ? new Date(a.date).getFullYear() : new Date().getFullYear();
+    return `year:${year}`;
+  }
+
   async addAssessment(assessment: Omit<Assessment, 'id' | 'date'>) {
     const subject = this.users.find(u => u.id === assessment.subjectId)?.name || 'Employee';
     const skillName = assessment.skillId === 'annual-appraisal'
       ? 'Annual Appraisal'
       : (this.skills.find(s => s.id === assessment.skillId)?.name || assessment.skillId);
 
-    // Upsert: a rater holds at most one live evaluation per subject+skill (per
-    // cycle). Re-submitting an evaluation must UPDATE that record in place
-    // rather than append a duplicate — otherwise the History Ledger fills with
-    // duplicate rows and the 360° score (which averages all SELF/PEER/MANAGER
-    // records in getUserSkillScore) double-counts the same rater instead of
-    // replacing the prior value. This mirrors the `existingAssessment` lookup
-    // the evaluation forms already use to pre-fill the prior score/comment.
+    // Upsert: a rater holds at most one live evaluation per subject+skill
+    // *within a cycle*. Re-submitting in the same period UPDATES that record in
+    // place rather than appending a duplicate — otherwise the History Ledger
+    // fills with duplicate rows and the score double-counts the same rater.
+    // The period is the explicit cycleId when set, else the calendar year, so a
+    // fresh evaluation in a new year keeps the prior year as its own historical
+    // record (e.g. the Annual Appraisal Historical Record grows one row/year)
+    // instead of overwriting it. Mirrors the `existingAssessment` form lookup.
+    const incomingBucket = this.assessmentCycleBucket(assessment);
     const existing = this.assessments.find(a =>
       !a.isArchived &&
       a.raterId === assessment.raterId &&
       a.subjectId === assessment.subjectId &&
       a.skillId === assessment.skillId &&
-      (a.cycleId || null) === (assessment.cycleId || null)
+      this.assessmentCycleBucket(a) === incomingBucket
     );
 
     if (existing) {
