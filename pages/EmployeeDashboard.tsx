@@ -145,7 +145,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
           required: s.required,
           current: s.current,
         })),
-      appraisalScore: latestAppraisal?.score,
+      appraisalScore: weightedAppraisalScore ?? undefined,
     });
   };
 
@@ -196,12 +196,36 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
     );
   }, [annualAppraisals]);
 
-  // The official headline score is the manager's appraisal when present,
-  // otherwise the most recent evaluation of any kind.
+  // latestAppraisal supplies the headline's metadata (date, cycle, remarks):
+  // the manager's appraisal when present, else the most recent of any kind.
   const latestAppraisal = useMemo(
     () => appraisalEvaluations.find(a => a.type === 'MANAGER') || appraisalEvaluations[0],
     [appraisalEvaluations]
   );
+
+  // Headline total = weighted blend of the three evaluator perspectives
+  // (Manager 60% · Peer 30% · Self 10%). Multiple peers are averaged into one
+  // PEER component first. When an evaluator type hasn't rated yet, its weight
+  // is dropped and the remaining weights are re-normalised so the total always
+  // reflects 100% of whoever has submitted. UPWARD (subordinate) ratings are
+  // not part of the official total. null ⇒ nobody has appraised yet.
+  const APPRAISAL_WEIGHTS: Record<string, number> = { MANAGER: 60, PEER: 30, SELF: 10 };
+  const weightedAppraisalScore = useMemo(() => {
+    const scoresByType = new Map<string, number[]>();
+    for (const a of appraisalEvaluations) {
+      if (!(a.type in APPRAISAL_WEIGHTS)) continue;
+      if (!scoresByType.has(a.type)) scoresByType.set(a.type, []);
+      scoresByType.get(a.type)!.push(a.score);
+    }
+    let weightedSum = 0;
+    let weightTotal = 0;
+    for (const [type, scores] of scoresByType) {
+      const avg = scores.reduce((s, v) => s + v, 0) / scores.length;
+      weightedSum += avg * APPRAISAL_WEIGHTS[type];
+      weightTotal += APPRAISAL_WEIGHTS[type];
+    }
+    return weightTotal > 0 ? Math.round(weightedSum / weightTotal) : null;
+  }, [appraisalEvaluations]);
 
   const appraisalTypeLabel = (type: string) =>
     type === 'MANAGER' ? 'Manager Appraisal'
@@ -783,7 +807,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                     <div>
                         <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Annual Appraisal</p>
                         <div className="flex items-baseline gap-1">
-                            <p className="text-3xl font-black text-amber-400">{latestAppraisal ? latestAppraisal.score : '--'}</p>
+                            <p className="text-3xl font-black text-amber-400">{weightedAppraisalScore ?? '--'}</p>
                             <span className="text-xs font-bold text-slate-500">/ 100</span>
                         </div>
                     </div>
@@ -829,8 +853,11 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                                 <div className="text-center py-4">
                                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Score</p>
                                     <div className="text-5xl font-black text-slate-900">
-                                        {latestAppraisal.score} <span className="text-xl text-slate-400">/ 100</span>
+                                        {weightedAppraisalScore ?? '--'} <span className="text-xl text-slate-400">/ 100</span>
                                     </div>
+                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-2">
+                                        Weighted · Manager 60 · Peer 30 · Self 10
+                                    </p>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="p-4 bg-slate-50 border border-slate-100">
