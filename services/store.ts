@@ -2567,6 +2567,54 @@ export class DataService {
   }
 
   async addAssessment(assessment: Omit<Assessment, 'id' | 'date'>) {
+    const subject = this.users.find(u => u.id === assessment.subjectId)?.name || 'Employee';
+    const skillName = assessment.skillId === 'annual-appraisal'
+      ? 'Annual Appraisal'
+      : (this.skills.find(s => s.id === assessment.skillId)?.name || assessment.skillId);
+
+    // Upsert: a rater holds at most one live evaluation per subject+skill (per
+    // cycle). Re-submitting an evaluation must UPDATE that record in place
+    // rather than append a duplicate — otherwise the History Ledger fills with
+    // duplicate rows and the 360° score (which averages all SELF/PEER/MANAGER
+    // records in getUserSkillScore) double-counts the same rater instead of
+    // replacing the prior value. This mirrors the `existingAssessment` lookup
+    // the evaluation forms already use to pre-fill the prior score/comment.
+    const existing = this.assessments.find(a =>
+      !a.isArchived &&
+      a.raterId === assessment.raterId &&
+      a.subjectId === assessment.subjectId &&
+      a.skillId === assessment.skillId &&
+      (a.cycleId || null) === (assessment.cycleId || null)
+    );
+
+    if (existing) {
+      const updated: Assessment = {
+        ...existing,
+        ...assessment,
+        id: existing.id,
+        date: new Date().toISOString(),
+      };
+      await this.updateItem('assessments', updated);
+
+      await this.logActivity('Updated Assessment', `For ${subject}`, {
+        entity: 'assessment',
+        entityId: existing.id,
+        before: `${skillName} (${existing.type}) → ${existing.score}`,
+        after: `${skillName} (${updated.type}) → ${updated.score}`,
+      });
+
+      if (assessment.raterId !== assessment.subjectId) {
+        await this.addNotification({
+          userId: assessment.subjectId,
+          title: 'Evaluation Updated',
+          message: `An existing ${assessment.method} evaluation on your profile was updated.`,
+          type: 'INFO',
+          actionLink: 'emp-dashboard'
+        });
+      }
+      return;
+    }
+
     const id = doc(collection(db, 'assessments')).id;
     const newAssessment: Assessment = {
       ...assessment,
@@ -2574,7 +2622,7 @@ export class DataService {
       date: new Date().toISOString(),
     };
     await this.persistItem('assessments', newAssessment);
-    
+
     // Auto-update notification for the subject
     await this.addNotification({
       userId: assessment.subjectId,
@@ -2584,10 +2632,6 @@ export class DataService {
       actionLink: 'emp-dashboard'
     });
 
-    const subject = this.users.find(u => u.id === assessment.subjectId)?.name || 'Employee';
-    const skillName = assessment.skillId === 'annual-appraisal'
-      ? 'Annual Appraisal'
-      : (this.skills.find(s => s.id === assessment.skillId)?.name || assessment.skillId);
     await this.logActivity('Submitted Assessment', `For ${subject}`, {
       entity: 'assessment',
       entityId: id,
@@ -2837,7 +2881,7 @@ export class DataService {
     const finalSubjectId = isTargetVisible ? effectiveTargetId : viewer.id;
 
     const pastAssessments = this.assessments
-      .filter(a => a.subjectId === finalSubjectId)
+      .filter(a => a.subjectId === finalSubjectId && !a.isArchived)
       .map(a => ({
         id: a.id,
         date: a.date,
