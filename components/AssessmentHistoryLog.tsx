@@ -52,9 +52,13 @@ export const AssessmentHistoryLog: React.FC<AssessmentHistoryLogProps> = ({ curr
   const filteredHistory = useMemo(() => {
     return history.filter(item => {
       const skill = dataService.getSkill(item.skillId);
-      const matchesSearch = !searchTerm || 
-        skill?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        dataService.getUserById(item.raterId)?.name.toLowerCase().includes(searchTerm.toLowerCase());
+      const method = effectiveMethod(item) || '';
+      const term = searchTerm.toLowerCase();
+      const matchesSearch = !searchTerm ||
+        skill?.name.toLowerCase().includes(term) ||
+        dataService.getUserById(item.raterId)?.name.toLowerCase().includes(term) ||
+        method.toLowerCase().includes(term) ||
+        method.replace(/_/g, ' ').toLowerCase().includes(term);
       
       const matchesMethod = methodFilter === 'ALL' || effectiveMethod(item) === methodFilter;
 
@@ -73,7 +77,7 @@ export const AssessmentHistoryLog: React.FC<AssessmentHistoryLogProps> = ({ curr
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <input 
               type="text"
-              placeholder="Search by skill or assessor..."
+              placeholder="Search by skill, assessor, or method..."
               className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-300 text-sm focus:ring-2 focus:ring-slate-900 outline-none transition-all"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}

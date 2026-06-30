@@ -784,7 +784,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                         <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Annual Appraisal</p>
                         <div className="flex items-baseline gap-1">
                             <p className="text-3xl font-black text-amber-400">{latestAppraisal ? latestAppraisal.score : '--'}</p>
-                            <span className="text-xs font-bold text-slate-500">/ 10</span>
+                            <span className="text-xs font-bold text-slate-500">/ 100</span>
                         </div>
                     </div>
                     {latestAppraisal && (
@@ -829,7 +829,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                                 <div className="text-center py-4">
                                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Score</p>
                                     <div className="text-5xl font-black text-slate-900">
-                                        {latestAppraisal.score} <span className="text-xl text-slate-400">/ 10</span>
+                                        {latestAppraisal.score} <span className="text-xl text-slate-400">/ 100</span>
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
@@ -867,7 +867,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                                                             <span className="text-[10px] font-black text-slate-700">{new Date(appraisal.date).getFullYear()}</span>
                                                         </div>
                                                         <div>
-                                                            <p className="text-xs font-bold text-slate-800 uppercase">{appraisalTypeLabel(appraisal.type)} · {appraisal.score} / 10</p>
+                                                            <p className="text-xs font-bold text-slate-800 uppercase">{appraisalTypeLabel(appraisal.type)} · {appraisal.score} / 100</p>
                                                             <p className="text-[9px] text-slate-500 font-bold tracking-widest uppercase">{evaluator?.name || 'System'} — {new Date(appraisal.date).toLocaleDateString()}</p>
                                                         </div>
                                                     </div>
