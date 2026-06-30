@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { User, Role, JobProfile, Skill, IndividualTrainingPlan, ORG_HIERARCHY_ORDER, ORG_LEVEL_LABELS, ScheduledAssessment, Certificate } from '../types';
+import { User, Role, JobProfile, Skill, IndividualTrainingPlan, ORG_HIERARCHY_ORDER, ORG_LEVEL_LABELS, ScheduledAssessment, Certificate, Assessment } from '../types';
 import { PROFICIENCY_DEFINITIONS } from '../constants';
 import { dataService } from '../services/store';
 import { useStoreData } from '../hooks/useStoreData';
@@ -178,7 +178,37 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
   const annualAppraisals = useMemo(() => {
     return dataService.getAssessments({ subjectId: user.id, skillId: 'annual-appraisal' });
   }, [user.id, storeVersion]);
-  const latestAppraisal = annualAppraisals[0];
+
+  // One appraisal per evaluator: an annual appraisal is rated separately by the
+  // employee (SELF), peers (PEER) and the manager (MANAGER). getAssessments is
+  // already sorted newest-first and de-duplicated per period, so taking the
+  // first record seen per rater yields each evaluator's latest appraisal with
+  // no duplicate manager/peer/self rows. Ordered Manager → Peer → Self.
+  const APPRAISAL_TYPE_ORDER: Record<string, number> = { MANAGER: 0, PEER: 1, SELF: 2, UPWARD: 3 };
+  const appraisalEvaluations = useMemo(() => {
+    const byRater = new Map<string, Assessment>();
+    for (const a of annualAppraisals) {
+      if (!byRater.has(a.raterId)) byRater.set(a.raterId, a);
+    }
+    return [...byRater.values()].sort((x, y) =>
+      (APPRAISAL_TYPE_ORDER[x.type] ?? 9) - (APPRAISAL_TYPE_ORDER[y.type] ?? 9) ||
+      new Date(y.date).getTime() - new Date(x.date).getTime()
+    );
+  }, [annualAppraisals]);
+
+  // The official headline score is the manager's appraisal when present,
+  // otherwise the most recent evaluation of any kind.
+  const latestAppraisal = useMemo(
+    () => appraisalEvaluations.find(a => a.type === 'MANAGER') || appraisalEvaluations[0],
+    [appraisalEvaluations]
+  );
+
+  const appraisalTypeLabel = (type: string) =>
+    type === 'MANAGER' ? 'Manager Appraisal'
+    : type === 'PEER' ? 'Peer Appraisal'
+    : type === 'SELF' ? 'Self Appraisal'
+    : type === 'UPWARD' ? 'Upward Appraisal'
+    : 'Appraisal';
 
   const annualCycle = useMemo(() => {
     if (!latestAppraisal?.cycleId) return null;
@@ -824,26 +854,29 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                                         <p className="text-xs text-slate-700 italic">{latestAppraisal.comment}</p>
                                     </div>
                                 )}
-                                {annualAppraisals.length > 1 && (
+                                {appraisalEvaluations.length > 0 && (
                                     <div className="pt-6 border-t border-slate-100">
-                                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Historical Record</h4>
+                                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Evaluations</h4>
                                         <div className="space-y-2">
-                                            {annualAppraisals.slice(1).map((appraisal, idx) => (
-                                                <div key={idx} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 hover:border-slate-300 transition-colors group cursor-pointer" onClick={() => { setHistorySearchTerm('Annual Appraisal'); setActiveTab('HISTORY'); }}>
+                                            {appraisalEvaluations.map((appraisal) => {
+                                                const evaluator = appraisal.raterId === user.id ? user : dataService.getUserById(appraisal.raterId);
+                                                return (
+                                                <div key={appraisal.id} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 hover:border-slate-300 transition-colors group cursor-pointer" onClick={() => { setHistorySearchTerm('Annual Appraisal'); setActiveTab('HISTORY'); }}>
                                                     <div className="flex items-center gap-3">
                                                         <div className="w-8 h-8 rounded-none bg-white border border-slate-200 flex items-center justify-center">
                                                             <span className="text-[10px] font-black text-slate-700">{new Date(appraisal.date).getFullYear()}</span>
                                                         </div>
                                                         <div>
-                                                            <p className="text-xs font-bold text-slate-800 uppercase">Score: {appraisal.score} / 10</p>
-                                                            <p className="text-[9px] text-slate-500 font-bold tracking-widest uppercase">{new Date(appraisal.date).toLocaleDateString()}</p>
+                                                            <p className="text-xs font-bold text-slate-800 uppercase">{appraisalTypeLabel(appraisal.type)} · {appraisal.score} / 10</p>
+                                                            <p className="text-[9px] text-slate-500 font-bold tracking-widest uppercase">{evaluator?.name || 'System'} — {new Date(appraisal.date).toLocaleDateString()}</p>
                                                         </div>
                                                     </div>
                                                     <div className="text-slate-400 group-hover:text-blue-600 transition-colors">
                                                         <Eye size={14} />
                                                     </div>
                                                 </div>
-                                            ))}
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 )}
