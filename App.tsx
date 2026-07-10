@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { useStoreData } from './hooks/useStoreData';
+import { useUrlRouting } from './hooks/useUrlRouting';
+import { RouteState } from './routes';
 import { Layout } from './components/Layout';
 
 // A3.5: Code-split heavy page bundles — each loads only when first visited.
@@ -160,6 +162,26 @@ const App: React.FC = () => {
     setTabKey(k => k + 1);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
+
+  // Apply a URL-derived route (deep link, refresh, or back/forward) into state.
+  // Stable identity so it can back the popstate listener in useUrlRouting.
+  const applyRoute = useCallback((route: RouteState) => {
+    setActiveTab(route.tab);
+    if (route.tab === 'ceo-view-profile') {
+      setSelectedProfileUserId(route.profileUserId ?? null);
+    }
+    setTabKey(k => k + 1);
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }, []);
+
+  // Clean-URL routing: keep the address bar in sync with `activeTab`. Must run
+  // before any early return below — the hook self-gates on authentication.
+  useUrlRouting({
+    isAuthenticated: !!user,
+    activeTab,
+    profileUserId: selectedProfileUserId,
+    applyRoute,
+  });
 
   if (isLoading) {
     return (

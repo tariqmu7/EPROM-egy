@@ -135,15 +135,42 @@ Driven by each skill's inline `assessmentMethods`. For a user+skill it takes eve
 
 ## Navigation / Routing
 
-Routing is tab-based state in `App.tsx` (no React Router). `activeTab` drives which page renders.
+**Clean-URL routing** (History API — no React Router dependency). `activeTab` in `App.tsx`
+remains the source of truth for which page renders; a thin sync layer keeps the browser URL,
+deep links, page refresh, and back/forward in step with it. Every page has a real, bookmarkable
+URL (e.g. `/admin/users`, `/evaluations/360`, `/ceo/profile/:userId`).
 
-| Tab Key | Component | Role |
-|---|---|---|
-| `emp-dashboard` | EmployeeDashboard | Employee |
-| `evaluations` | EvaluationsHub | Employee |
-| `manager-dashboard` | ManagerDashboard | Manager |
-| `admin-dashboard/users/jobs/skills/depts/analytics` | AdminPanel | Admin |
-| `ceo-dashboard` | CEOPanel | CEO |
+Moving parts:
+- [`routes.ts`](routes.ts) — **the single source of truth**: a `TAB_PATHS` map pairing each
+  `activeTab` key with a clean path, plus `routeToPath` / `pathToRoute` helpers. Base-path aware
+  (reads `import.meta.env.BASE_URL`).
+- [`hooks/useUrlRouting.ts`](hooks/useUrlRouting.ts) — bidirectional sync: adopts the URL on
+  first authenticated render (deep link/refresh), pushes history entries on tab change, and
+  applies back/forward pops via `applyRoute`.
+- `base: '/'` in [`vite.config.ts`](vite.config.ts) — the app is served from a domain **root**
+  (company-domain nginx), not GitHub Pages, so bundled asset URLs are absolute and resolve
+  correctly at any route depth.
+
+> **RULE — every feature must be routable.** When you add a page/tab, add a row to `TAB_PATHS`
+> in `routes.ts`. Navigation still flows through `setActiveTab` / `onSwitchTab` (unchanged) — the
+> sync layer turns any tab change into a URL automatically. A tab with no row still renders but
+> its URL falls back to `/dashboard` and it won't be deep-linkable. Parameterised routes (like
+> `ceo-view-profile`) are handled explicitly in `routeToPath`/`pathToRoute` — follow that pattern.
+
+| Tab Key | Path | Component | Role |
+|---|---|---|---|
+| `emp-dashboard` | `/dashboard` | EmployeeDashboard | Employee |
+| `evaluations` | `/evaluations` | EvaluationsHub | Employee |
+| `manager-dashboard` | `/manager` | ManagerDashboard | Manager |
+| `admin-dashboard/users/jobs/skills/depts/analytics` | `/admin`, `/admin/users`, … | AdminPanel | Admin |
+| `ceo-dashboard` / `ceo-view-profile` | `/ceo`, `/ceo/profile/:userId` | CEOPanel | CEO |
+
+> **Deploy note:** clean URLs need the host to serve `index.html` for any unknown path (SPA
+> fallback). The app deploys as static files (`npm run build` → `dist/`) served by **nginx** on
+> the company domain — see [`deploy/nginx.conf`](deploy/nginx.conf); the `try_files $uri $uri/
+> /index.html;` line is what makes deep links survive a hard refresh. CI validates the build via
+> [`.github/workflows/ci.yml`](.github/workflows/ci.yml) but no longer deploys — the old GitHub
+> Pages workflow and `base: './'` were retired with the move off GitHub Pages.
 
 ---
 
