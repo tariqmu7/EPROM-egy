@@ -6,7 +6,7 @@ export default defineConfig({
     globals: true,
     coverage: {
       provider: 'v8',
-      include: ['services/store.ts'],
+      include: ['src/services/store.ts'],
       // Regression ratchet: locked to current actual coverage so it can only
       // improve, never regress. Raise these as tests are added (target: 70%).
       thresholds: {

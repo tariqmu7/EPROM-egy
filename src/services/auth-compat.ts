@@ -1,0 +1,143 @@
+// ============================================================================
+// Firebase-Auth-compatible shim over the self-hosted /auth API.
+//
+// Provides the subset of `firebase/auth` that store.ts + App.tsx use:
+//   signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut,
+//   onAuthStateChanged, sendPasswordResetEmail.
+//
+// NOTE ON SIGN-UP: Firebase's createUserWithEmailAndPassword also *signs the
+// new user in*, and store.ts then writes the users/{uid} document itself. Our
+// API creates the user document server-side during /auth/signup and returns
+// PENDING (no session). So store.ts's signUp() needs a small rewrite — see
+// PHASE3_FRONTEND_SWAP.md. The compat below returns the created id so the
+// rewrite is minimal.
+// ============================================================================
+import { api, getToken, setToken, clearToken } from './api-client';
+
+export interface ProviderInfo {
+  providerId: string;
+  displayName: string | null;
+  email: string | null;
+  photoURL: string | null;
+}
+
+export interface CompatUser {
+  uid: string;
+  email: string | null;
+  emailVerified: boolean;
+  // Firebase-User fields store.ts reads for error diagnostics. In the
+  // self-hosted world there is a single credential provider and no anonymous
+  // or multi-tenant auth, so these carry constant values.
+  isAnonymous: boolean;
+  tenantId: string | null;
+  providerData: ProviderInfo[];
+}
+
+export interface UserCredential {
+  user: CompatUser;
+}
+
+let currentUser: CompatUser | null = null;
+
+// Auth handle passed around by store.ts / App.tsx. `currentUser` mirrors
+// firebase/auth's `auth.currentUser`, resolved from the JWT session and kept in
+// sync by signIn/signOut/resolveSession below.
+export const compatAuth = {
+  __eprom: 'auth' as const,
+  get currentUser(): CompatUser | null {
+    return currentUser;
+  },
+};
+
+// Builds a full CompatUser from the minimal fields the API returns.
+function mkUser(id: string, email: string | null): CompatUser {
+  return { uid: id, email, emailVerified: true, isAnonymous: false, tenantId: null, providerData: [] };
+}
+const listeners = new Set<(u: CompatUser | null) => void>();
+let initialized = false;
+
+function notify() {
+  for (const cb of listeners) {
+    try {
+      cb(currentUser);
+    } catch (e) {
+      console.error('auth listener threw', e);
+    }
+  }
+}
+
+async function resolveSession(): Promise<void> {
+  const token = getToken();
+  if (!token) {
+    currentUser = null;
+    return;
+  }
+  try {
+    const res = await api.get<{ user: { id: string; email?: string } }>('/auth/me');
+    currentUser = mkUser(res.user.id, res.user.email ?? null);
+  } catch {
+    clearToken();
+    currentUser = null;
+  }
+}
+
+export async function signInWithEmailAndPassword(
+  _auth: unknown,
+  email: string,
+  password: string,
+): Promise<UserCredential> {
+  const res = await api.post<{ token: string; user: { id: string; email?: string } }>('/auth/login', {
+    email,
+    password,
+  });
+  setToken(res.token);
+  currentUser = mkUser(res.user.id, res.user.email ?? email);
+  notify();
+  return { user: currentUser };
+}
+
+// Signs up a PENDING user. Does NOT establish a session (mirrors the app's
+// pending-approval flow). Returns the new user id as `uid` for store.ts.
+export async function createUserWithEmailAndPassword(
+  _auth: unknown,
+  email: string,
+  password: string,
+  name?: string,
+): Promise<UserCredential> {
+  const res = await api.post<{ pending: boolean; id?: string }>('/auth/signup', {
+    email,
+    password,
+    name: name ?? email,
+  });
+  return {
+    user: { uid: res.id ?? '', email, emailVerified: false, isAnonymous: false, tenantId: null, providerData: [] },
+  };
+}
+
+export async function signOut(_auth?: unknown): Promise<void> {
+  clearToken();
+  currentUser = null;
+  notify();
+}
+
+export async function sendPasswordResetEmail(_auth: unknown, email: string): Promise<void> {
+  await api.post('/auth/reset-password', { email });
+}
+
+// Firebase-style listener. Resolves the current session once on first call,
+// then invokes cb on every future auth change. Returns an unsubscribe fn.
+export function onAuthStateChanged(_auth: unknown, cb: (user: CompatUser | null) => void): () => void {
+  listeners.add(cb);
+  if (!initialized) {
+    initialized = true;
+    void resolveSession().then(() => notify());
+  } else {
+    // Late subscriber — give it the current state immediately.
+    cb(currentUser);
+  }
+  return () => listeners.delete(cb);
+}
+
+export function getCurrentUser(): CompatUser | null {
+  return currentUser;
+}

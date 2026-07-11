@@ -1,0 +1,95 @@
+# EPROM CMS — full self-hosted stack for the EPROM Linux VM.
+#   postgres  — the database (persistent volume)
+#   api       — Node + Express API (runs migrations on boot)
+#   web       — nginx serving the SPA + proxying /api
+#   backup    — nightly pg_dump to ./backups, 30-day retention
+#
+# Usage:  cp .env.docker.example .env  &&  edit .env  &&  docker compose up -d --build
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${PGUSER}
+      POSTGRES_PASSWORD: ${PGPASSWORD}
+      POSTGRES_DB: ${PGDATABASE}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PGUSER} -d ${PGDATABASE}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  api:
+    build: ./server
+    environment:
+      PORT: "4000"
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGUSER: ${PGUSER}
+      PGPASSWORD: ${PGPASSWORD}
+      PGDATABASE: ${PGDATABASE}
+      PGSSL: "false"
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-12h}
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL}
+      ALLOW_SIGNUP: ${ALLOW_SIGNUP:-true}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Liveness via the /health endpoint. Dependency-free (no curl/wget in the
+    # alpine image) using a tiny Node HTTP probe. start_period covers boot-time
+    # DB migrations so early failures don't flap the container.
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "require('http').get('http://127.0.0.1:4000/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      args:
+        VITE_API_URL: /api
+    ports:
+      - "80:80"
+      - "443:443"
+    # Only start serving once the API is actually healthy, not merely started —
+    # otherwise the first requests through /api race the API's boot/migrations.
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  backup:
+    image: postgres:16-alpine
+    environment:
+      PGPASSWORD: ${PGPASSWORD}
+    volumes:
+      - ./backups:/backups
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      "while true; do
+         echo \"[backup] $$(date -Iseconds) starting\";
+         pg_dump -h postgres -U ${PGUSER} ${PGDATABASE} | gzip > /backups/cms-$$(date +%F-%H%M).sql.gz || echo '[backup] FAILED';
+         find /backups -name '*.sql.gz' -mtime +30 -delete;
+         sleep 86400;
+       done"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:

@@ -1,0 +1,11 @@
+node_modules
+server
+dist
+coverage
+backups
+scratch
+.git
+.env
+.env.*
+*.log
+npm-debug.log*

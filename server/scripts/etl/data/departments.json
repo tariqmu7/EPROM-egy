@@ -1,0 +1,1482 @@
+[
+  {
+    "id": "chairman",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "CHAIRMAN",
+      "id": "chairman",
+      "managerId": "7F5hN6d0yuXVB2Ppe6B8xKv9oDm1",
+      "name": "Chairman & Managing Director",
+      "nameAr": "رئيس مجلس الإدارة والعضو المنتدب",
+      "type": "EXECUTIVE"
+    }
+  },
+  {
+    "id": "d-bizdev-ext",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "BIZDEV-EXT",
+      "id": "d-bizdev-ext",
+      "name": "External Contracts/Bids & Project Contract Follow-up",
+      "nameAr": "العقود والعروض الخارجية ومتابعة عقود المشروعات",
+      "parentId": "g-bizdev",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-bizdev-mkt",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "BIZDEV-MKT",
+      "id": "d-bizdev-mkt",
+      "managerId": "FntPakG6kZPYhcPbDrpQ80GtdbY2",
+      "name": "Business Development & Marketing Programs",
+      "nameAr": "تنمية الأعمال وبرامج التسويق",
+      "parentId": "g-bizdev",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-canal-hse",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "CANAL-HSE",
+      "id": "d-canal-hse",
+      "name": "HSE & Quality",
+      "nameAr": "السلامة والصحة المهنية وحماية البيئة والجودة",
+      "parentId": "g-canal",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-canal-insp",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "CANAL-INSP",
+      "id": "d-canal-insp",
+      "name": "Engineering Inspection & Corrosion",
+      "nameAr": "التفتيش الهندسي والتآكل",
+      "parentId": "g-canal",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-canal-lab",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "CANAL-LAB",
+      "id": "d-canal-lab",
+      "name": "Chemical Laboratories",
+      "nameAr": "المعامل الكيميائية",
+      "parentId": "g-canal",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-canal-maint",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "CANAL-MAINT",
+      "id": "d-canal-maint",
+      "name": "Maintenance",
+      "nameAr": "الصيانة",
+      "parentId": "g-canal",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-canal-ops",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "CANAL-OPS",
+      "id": "d-canal-ops",
+      "name": "Operations",
+      "nameAr": "التشغيل",
+      "parentId": "g-canal",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-comm-comm",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "COMM-COMM",
+      "id": "d-comm-comm",
+      "name": "Communication",
+      "nameAr": "الإتصال",
+      "parentId": "g-comm",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-comm-gov",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "COMM-GOV",
+      "id": "d-comm-gov",
+      "name": "Government Relations",
+      "nameAr": "العلاقات الحكومية",
+      "parentId": "g-comm",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-energy-impl",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "ENERGY-IMPL",
+      "id": "d-energy-impl",
+      "name": "Energy Efficiency Project Implementation",
+      "nameAr": "تنفيذ مشروعات رفع كفاءة الطاقة",
+      "parentId": "g-energy",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-energy-studies",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "ENERGY-STUDIES",
+      "id": "d-energy-studies",
+      "name": "Energy Efficiency Studies",
+      "nameAr": "دراسات رفع كفاءة الطاقة",
+      "parentId": "g-energy",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-fin-acct",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "FIN-ACCT",
+      "id": "d-fin-acct",
+      "name": "Accounts & Budget",
+      "nameAr": "الحسابات والموازنة",
+      "parentId": "g-fin",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-fin-cost",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "FIN-COST",
+      "id": "d-fin-cost",
+      "name": "Costs, Project Control & Receivables",
+      "nameAr": "التكاليف ومراقبة المشروعات والمقبوضات",
+      "parentId": "g-fin",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-fin-pay",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "FIN-PAY",
+      "id": "d-fin-pay",
+      "name": "Payments",
+      "nameAr": "المدفوعات",
+      "parentId": "g-fin",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-fin-tax",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "FIN-TAX",
+      "id": "d-fin-tax",
+      "name": "Finance & Taxes",
+      "nameAr": "التمويل والضرائب",
+      "parentId": "g-fin",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-fin-wage",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "FIN-WAGE",
+      "id": "d-fin-wage",
+      "name": "Wages & Employee Entitlements",
+      "nameAr": "الأجور وإستحقاقات العاملين",
+      "parentId": "g-fin",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-hr-ent",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "HR-ENT",
+      "id": "d-hr-ent",
+      "name": "Entitlements",
+      "nameAr": "الإستحقاقات",
+      "parentId": "g-hr",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-hr-ins",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "HR-INS",
+      "id": "d-hr-ins",
+      "name": "Social Insurance & Pensions",
+      "nameAr": "التأمينات الاجتماعية والمعاشات",
+      "parentId": "g-hr",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-hr-org",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "HR-ORG",
+      "id": "d-hr-org",
+      "name": "Organization & Workforce Planning",
+      "nameAr": "التنظيم وتخطيط القوى العاملة",
+      "parentId": "g-hr",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-hr-pers",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "HR-PERS",
+      "id": "d-hr-pers",
+      "name": "Personnel Affairs",
+      "nameAr": "شئون العاملين",
+      "parentId": "g-hr",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-iis-cairo",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "IIS-CAIRO",
+      "id": "d-iis-cairo",
+      "name": "Software & Hardware/Network Maintenance (Cairo)",
+      "nameAr": "البرمجيات وصيانة الأجهزة والشبكات بالقاهرة",
+      "parentId": "g-iis",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-iis-db",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "IIS-DB",
+      "id": "d-iis-db",
+      "name": "Databases & Software",
+      "nameAr": "قواعد المعلومات والبرمجيات",
+      "parentId": "g-iis",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-iis-infra",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "IIS-INFRA",
+      "id": "d-iis-infra",
+      "name": "Infrastructure, Networks & Hardware Operation/Maintenance",
+      "nameAr": "البنية التحتية والشبكات وتشغيل وصيانة الأجهزة",
+      "parentId": "g-iis",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-legal-inv",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "LEGAL-INV",
+      "id": "d-legal-inv",
+      "name": "Investigations",
+      "nameAr": "التحقيقات",
+      "parentId": "g-legal",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-legal-lit",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "LEGAL-LIT",
+      "id": "d-legal-lit",
+      "name": "Litigation",
+      "nameAr": "القضايا",
+      "parentId": "g-legal",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-med-cur",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "MED-CUR",
+      "id": "d-med-cur",
+      "name": "Curative Medicine",
+      "nameAr": "الطب العلاجي",
+      "parentId": "g-medical",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-med-prev",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "MED-PREV",
+      "id": "d-med-prev",
+      "name": "Preventive Medicine",
+      "nameAr": "الطب الوقائي",
+      "parentId": "g-medical",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-pr-adm",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "PR-ADM",
+      "id": "d-pr-adm",
+      "name": "Administrative Services",
+      "nameAr": "الخدمات الإدارية",
+      "parentId": "g-pr",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-pr-pr",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "PR-PR",
+      "id": "d-pr-pr",
+      "name": "Public Relations",
+      "nameAr": "العلاقات العامة",
+      "parentId": "g-pr",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-ps-ops",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "PS-OPS",
+      "id": "d-ps-ops",
+      "name": "Operational Safety",
+      "nameAr": "السلامة التشغيلية",
+      "parentId": "g-psafety",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-ps-tech",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "PS-TECH",
+      "id": "d-ps-tech",
+      "name": "Technical Safety & Loss Prevention",
+      "nameAr": "السلامة الفنية ومنع الخسائر",
+      "parentId": "g-psafety",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-sec-board",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "SEC-BOARD",
+      "id": "d-sec-board",
+      "name": "General Secretariat of the Board",
+      "nameAr": "الأمانة العامة لمجلس الإدارة",
+      "parentId": "g-secretariat",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-sec-chair",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "SEC-CHAIR",
+      "id": "d-sec-chair",
+      "name": "Board Chairman's Secretariat",
+      "nameAr": "سكرتارية رئيس مجلس الإدارة",
+      "parentId": "g-secretariat",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-south-hse",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "SOUTH-HSE",
+      "id": "d-south-hse",
+      "name": "HSE & Quality",
+      "nameAr": "السلامة والصحة المهنية وحماية البيئة والجودة",
+      "parentId": "g-south",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-south-insp",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "SOUTH-INSP",
+      "id": "d-south-insp",
+      "name": "Engineering Inspection & Corrosion",
+      "nameAr": "التفتيش الهندسي والتآكل",
+      "parentId": "g-south",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-south-lab",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "SOUTH-LAB",
+      "id": "d-south-lab",
+      "name": "Chemical Laboratories",
+      "nameAr": "المعامل الكيميائية",
+      "parentId": "g-south",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-south-maint",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "SOUTH-MAINT",
+      "id": "d-south-maint",
+      "name": "Maintenance",
+      "nameAr": "الصيانة",
+      "parentId": "g-south",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-south-ops",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "SOUTH-OPS",
+      "id": "d-south-ops",
+      "name": "Operations",
+      "nameAr": "التشغيل",
+      "parentId": "g-south",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-supply-contr",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "SUPPLY-CONTR",
+      "id": "d-supply-contr",
+      "name": "Contracts",
+      "nameAr": "العقود",
+      "parentId": "g-supply",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-supply-purch",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "SUPPLY-PURCH",
+      "id": "d-supply-purch",
+      "name": "Purchasing",
+      "nameAr": "المشتريات",
+      "parentId": "g-supply",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-supply-wh",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "SUPPLY-WH",
+      "id": "d-supply-wh",
+      "name": "Warehouses",
+      "nameAr": "المخازن",
+      "parentId": "g-supply",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-techoff-ctrl",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "TECHOFF-CTRL",
+      "id": "d-techoff-ctrl",
+      "name": "Technical Office, Control Systems",
+      "nameAr": "المكتب الفني لنظم التحكم",
+      "parentId": "g-techoff",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-techoff-eng",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "TECHOFF-ENG",
+      "id": "d-techoff-eng",
+      "name": "Technical Office, Engineering Affairs",
+      "nameAr": "المكتب الفني للشئون الهندسية",
+      "parentId": "g-techoff",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-techoff-insp",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "TECHOFF-INSP",
+      "id": "d-techoff-insp",
+      "name": "Technical Office, Engineering Inspection (Technical Support)",
+      "nameAr": "المكتب الفني للتفتيش الهندسي (الدعم الفني)",
+      "parentId": "g-techoff",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-techsup-ops",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "TECHSUP-OPS",
+      "id": "d-techsup-ops",
+      "name": "Technical Support for Operations",
+      "nameAr": "الدعم الفني للعمليات",
+      "parentId": "g-techsup",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-techsup-perf",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "TECHSUP-PERF",
+      "id": "d-techsup-perf",
+      "name": "Technical Support for Performance Evaluation & Work Programs",
+      "nameAr": "الدعم الفني لمتابعة تقييم الأداء وبرامج العمل",
+      "parentId": "g-techsup",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-techsup-util",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "TECHSUP-UTIL",
+      "id": "d-techsup-util",
+      "name": "Technical Support for Utilities & Storage",
+      "nameAr": "الدعم الفني للمرافق والمستودعات",
+      "parentId": "g-techsup",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-tf-eng",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "TF-ENG",
+      "id": "d-tf-eng",
+      "name": "Engineering Affairs Follow-up",
+      "nameAr": "متابعة الشئون الهندسية",
+      "parentId": "g-techfollow",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-tf-studies",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "TF-STUDIES",
+      "id": "d-tf-studies",
+      "name": "Technical Studies",
+      "nameAr": "الدراسات الفنية",
+      "parentId": "g-techfollow",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-train-prep",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "TRAIN-PREP",
+      "id": "d-train-prep",
+      "name": "Training Preparation & Planning",
+      "nameAr": "إعداد وتخطيط التدريب",
+      "parentId": "g-train",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-train-rd",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "TRAIN-RD",
+      "id": "d-train-rd",
+      "name": "Research & Training Development",
+      "nameAr": "البحوث وتطوير التدريب",
+      "parentId": "g-train",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-west-hse",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "WEST-HSE",
+      "id": "d-west-hse",
+      "name": "HSE & Quality",
+      "nameAr": "السلامة والصحة المهنية وحماية البيئة والجودة",
+      "parentId": "g-west",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-west-insp",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "WEST-INSP",
+      "id": "d-west-insp",
+      "name": "Engineering Inspection & Corrosion",
+      "nameAr": "التفتيش الهندسي والتآكل",
+      "parentId": "g-west",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-west-lab",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "WEST-LAB",
+      "id": "d-west-lab",
+      "name": "Chemical Laboratories",
+      "nameAr": "المعامل الكيميائية",
+      "parentId": "g-west",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-west-maint",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "WEST-MAINT",
+      "id": "d-west-maint",
+      "name": "Maintenance",
+      "nameAr": "الصيانة",
+      "parentId": "g-west",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "d-west-ops",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "WEST-OPS",
+      "id": "d-west-ops",
+      "name": "Operations",
+      "nameAr": "التشغيل",
+      "parentId": "g-west",
+      "type": "ASSISTANT_GENERAL"
+    }
+  },
+  {
+    "id": "dept-bizdev-ext-contracts",
+    "data": {
+      "code": "DEPT-BIZDEV-EXT-CONTRACTS",
+      "id": "dept-bizdev-ext-contracts",
+      "name": "External Contracts & Offers",
+      "nameAr": "العقود والعروض الخارجية",
+      "parentId": "d-bizdev-ext",
+      "type": "DEPARTMENT"
+    }
+  },
+  {
+    "id": "dept-bizdev-ext-followup",
+    "data": {
+      "code": "DEPT-BIZDEV-EXT-FOLLOWUP",
+      "id": "dept-bizdev-ext-followup",
+      "name": "Project Contract Follow-up",
+      "nameAr": "متابعة عقود المشروعات",
+      "parentId": "d-bizdev-ext",
+      "type": "DEPARTMENT"
+    }
+  },
+  {
+    "id": "dept-bizdev-mkt-bd",
+    "data": {
+      "code": "DEPT-BIZDEV-MKT-BD",
+      "id": "dept-bizdev-mkt-bd",
+      "name": "Business Development",
+      "nameAr": "تنمية الأعمال",
+      "parentId": "d-bizdev-mkt",
+      "type": "DEPARTMENT"
+    }
+  },
+  {
+    "id": "dept-bizdev-mkt-programs",
+    "data": {
+      "code": "DEPT-BIZDEV-MKT-PROGRAMS",
+      "id": "dept-bizdev-mkt-programs",
+      "name": "Marketing Programs",
+      "nameAr": "برامج التسويق",
+      "parentId": "d-bizdev-mkt",
+      "type": "DEPARTMENT"
+    }
+  },
+  {
+    "id": "g-bizdev",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "BIZDEV",
+      "id": "g-bizdev",
+      "managerId": "FTTujYERJRaQ8RT4zF3jX0jFZrT2",
+      "name": "General Manager of Business Development & External Contracting",
+      "nameAr": "مدير عام تنمية الأعمال والتعاقدات الخارجية",
+      "parentId": "sec-techsvc",
+      "type": "GENERAL"
+    }
+  },
+  {
+    "id": "g-canal",
+    "data": {
+      "code": "CANAL",
+      "id": "g-canal",
+      "name": "General Manager of Operations: Canal Cities & Sinai",
+      "nameAr": "مدير عام التشغيل بمدن القناة وسيناء",
+      "parentId": "sec-tech",
+      "type": "GENERAL"
+    }
+  },
+  {
+    "id": "g-comm",
+    "data": {
+      "code": "COMM",
+      "id": "g-comm",
+      "name": "General Manager of Communication & Government Relations",
+      "nameAr": "مدير عام الإتصال والعلاقات الحكومية",
+      "parentId": "sec-admin",
+      "type": "GENERAL"
+    }
+  },
+  {
+    "id": "g-energy",
+    "data": {
+      "code": "ENERGY",
+      "id": "g-energy",
+      "name": "General Manager of Energy Rationalization",
+      "nameAr": "مدير عام ترشيد الطاقة",
+      "parentId": "chairman",
+      "type": "GENERAL"
+    }
+  },
+  {
+    "id": "g-fin",
+    "data": {
+      "code": "FIN-2",
+      "id": "g-fin",
+      "name": "General Manager of Financial Affairs",
+      "nameAr": "مدير عام الشئون المالية",
+      "parentId": "sec-fin",
+      "type": "GENERAL"
+    }
+  },
+  {
+    "id": "g-hr",
+    "data": {
+      "code": "HR",
+      "id": "g-hr",
+      "name": "General Manager of Human Resources",
+      "nameAr": "مدير عام الموارد البشرية",
+      "parentId": "sec-admin",
+      "type": "GENERAL"
+    }
+  },
+  {
+    "id": "g-iis",
+    "data": {
+      "code": "IIS",
+      "id": "g-iis",
+      "name": "General Manager of Integrated Information Systems",
+      "nameAr": "مدير عام نظم المعلومات المتكاملة",
+      "parentId": "sec-eng",
+      "type": "GENERAL"
+    }
+  },
+  {
+    "id": "g-legal",
+    "data": {
+      "code": "LEGAL",
+      "id": "g-legal",
+      "name": "General Manager of Legal Affairs",
+      "nameAr": "مدير عام الشئون القانونية",
+      "parentId": "chairman",
+      "type": "GENERAL"
+    }
+  },
+  {
+    "id": "g-medical",
+    "data": {
+      "code": "MEDICAL",
+      "id": "g-medical",
+      "name": "General Manager of Medical Affairs",
+      "nameAr": "مدير عام الشئون الطبية",
+      "parentId": "chairman",
+      "type": "GENERAL"
+    }
+  },
+  {
+    "id": "g-pr",
+    "data": {
+      "code": "PR",
+      "id": "g-pr",
+      "name": "General Manager of Public Relations & General Services",
+      "nameAr": "مدير عام العلاقات والخدمات العامة",
+      "parentId": "sec-admin",
+      "type": "GENERAL"
+    }
+  },
+  {
+    "id": "g-psafety",
+    "data": {
+      "code": "PSAFETY",
+      "id": "g-psafety",
+      "name": "General Manager of Process Safety",
+      "nameAr": "مدير عام سلامة العمليات",
+      "parentId": "chairman",
+      "type": "GENERAL"
+    }
+  },
+  {
+    "id": "g-quality",
+    "data": {
+      "code": "QUALITY",
+      "id": "g-quality",
+      "name": "General Manager of Quality Systems",
+      "nameAr": "مدير عام نظم الجودة",
+      "parentId": "chairman",
+      "type": "GENERAL"
+    }
+  },
+  {
+    "id": "g-secretariat",
+    "data": {
+      "code": "SECRETARIAT",
+      "id": "g-secretariat",
+      "name": "General Manager of General Secretariat & Board Chairman Secretariat",
+      "nameAr": "مدير عام الأمانة العامة وسكرتارية رئيس مجلس الإدارة",
+      "parentId": "chairman",
+      "type": "GENERAL"
+    }
+  },
+  {
+    "id": "g-security",
+    "data": {
+      "code": "SECURITY",
+      "id": "g-security",
+      "name": "General Manager of Security",
+      "nameAr": "مدير عام الأمن",
+      "parentId": "chairman",
+      "type": "GENERAL"
+    }
+  },
+  {
+    "id": "g-south",
+    "data": {
+      "code": "SOUTH",
+      "id": "g-south",
+      "name": "General Manager of Operations: Southern Region",
+      "nameAr": "مدير عام التشغيل بالمنطقة الجنوبية",
+      "parentId": "sec-tech",
+      "type": "GENERAL"
+    }
+  },
+  {
+    "id": "g-supply",
+    "data": {
+      "code": "SUPPLY",
+      "id": "g-supply",
+      "name": "General Manager of Supplies & Contracts",
+      "nameAr": "مدير عام المهمات والعقود",
+      "parentId": "sec-techsvc",
+      "type": "GENERAL"
+    }
+  },
+  {
+    "id": "g-techfollow",
+    "data": {
+      "code": "TECHFOLLOW",
+      "id": "g-techfollow",
+      "name": "General Manager of Technical Follow-up, Cairo Office",
+      "nameAr": "مدير عام المتابعة الفنية (مكتب القاهرة)",
+      "parentId": "chairman",
+      "type": "GENERAL"
+    }
+  },
+  {
+    "id": "g-techoff",
+    "data": {
+      "code": "TECHOFF",
+      "id": "g-techoff",
+      "name": "General Manager of Technical Office for Documents",
+      "nameAr": "مدير عام المكتب الفني للوثائق",
+      "parentId": "sec-ops",
+      "type": "GENERAL"
+    }
+  },
+  {
+    "id": "g-techsup",
+    "data": {
+      "code": "TECHSUP",
+      "id": "g-techsup",
+      "name": "General Manager of Technical Support for Projects",
+      "nameAr": "مدير عام الدعم الفني للمشروعات",
+      "parentId": "sec-tech",
+      "type": "GENERAL"
+    }
+  },
+  {
+    "id": "g-train",
+    "data": {
+      "code": "TRAIN",
+      "id": "g-train",
+      "name": "General Manager of Training",
+      "nameAr": "مدير عام التدريب",
+      "parentId": "sec-admin",
+      "type": "GENERAL"
+    }
+  },
+  {
+    "id": "g-west",
+    "data": {
+      "code": "WEST",
+      "id": "g-west",
+      "name": "General Manager of Operations: Western Region",
+      "nameAr": "مدير عام التشغيل بالمنطقة الغربية",
+      "parentId": "sec-tech",
+      "type": "GENERAL"
+    }
+  },
+  {
+    "id": "p-admin-asstgm-cairo",
+    "data": {
+      "code": "ADMIN-ASSTGM-CAIRO",
+      "id": "p-admin-asstgm-cairo",
+      "name": "Assistant General Manager, Cairo Administrative Affairs",
+      "nameAr": "مدير عام مساعد الشئون الإدارية بالقاهرة (1)",
+      "parentId": "sec-admin",
+      "type": "POSITION"
+    }
+  },
+  {
+    "id": "p-admin-asstgm-pers",
+    "data": {
+      "code": "ADMIN-ASSTGM-PERS",
+      "id": "p-admin-asstgm-pers",
+      "name": "Assistant General Manager, personal capacity",
+      "nameAr": "مدير عام مساعد بصفة شخصية (1)",
+      "parentId": "sec-admin",
+      "type": "POSITION"
+    }
+  },
+  {
+    "id": "p-admin-gm-affairs",
+    "data": {
+      "code": "ADMIN-GM-AFFAIRS",
+      "id": "p-admin-gm-affairs",
+      "name": "General Manager, Administrative Affairs",
+      "nameAr": "مدير عام بالشئون الإدارية (1)",
+      "parentId": "sec-admin",
+      "type": "POSITION"
+    }
+  },
+  {
+    "id": "p-admin-gm-dept",
+    "data": {
+      "code": "ADMIN-GM-DEPT",
+      "id": "p-admin-gm-dept",
+      "name": "General Manager within the department",
+      "nameAr": "مدير عام بالإدارة (1)",
+      "parentId": "sec-admin",
+      "type": "POSITION"
+    }
+  },
+  {
+    "id": "p-asstgm-admin-followup",
+    "data": {
+      "code": "ASSTGM-ADMIN-FOLLOWUP",
+      "id": "p-asstgm-admin-followup",
+      "name": "Assistant General Manager of Administrative Follow-up for the President's Assistants",
+      "nameAr": "مدير عام مساعد المتابعة الإدارية لمساعدي رئيس الشركة",
+      "parentId": "chairman",
+      "type": "POSITION"
+    }
+  },
+  {
+    "id": "p-asstgm-csr",
+    "data": {
+      "code": "ASSTGM-CSR",
+      "id": "p-asstgm-csr",
+      "name": "Assistant General Manager of Corporate Social Responsibility (CSR)",
+      "nameAr": "مدير عام مساعد أنشطة المسئولية المجتمعية",
+      "parentId": "chairman",
+      "type": "POSITION"
+    }
+  },
+  {
+    "id": "p-asstgm-hse",
+    "data": {
+      "code": "ASSTGM-HSE",
+      "id": "p-asstgm-hse",
+      "name": "Assistant General Manager of Health, Safety & Environment (HSE)",
+      "nameAr": "مدير عام مساعد السلامة والصحة المهنية وحماية البيئة",
+      "parentId": "chairman",
+      "type": "POSITION"
+    }
+  },
+  {
+    "id": "p-asstgm-internal-audit",
+    "data": {
+      "code": "ASSTGM-INTERNAL-AUDIT",
+      "id": "p-asstgm-internal-audit",
+      "name": "Assistant General Manager of Internal Audit",
+      "nameAr": "مدير عام مساعد المراجعة الداخلية",
+      "parentId": "chairman",
+      "type": "POSITION"
+    }
+  },
+  {
+    "id": "p-asstgm-pers-10",
+    "data": {
+      "code": "ASSTGM-PERS-10",
+      "id": "p-asstgm-pers-10",
+      "name": "Assistant General Manager, personal capacity (10)",
+      "nameAr": "مدير عام مساعد بصفة شخصية (10)",
+      "parentId": "chairman",
+      "type": "POSITION"
+    }
+  },
+  {
+    "id": "p-erc-maint-gm",
+    "data": {
+      "code": "ERC-MAINT-GM",
+      "id": "p-erc-maint-gm",
+      "name": "General Manager, General Maintenance (at ERC refining project)",
+      "nameAr": "مدير عام بالإدارة العامة للصيانة العامة — بمشروع المصرية للتكرير (ERC project)",
+      "parentId": "chairman",
+      "type": "POSITION"
+    }
+  },
+  {
+    "id": "p-expert-asst-pres",
+    "data": {
+      "code": "EXPERT-ASST-PRES",
+      "id": "p-expert-asst-pres",
+      "name": "Expert / Assistant President grade",
+      "nameAr": "خبير / مساعد رئيس شركة (15)",
+      "parentId": "chairman",
+      "type": "POSITION"
+    }
+  },
+  {
+    "id": "p-expert-company-pres",
+    "data": {
+      "code": "EXPERT-COMPANY-PRES",
+      "id": "p-expert-company-pres",
+      "name": "Expert / Company President grade",
+      "nameAr": "خبير / رئيس شركة (3)",
+      "parentId": "chairman",
+      "type": "POSITION"
+    }
+  },
+  {
+    "id": "p-expert-vice-pres",
+    "data": {
+      "behavioralSkillIds": [],
+      "code": "EXPERT-VICE-PRES",
+      "id": "p-expert-vice-pres",
+      "name": "Expert / Vice President grade",
+      "nameAr": "خبير / نائب رئيس شركة (1)",
+      "parentId": "chairman",
+      "type": "POSITION"
+    }
+  },
+  {
+    "id": "p-fin-asstgm-dept",
+    "data": {
+      "code": "FIN-ASSTGM-DEPT",
+      "id": "p-fin-asstgm-dept",
+      "name": "Assistant General Manager within the department",
+      "nameAr": "مدير عام مساعد بالإدارة (1)",
+      "parentId": "g-fin",
+      "type": "POSITION"
+    }
+  },
+  {
+    "id": "p-fin-asstgm-dept-pers",
+    "data": {
+      "code": "FIN-ASSTGM-DEPT-PERS",
+      "id": "p-fin-asstgm-dept-pers",
+      "name": "Assistant General Manager within the department, personal capacity",
+      "nameAr": "مدير عام مساعد بالإدارة بصفة شخصية (3)",
+      "parentId": "sec-fin",
+      "type": "POSITION"
+    }
+  },
+  {
+    "id": "p-fin-gm-pers",
+    "data": {
+      "code": "FIN-GM-PERS",
+      "id": "p-fin-gm-pers",
+      "name": "General Manager, personal capacity",
+      "nameAr": "مدير عام بصفة شخصية (1)",
+      "parentId": "sec-fin",
+      "type": "POSITION"
+    }
+  },
+  {
+    "id": "p-gm-pers-9",
+    "data": {
+      "code": "GM-PERS-9",
+      "id": "p-gm-pers-9",
+      "name": "General Manager, personal capacity (9)",
+      "nameAr": "مدير عام بصفة شخصية (9)",
+      "parentId": "chairman",
+      "type": "POSITION"
+    }
+  },
+  {
+    "id": "p-iis-asstgm-pers",
+    "data": {
+      "code": "IIS-ASSTGM-PERS",
+      "id": "p-iis-asstgm-pers",
+      "name": "Assistant General Manager, personal capacity",
+      "nameAr": "مدير عام مساعد بصفة شخصية (2)",
+      "parentId": "g-iis",
+      "type": "POSITION"
+    }
+  },
+  {
+    "id": "p-legal-asstgm-pers",
+    "data": {
+      "code": "LEGAL-ASSTGM-PERS",
+      "id": "p-legal-asstgm-pers",
+      "name": "Assistant General Manager, personal capacity",
+      "nameAr": "مدير عام مساعد بصفة شخصية (2)",
+      "parentId": "g-legal",
+      "type": "POSITION"
+    }
+  },
+  {
+    "id": "p-pm-amoc",
+    "data": {
+      "code": "PM-AMOC",
+      "id": "p-pm-amoc",
+      "name": "Project Manager, AMOC",
+      "nameAr": "مدير مشروع أموك",
+      "parentId": "chairman",
+      "type": "POSITION"
+    }
+  },
+  {
+    "id": "p-pm-elab",
+    "data": {
+      "code": "PM-ELAB",
+      "id": "p-pm-elab",
+      "name": "Project Manager, ELAB",
+      "nameAr": "مدير مشروع إيلاب",
+      "parentId": "chairman",
+      "type": "POSITION"
+    }
+  },
+  {
+    "id": "p-pm-erc",
+    "data": {
+      "code": "PM-ERC",
+      "id": "p-pm-erc",
+      "name": "Project Manager, ERC (Egyptian Refining Company)",
+      "nameAr": "مدير مشروع المصرية للتكرير",
+      "parentId": "chairman",
+      "type": "POSITION"
+    }
+  },
+  {
+    "id": "p-pm-esterenex",
+    "data": {
+      "code": "PM-ESTERENEX",
+      "id": "p-pm-esterenex",
+      "name": "Project Manager, Esterenex",
+      "nameAr": "مدير مشروع الإستيرنكس",
+      "parentId": "chairman",
+      "type": "POSITION"
+    }
+  },
+  {
+    "id": "p-pm-midor",
+    "data": {
+      "code": "PM-MIDOR",
+      "id": "p-pm-midor",
+      "name": "Project Manager, MIDOR",
+      "nameAr": "مدير مشروع ميدور",
+      "parentId": "chairman",
+      "type": "POSITION"
+    }
+  },
+  {
+    "id": "p-pm-sokhna",
+    "data": {
+      "code": "PM-SOKHNA",
+      "id": "p-pm-sokhna",
+      "name": "Project Manager, Sokhna",
+      "nameAr": "مدير مشروع السخنة",
+      "parentId": "chairman",
+      "type": "POSITION"
+    }
+  },
+  {
+    "id": "p-quality-asstgm",
+    "data": {
+      "code": "QUALITY-ASSTGM",
+      "id": "p-quality-asstgm",
+      "name": "Assistant General Manager, Quality Systems",
+      "nameAr": "مدير عام مساعد نظم الجودة (1)",
+      "parentId": "g-quality",
+      "type": "POSITION"
+    }
+  },
+  {
+    "id": "p-secretariat-asstgm-pers",
+    "data": {
+      "code": "SECRETARIAT-ASSTGM-PERS",
+      "id": "p-secretariat-asstgm-pers",
+      "name": "Assistant General Manager, personal capacity",
+      "nameAr": "مدير عام مساعد بصفة شخصية (1)",
+      "parentId": "g-secretariat",
+      "type": "POSITION"
+    }
+  },
+  {
+    "id": "p-security-asstgm",
+    "data": {
+      "code": "SECURITY-ASSTGM",
+      "id": "p-security-asstgm",
+      "name": "Assistant General Manager, Security",
+      "nameAr": "مدير عام مساعد الأمن (1)",
+      "parentId": "g-security",
+      "type": "POSITION"
+    }
+  },
+  {
+    "id": "p-supply-asstgm-pers",
+    "data": {
+      "code": "SUPPLY-ASSTGM-PERS",
+      "id": "p-supply-asstgm-pers",
+      "name": "Assistant General Manager, personal capacity",
+      "nameAr": "مدير عام مساعد بصفة شخصية (4)",
+      "parentId": "g-supply",
+      "type": "POSITION"
+    }
+  },
+  {
+    "id": "p-supply-gm-pers",
+    "data": {
+      "code": "SUPPLY-GM-PERS",
+      "id": "p-supply-gm-pers",
+      "name": "General Manager, personal capacity",
+      "nameAr": "مدير عام بصفة شخصية (1)",
+      "parentId": "g-supply",
+      "type": "POSITION"
+    }
+  },
+  {
+    "id": "p-tech-asstgm-pers",
+    "data": {
+      "code": "TECH-ASSTGM-PERS",
+      "id": "p-tech-asstgm-pers",
+      "name": "Assistant General Manager, personal capacity",
+      "nameAr": "مدير عام مساعد بصفة شخصية (1)",
+      "parentId": "sec-tech",
+      "type": "POSITION"
+    }
+  },
+  {
+    "id": "p-tech-gm-pers",
+    "data": {
+      "code": "TECH-GM-PERS",
+      "id": "p-tech-gm-pers",
+      "name": "General Manager, personal capacity",
+      "nameAr": "مدير عام بصفة شخصية (1)",
+      "parentId": "sec-tech",
+      "type": "POSITION"
+    }
+  },
+  {
+    "id": "p-techoff-asstgm-pers",
+    "data": {
+      "code": "TECHOFF-ASSTGM-PERS",
+      "id": "p-techoff-asstgm-pers",
+      "name": "Assistant General Manager, personal capacity",
+      "nameAr": "مدير عام مساعد بصفة شخصية (1)",
+      "parentId": "g-techoff",
+      "type": "POSITION"
+    }
+  },
+  {
+    "id": "p-techoff-gm-pers",
+    "data": {
+      "code": "TECHOFF-GM-PERS",
+      "id": "p-techoff-gm-pers",
+      "name": "General Manager, personal capacity",
+      "nameAr": "مدير عام بصفة شخصية (1)",
+      "parentId": "g-techoff",
+      "type": "POSITION"
+    }
+  },
+  {
+    "id": "p-techsup-gm-pers",
+    "data": {
+      "code": "TECHSUP-GM-PERS",
+      "id": "p-techsup-gm-pers",
+      "name": "General Manager, personal capacity",
+      "nameAr": "مدير عام بصفة شخصية (1)",
+      "parentId": "g-techsup",
+      "type": "POSITION"
+    }
+  },
+  {
+    "id": "sec-admin",
+    "data": {
+      "code": "ADMIN",
+      "id": "sec-admin",
+      "name": "Assistant to Company President for Administrative Affairs",
+      "nameAr": "مساعد رئيس الشركة للشئون الإدارية",
+      "parentId": "chairman",
+      "type": "SECTOR"
+    }
+  },
+  {
+    "id": "sec-eng",
+    "data": {
+      "code": "ENG",
+      "id": "sec-eng",
+      "name": "Assistant to Company President for Engineering Affairs",
+      "nameAr": "مساعد رئيس الشركة للشئون الهندسية",
+      "parentId": "chairman",
+      "type": "SECTOR"
+    }
+  },
+  {
+    "id": "sec-fin",
+    "data": {
+      "code": "FIN",
+      "id": "sec-fin",
+      "name": "Assistant to Company President for Financial Affairs",
+      "nameAr": "مساعد رئيس الشركة للشئون المالية",
+      "parentId": "chairman",
+      "type": "SECTOR"
+    }
+  },
+  {
+    "id": "sec-mech",
+    "data": {
+      "code": "MECH",
+      "id": "sec-mech",
+      "name": "Assistant to Company President for Mechanical Maintenance & Engineering Inspection",
+      "nameAr": "مساعد رئيس الشركة للصيانة الميكانيكية والتفتيش الهندسي",
+      "parentId": "chairman",
+      "type": "SECTOR"
+    }
+  },
+  {
+    "id": "sec-ops",
+    "data": {
+      "code": "OPS",
+      "id": "sec-ops",
+      "name": "Assistant to Company President for Operations",
+      "nameAr": "مساعد رئيس الشركة للعمليات",
+      "parentId": "chairman",
+      "type": "SECTOR"
+    }
+  },
+  {
+    "id": "sec-tech",
+    "data": {
+      "code": "TECH",
+      "id": "sec-tech",
+      "name": "Assistant to Company President for Technical Affairs",
+      "nameAr": "مساعد رئيس الشركة للشئون الفنية",
+      "parentId": "chairman",
+      "type": "SECTOR"
+    }
+  },
+  {
+    "id": "sec-techsvc",
+    "data": {
+      "code": "TECHSVC",
+      "id": "sec-techsvc",
+      "name": "Assistant to Company President for Technical Services & Business Development",
+      "nameAr": "مساعد رئيس الشركة للخدمات الفنية وتنمية الأعمال",
+      "parentId": "chairman",
+      "type": "SECTOR"
+    }
+  },
+  {
+    "id": "sect-bizdev-ext-contracts",
+    "data": {
+      "code": "SECT-BIZDEV-EXT-CONTRACTS",
+      "id": "sect-bizdev-ext-contracts",
+      "name": "External Contracts & Offers",
+      "nameAr": "العقود والعروض الخارجية",
+      "parentId": "dept-bizdev-ext-contracts",
+      "type": "SECTION"
+    }
+  },
+  {
+    "id": "sect-bizdev-ext-followup",
+    "data": {
+      "code": "SECT-BIZDEV-EXT-FOLLOWUP",
+      "id": "sect-bizdev-ext-followup",
+      "name": "Project Contract Follow-up",
+      "nameAr": "متابعة عقود المشروعات",
+      "parentId": "dept-bizdev-ext-followup",
+      "type": "SECTION"
+    }
+  },
+  {
+    "id": "sect-bizdev-mkt-bd",
+    "data": {
+      "code": "SECT-BIZDEV-MKT-BD",
+      "id": "sect-bizdev-mkt-bd",
+      "name": "Business Development",
+      "nameAr": "تنمية الأعمال",
+      "parentId": "dept-bizdev-mkt-bd",
+      "type": "SECTION"
+    }
+  },
+  {
+    "id": "sect-bizdev-mkt-programs",
+    "data": {
+      "code": "SECT-BIZDEV-MKT-PROGRAMS",
+      "id": "sect-bizdev-mkt-programs",
+      "name": "Marketing Programs",
+      "nameAr": "برامج التسويق",
+      "parentId": "dept-bizdev-mkt-programs",
+      "type": "SECTION"
+    }
+  },
+  {
+    "id": "vice-chairman",
+    "data": {
+      "code": "VICE-CHAIRMAN",
+      "id": "vice-chairman",
+      "name": "Vice Chairman of the Board",
+      "nameAr": "نائب رئيس مجلس الإدارة (1)",
+      "parentId": "chairman",
+      "type": "EXECUTIVE"
+    }
+  }
+]

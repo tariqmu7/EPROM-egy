@@ -46,36 +46,25 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      # A4.8 — run tests and enforce coverage on services/store.ts
+      # A4.8 — run tests and enforce coverage on src/services/store.ts
       - name: Test with coverage
         run: npm run test:coverage
 
-      - name: Regenerate Firestore rules from template
-        run: npm run rules:build
-        env:
-          VITE_BOOTSTRAP_ADMIN_EMAIL: ${{ secrets.VITE_BOOTSTRAP_ADMIN_EMAIL }}
+      # Backend (self-hosted API): typecheck + authz/auth tests (pg-mem, no DB needed).
+      - name: Backend install
+        run: npm install
+        working-directory: server
 
-      # A6.4 — block the build if any required Firebase env var is missing
-      - name: Validate Firebase env vars
-        run: npm run check-env
-        env:
-          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
-          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
-          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
-          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
-          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
-          VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
+      - name: Backend typecheck
+        run: npm run typecheck
+        working-directory: server
+
+      - name: Backend tests
+        run: npm test
+        working-directory: server
 
       # Verify the production bundle compiles. The dist/ output is deployed to
-      # the nginx host out-of-band (not uploaded here).
+      # the nginx host out-of-band (not uploaded here). VITE_API_URL is baked at
+      # build time on the deploy host; the client falls back to '/api' if unset.
       - name: Build
         run: npm run build
-        env:
-          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
-          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
-          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
-          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
-          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
-          VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}

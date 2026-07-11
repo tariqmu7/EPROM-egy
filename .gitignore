@@ -13,6 +13,9 @@ dist
 dist-ssr
 *.local
 
+# Local PostgreSQL data (the embedded cluster's data dir — the actual database)
+server/data/
+
 # Environment variables (contain Firebase credentials — never commit)
 .env
 .env.local

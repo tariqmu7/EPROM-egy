@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-A React + Firebase SPA for employee competency management. The system allows admins to define **Job Profiles** with required skill levels, assign employees to those profiles, and evaluate each employee's proficiency across all relevant skills. Output includes skill gap reports, Individual Training Plans (ITP), and career progression roadmaps.
+A **self-hosted** React SPA (backed by a Node + Express + PostgreSQL API) for employee competency management. The system allows admins to define **Job Profiles** with required skill levels, assign employees to those profiles, and evaluate each employee's proficiency across all relevant skills. Output includes skill gap reports, Individual Training Plans (ITP), and career progression roadmaps. It runs entirely on company infrastructure — no external cloud dependency. (It was migrated off Firebase; see [`docs/migration/`](docs/migration/).)
 
 ---
 
@@ -11,8 +11,10 @@ A React + Firebase SPA for employee competency management. The system allows adm
 | Layer | Technology |
 |---|---|
 | Frontend | React 18 + TypeScript, Vite, Tailwind CSS |
-| Database | Firebase Firestore (primary), Supabase (secondary) |
-| Auth | Firebase Authentication (email/password) |
+| Backend (API) | Node 20 + Express REST API (`server/`) — JWT auth, authz middleware, generic `/col` + `/batch` endpoints |
+| Database | PostgreSQL — each former collection is a table of JSON(B) documents; reached **only** through the API |
+| Auth | Email/password → JWT (HS256), bcrypt-hashed passwords, issued by the API |
+| Deploy | Docker Compose (postgres + api + web/nginx + backup) on one Linux VM |
 | Charts | Recharts |
 | Icons | Lucide React |
 | Bulk Import | XLSX (Excel parsing) |
@@ -21,38 +23,51 @@ A React + Firebase SPA for employee competency management. The system allows adm
 
 ## Project Structure
 
+> **Frontend source lives under `src/`** (deep-restructured 2026-07-11). Config
+> files (vite/vitest/tailwind/tsconfig/postcss/eslint) and `index.html` stay at the
+> repo root. The self-hosted backend lives under `server/`. Loose docs live under
+> `docs/`. See [`WORKPLAN.md`](WORKPLAN.md) for the local-server hardening tracker.
+
 ```
-EPROM-egy/
-├── App.tsx              # Root: auth screen + role-based tab routing
-├── types.ts             # All TypeScript interfaces & enums
-├── constants.ts         # Proficiency level labels (1=Awareness → 5=Expert)
-├── firebase.ts          # Firebase init (auth, db)
-├── services/
-│   └── store.ts         # DataService — all Firestore ops & business logic
-├── pages/
-│   ├── AdminPanel.tsx   # Multi-view admin dashboard
-│   ├── EmployeeDashboard.tsx
-│   ├── ManagerDashboard.tsx
-│   ├── CEOPanel.tsx
-│   ├── EvaluationsHub.tsx
-│   ├── OnlineAssessments.tsx
-│   ├── ManagerialInterviews.tsx
-│   ├── BehavioralAssessment.tsx  # 360° self/peer/manager
-│   ├── EvidencePortal.tsx
-│   ├── CompetencyMatrix.tsx
-│   ├── (assessment config lives inline on each Skill — see SkillForm in AdminPanel + components/AssessmentMethodEditor.tsx)
-│   └── SupervisorApproval.tsx
-└── components/
-    ├── Layout.tsx        # Sidebar nav + header
-    ├── BulkUpload.tsx    # Excel import for users
-    ├── SearchableSelect.tsx
-    ├── NotificationBell.tsx
-    └── AssessmentHistoryLog.tsx
+ECMS/
+├── index.html           # Vite entry → loads /src/main.tsx
+├── src/
+│   ├── main.tsx         # React bootstrap (was index.tsx)
+│   ├── App.tsx          # Root: auth screen + role-based tab routing
+│   ├── routes.ts        # Clean-URL routing map + SUB_VIEWS (see Navigation below)
+│   ├── types.ts         # All TypeScript interfaces & enums
+│   ├── constants.ts     # Proficiency level labels (1=Awareness → 5=Expert)
+│   ├── hooks/           # useUrlRouting, usePersistentView, useSessionState, useStoreData
+│   ├── services/
+│   │   ├── store.ts     # DataService — all data ops & business logic
+│   │   ├── api-client.ts        # HTTP client for the self-hosted API (JWT)
+│   │   ├── firestore-compat.ts  # Firestore-shaped shim over the REST API (polling)
+│   │   └── auth-compat.ts       # Firebase-Auth-shaped shim over JWT auth
+│   ├── pages/           # AdminPanel, EmployeeDashboard, ManagerDashboard, CEOPanel,
+│   │   │                # EvaluationsHub, OnlineAssessments, ManagerialInterviews,
+│   │   │                # BehavioralAssessment (360°), EvidencePortal, etc.
+│   │   │                # (skill assessment config is inline via SkillForm +
+│   │   │                #  components/AssessmentMethodEditor.tsx)
+│   ├── components/      # Layout (sidebar+header), BulkUpload, SearchableSelect,
+│   │   │                # NotificationBell, AssessmentHistoryLog, ui/ …
+│   ├── i18n/ · utils/ · assets/ · constants/ (standards.ts) · __tests__/
+├── server/              # Self-hosted backend: Node + Express + Postgres (JWT auth,
+│   │                    # authz middleware, generic /col REST, /batch, migrations,
+│   │                    # scripts/serve-local.ts = embedded-Postgres one-command run)
+├── deploy/nginx.conf    # SPA + /api reverse proxy (company-domain host)
+├── docs/                # migration/ · runbooks/ · qa/ · reference/  (+ docs/README.md)
+└── run.bat              # One-click: boots backend (:4000) + frontend (:5173)
 ```
 
 ---
 
-## Core Data Model (Firestore Collections)
+## Core Data Model (Collections)
+
+> Each "collection" below is now a **PostgreSQL table** holding JSON(B) documents
+> (original document IDs preserved from the Firebase export). The frontend still
+> reads/writes them with Firestore-shaped calls via the compat shims; the API's
+> generic `/col/:collection` endpoints translate those to SQL. The logical model is
+> unchanged from the Firestore era — only the storage engine changed.
 
 ### Key Collections
 
@@ -72,7 +87,7 @@ EPROM-egy/
 ### Org Hierarchy (OrgLevel enum)
 `CEO` → `ACEO` → `GM` → `AGM` → `DM` → `SH` → `SP` → `JP` → `FR`
 
-A job profile's `orgLevel` is **derived from the org-chart node's structural type** (`COMPANY` / `EXECUTIVE` / `SECTOR` / `GENERAL` / `DEPARTMENT` / `POSITION`), never inferred from the position name or who it reports to. Mapping: `EXECUTIVE→CEO`, `SECTOR→ACEO`, `GENERAL→GM`, `DEPARTMENT→SH`, `POSITION→by title`. Full table in [`job_profiles/README.md`](job_profiles/README.md).
+A job profile's `orgLevel` is **derived from the org-chart node's structural type** (`COMPANY` / `EXECUTIVE` / `SECTOR` / `GENERAL` / `DEPARTMENT` / `POSITION`), never inferred from the position name or who it reports to. Mapping: `EXECUTIVE→CEO`, `SECTOR→ACEO`, `GENERAL→GM`, `DEPARTMENT→SH`, `POSITION→by title`. (The mapping constant is `DEPT_TYPE_TO_ORG_LEVEL` in `src/types.ts`.)
 
 ### User Roles
 - `ADMIN` — full system management
@@ -141,21 +156,34 @@ deep links, page refresh, and back/forward in step with it. Every page has a rea
 URL (e.g. `/admin/users`, `/evaluations/360`, `/ceo/profile/:userId`).
 
 Moving parts:
-- [`routes.ts`](routes.ts) — **the single source of truth**: a `TAB_PATHS` map pairing each
-  `activeTab` key with a clean path, plus `routeToPath` / `pathToRoute` helpers. Base-path aware
-  (reads `import.meta.env.BASE_URL`).
-- [`hooks/useUrlRouting.ts`](hooks/useUrlRouting.ts) — bidirectional sync: adopts the URL on
-  first authenticated render (deep link/refresh), pushes history entries on tab change, and
-  applies back/forward pops via `applyRoute`.
+- [`src/routes.ts`](src/routes.ts) — **the single source of truth**: a `TAB_PATHS` map pairing
+  each `activeTab` key with a clean path, plus `routeToPath` / `pathToRoute` helpers, plus
+  `SUB_VIEWS` (page-level sub-tabs → URL sub-segments) with `buildSubViewPath` /
+  `readSubViewFromPath`. Base-path aware (reads `import.meta.env.BASE_URL`).
+- [`src/hooks/useUrlRouting.ts`](src/hooks/useUrlRouting.ts) — bidirectional sync: adopts the URL
+  on first authenticated render (deep link/refresh), pushes history entries on tab change, applies
+  back/forward pops via `applyRoute`. **Skips the state→URL push when the address bar already
+  resolves to the active tab**, so adopting a deep link never flattens a sub-view (`/dashboard/history`).
+- **Sub-view persistence (refresh-stable + deep-linkable):**
+  - [`src/hooks/usePersistentView.ts`](src/hooks/usePersistentView.ts) — a `useState` drop-in that
+    syncs a page's sub-tab to a URL sub-segment (`/dashboard/idp`) **and** sessionStorage. Has an
+    `enabled` flag so a page reused in an embedded context (EmployeeDashboard inside a CEO/manager
+    profile) does NOT rewrite the URL. Used by EmployeeDashboard (Overview/IDP/History/Certificates/Career).
+  - [`src/hooks/useSessionState.ts`](src/hooks/useSessionState.ts) — sessionStorage-backed `useState`
+    for finer in-page state that shouldn't own a URL (admin list filters, the dept Personnel/Sub-units
+    drill-down tab).
+  - EvaluationsHub reports sub-tab changes up via an `onTabChange` callback → App points `activeTab`
+    at that sub-tab's existing route (`/evaluations/360` …), so the URL + refresh follow.
 - `base: '/'` in [`vite.config.ts`](vite.config.ts) — the app is served from a domain **root**
   (company-domain nginx), not GitHub Pages, so bundled asset URLs are absolute and resolve
   correctly at any route depth.
 
 > **RULE — every feature must be routable.** When you add a page/tab, add a row to `TAB_PATHS`
-> in `routes.ts`. Navigation still flows through `setActiveTab` / `onSwitchTab` (unchanged) — the
-> sync layer turns any tab change into a URL automatically. A tab with no row still renders but
+> in `src/routes.ts`. Navigation still flows through `setActiveTab` / `onSwitchTab` (unchanged) —
+> the sync layer turns any tab change into a URL automatically. A tab with no row still renders but
 > its URL falls back to `/dashboard` and it won't be deep-linkable. Parameterised routes (like
-> `ceo-view-profile`) are handled explicitly in `routeToPath`/`pathToRoute` — follow that pattern.
+> `ceo-view-profile`) are handled explicitly in `routeToPath`/`pathToRoute`. For a page with
+> **sub-tabs**, add a `SUB_VIEWS` entry and use `usePersistentView` so each sub-tab is a real URL.
 
 | Tab Key | Path | Component | Role |
 |---|---|---|---|
@@ -166,46 +194,80 @@ Moving parts:
 | `ceo-dashboard` / `ceo-view-profile` | `/ceo`, `/ceo/profile/:userId` | CEOPanel | CEO |
 
 > **Deploy note:** clean URLs need the host to serve `index.html` for any unknown path (SPA
-> fallback). The app deploys as static files (`npm run build` → `dist/`) served by **nginx** on
-> the company domain — see [`deploy/nginx.conf`](deploy/nginx.conf); the `try_files $uri $uri/
-> /index.html;` line is what makes deep links survive a hard refresh. CI validates the build via
-> [`.github/workflows/ci.yml`](.github/workflows/ci.yml) but no longer deploys — the old GitHub
-> Pages workflow and `base: './'` were retired with the move off GitHub Pages.
+> fallback). In production the **`web` container (nginx)** serves the built SPA (`npm run build`
+> → `dist/`, baked into the image) **and** reverse-proxies `/api/` to the `api` container — see
+> [`deploy/nginx/nginx.conf`](deploy/nginx/nginx.conf) (Docker) and [`deploy/nginx.conf`](deploy/nginx.conf)
+> (standalone host install). The `try_files $uri $uri/ /index.html;` line is what makes deep links
+> survive a hard refresh. CI validates the build via [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
+> but does not deploy — deployment is `docker compose up -d --build` on the VM (see
+> [`docs/runbooks/DEPLOYMENT_RUNBOOK.md`](docs/runbooks/DEPLOYMENT_RUNBOOK.md)).
 
 ---
 
 ## Development Notes
 
-- All data access goes through `DataService` in `services/store.ts` — do not call Firestore directly from components.
-- `types.ts` is the source of truth for all interfaces; update it before adding new fields.
-- `constants.ts` holds proficiency level labels — the scale is always 1–5.
-- The app has no backend server; all logic runs client-side against Firestore.
-- Firebase config is loaded by `firebase.ts` from `VITE_FIREBASE_*` env vars (`.env.local` / `.env.production`); see `.env.example` for the required keys.
+- All data access goes through `DataService` in `src/services/store.ts` — do not call the API/DB directly from components.
+- `src/types.ts` is the source of truth for all interfaces; update it before adding new fields.
+- `src/constants.ts` holds proficiency level labels — the scale is always 1–5.
+- **Backend:** the app now talks to the self-hosted API under `server/` (Node + Express +
+  Postgres, JWT auth). In the browser, `store.ts` still uses Firestore-shaped calls — they are
+  served by the compat shims (`src/services/firestore-compat.ts` + `auth-compat.ts`) over
+  `src/services/api-client.ts`. `VITE_API_URL` points the SPA at the API (`.env.local` /
+  `.env.production`). Real-time is polling (`VITE_POLL_INTERVAL_MS`), not `onSnapshot`.
+- **Local run:** `run.bat` (or `cd server && npx tsx scripts/serve-local.ts` for the API +
+  embedded Postgres, and `npm run dev` for the SPA). Seeded admin comes from `server/.env`
+  (`SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`).
+- Firebase→self-hosted migration is tracked in [`docs/migration/`](docs/migration/). Cutover
+  (Phase 6) is still pending; `firebase.ts` and the Firestore rules pipeline have been removed
+  from the frontend.
 
 ---
 
-## Firebase Project
+## Backend / Self-Hosted Infrastructure
 
-**Active project:** `eprom-cms` (migrated 2026-05-15 from `gen-lang-client-0893475577`)
+The app is served entirely from company infrastructure — a single Linux VM running the
+whole stack via **Docker Compose** ([`docker-compose.yml`](docker-compose.yml)). No Firebase,
+no external cloud. Four services:
 
-| Setting | Value |
-|---|---|
-| Project ID | `eprom-cms` |
-| Firestore DB | `(default)` |
-| Auth domain | `eprom-cms.firebaseapp.com` |
-| Config | `VITE_FIREBASE_*` env vars (`.env.local` dev / `.env.production` build) |
-| Rules file | `firestore.rules` (generated — see below) |
+| Service | Image / build | Role |
+|---|---|---|
+| `postgres` | `postgres:16-alpine` | The database; data persisted in the `pgdata` named volume |
+| `api` | `./server` (Node 20 + Express) | REST API; **runs DB migrations on boot**; JWT auth |
+| `web` | [`Dockerfile.web`](Dockerfile.web) (nginx) | Serves the built SPA + reverse-proxies `/api` (ports 80/443) |
+| `backup` | `postgres:16-alpine` | Nightly `pg_dump` → `./backups`, 30-day retention |
 
-`firebase.ts` reads config from `import.meta.env.VITE_FIREBASE_*`; env files are gitignored. Copy `.env.example` to `.env.local` / `.env.production` and fill in values from Firebase Console. `getFirestore(app)` is used — no custom database ID needed.
+### API surface ([`server/src/app.ts`](server/src/app.ts))
+- `GET /health` — liveness (`{ ok: true }`), unauthenticated.
+- `/auth/*` — public: `login`, `signup`, password reset; `/auth/me` is protected.
+- `/col/:collection` — authenticated generic CRUD/query over the Postgres tables
+  (allowlisted collection names in [`server/src/collections/registry.ts`](server/src/collections/registry.ts)).
+- `/batch` — authenticated multi-write.
 
-`firestore.rules` is **generated** from `firestore.rules.template` by `npm run rules:build`, which bakes in `VITE_BOOTSTRAP_ADMIN_EMAIL` (Firestore rules can't read env vars at runtime). Edit the template, not the generated file; run `npm run rules:build` before `firebase deploy --only firestore:rules`. The generated `firestore.rules` is gitignored.
+### Configuration (env vars, all gitignored)
+- **Frontend (Vite):** `VITE_API_URL` (points the SPA at the API — `/api` behind nginx) and
+  `VITE_POLL_INTERVAL_MS` (poll cadence, since there is no `onSnapshot`). Copy
+  [`.env.example`](.env.example) → `.env.local` / `.env.production`.
+- **API (local dev):** Postgres (`PG*`), `JWT_SECRET` (**required in prod — no default**),
+  `JWT_EXPIRES_IN`, `BCRYPT_ROUNDS`, `BOOTSTRAP_ADMIN_EMAIL`, `ALLOW_SIGNUP`, `CORS_ORIGINS`.
+  Copy [`server/.env.example`](server/.env.example) → `server/.env`. Resolved in
+  [`server/src/config.ts`](server/src/config.ts).
+- **Docker Compose:** copy [`.env.docker.example`](.env.docker.example) → `.env` (repo root):
+  `PGUSER` / `PGPASSWORD` / `PGDATABASE`, `JWT_SECRET`, `BOOTSTRAP_ADMIN_EMAIL`, `CORS_ORIGINS`.
 
-### Migration notes
-- All Firestore collections migrated with original document IDs preserved.
-- User avatars were reset to `ui-avatars.com` URLs (base64 originals were too large); users can re-upload via the app.
-- Firebase Auth accounts are **not** migratable — existing users must sign up again with the same email. After sign-up, their new UID will differ from the Firestore `id` field; fix via Admin Panel or Firestore console.
-- `evidences` and `activityLogs` collections were not migrated (large volume / low priority); re-populate through normal app usage.
+### Auth & authorization
+- Email/password. Passwords are **bcrypt**-hashed; login issues a **JWT (HS256)** signed with
+  `JWT_SECRET`. The token is stored client-side and sent as a bearer token; every request
+  reloads the fresh user doc so role/status is never stale, and non-`ACTIVE` accounts are locked out.
+- **Authorization** is enforced server-side in [`server/src/authz.ts`](server/src/authz.ts) +
+  [`server/src/middleware/authenticate.ts`](server/src/middleware/authenticate.ts) — a port of the
+  old `firestore.rules` (self-update cannot change `role`, owner/manager scoping, admin-write allowlist).
+- `BOOTSTRAP_ADMIN_EMAIL` is treated as ADMIN before any user holds the `ADMIN` role
+  (first-run / recovery only); normal admin access is role-driven (`users` doc `role == 'ADMIN'`).
 
-### Auth setup
-- Provider: Email/Password (enabled manually in Firebase Console).
-- Bootstrap admin email is driven by the `VITE_BOOTSTRAP_ADMIN_EMAIL` env var: consumed by the frontend (`isBootstrapAdminEmail` in `services/store.ts`) and substituted into `isAdmin()` in the generated `firestore.rules`. It is a first-run / recovery fallback only — normal admin access is role-driven (`users` doc `role == 'ADMIN'`).
+### Data migration notes (from the Firebase era)
+- All collections were exported and loaded into Postgres with original document IDs preserved
+  (ETL: [`server/scripts/etl/`](server/scripts/etl/)).
+- Firebase Auth accounts are **not** migratable — users must sign up again with the same email;
+  the new account is linked to the existing profile by email on first sign-up.
+- User avatars are base64 data URLs stored directly in the `users` document (no object storage).
+- Live-data cutover is the migration's own **Phase 6** — see [`docs/migration/`](docs/migration/).
