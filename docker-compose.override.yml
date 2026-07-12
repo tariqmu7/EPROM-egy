@@ -1,0 +1,27 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# SHARED-SERVER OVERRIDE  (the EPROM Linux VM that already runs another site)
+#
+# The base docker-compose.yml makes the `web` container take ports 80 + 443.
+# On the EPROM server those doors are ALREADY used by the existing host nginx
+# that serves https://ese.eprom.com.eg. Two things cannot use the same port,
+# so this file makes our app step aside:
+#
+#   • It stops publishing 80/443.
+#   • It publishes our app ONLY on a private inside door on the server itself
+#     (127.0.0.1:${WEB_PORT}, default 8080 — not reachable from the network).
+#   • The existing host nginx then forwards our subdomain (ecms.eprom.com.eg)
+#     to that inside door. See deploy/nginx-host-ecms.conf.
+#
+# Docker automatically merges this file on top of docker-compose.yml, so the
+# Monday command stays simply:   docker compose up -d --build
+#
+# If you ever deploy to a DEDICATED server (nothing else on it), delete or
+# rename this file so the app can take 80/443 directly again.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  web:
+    ports:
+      # host-side is bound to 127.0.0.1 so the container is invisible to the
+      # network — only the host's own nginx can reach it. container still :80.
+      - "127.0.0.1:${WEB_PORT:-8080}:80"
