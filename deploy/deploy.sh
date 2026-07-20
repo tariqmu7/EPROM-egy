@@ -31,7 +31,11 @@ REF="${1:-}"
 
 if [[ "$TARGET" == "production" ]]; then
   ENV_FILE=.env
-  DEFAULT_PORT=8080
+  # The live VM (192.168.240.4) is DEDICATED to this app, so the web container
+  # owns port 80 directly and docker-compose.override.yml was deleted there.
+  # Default to 80, not 8080 — otherwise the health check below polls a port
+  # nothing is listening on and rolls back a perfectly good deploy.
+  DEFAULT_PORT=80
   COMPOSE=(docker compose)          # no -f: docker-compose.override.yml auto-merges
   if [[ -z "$REF" ]]; then
     echo "ERROR: production needs an explicit ref (a release tag)." >&2
@@ -105,10 +109,23 @@ echo "==> Building and starting the stack"
 # ── 5. wait for readiness ────────────────────────────────────────────────────
 # /health/ready pings the DB too, so this proves migrations finished and the API
 # can actually serve — not merely that a container started.
+#
+# The live VM has NO curl installed (only wget), so probe with whichever exists.
+# Getting this wrong is worse than it sounds: a health check that can never
+# succeed makes the script roll back a deploy that was actually fine.
+if command -v curl >/dev/null 2>&1; then
+  probe() { curl -fsS "$1" >/dev/null 2>&1; }
+elif command -v wget >/dev/null 2>&1; then
+  probe() { wget -q -O /dev/null "$1" >/dev/null 2>&1; }
+else
+  echo "ERROR: neither curl nor wget available — cannot verify health." >&2
+  exit 1
+fi
+
 echo -n "==> Waiting for http://127.0.0.1:$WEB_PORT/api/health/ready "
 HEALTHY=0
 for _ in $(seq 1 60); do
-  if curl -fsS "http://127.0.0.1:$WEB_PORT/api/health/ready" >/dev/null 2>&1; then
+  if probe "http://127.0.0.1:$WEB_PORT/api/health/ready"; then
     HEALTHY=1
     break
   fi
