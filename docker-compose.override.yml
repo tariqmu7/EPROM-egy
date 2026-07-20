@@ -21,7 +21,13 @@
 
 services:
   web:
-    ports:
+    # `!override` REPLACES the base file's ports list instead of appending to it.
+    # Without it Compose merges sequences additively, so the base 80/443 bindings
+    # would survive alongside 8080 — and binding 80/443 on this shared VM either
+    # fails ("address already in use") or steals the ports from the host nginx
+    # serving ese.eprom.com.eg. Verify after any change with:
+    #     docker compose config | grep -A2 published
+    ports: !override
       # host-side is bound to 127.0.0.1 so the container is invisible to the
       # network — only the host's own nginx can reach it. container still :80.
       - "127.0.0.1:${WEB_PORT:-8080}:80"
