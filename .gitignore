@@ -21,8 +21,10 @@ server/data/
 .env.local
 .env.development
 .env.production
+.env.staging
 .env.*.local
 !.env.example
+!.env.staging.example
 
 # Firebase credentials — use the VITE_FIREBASE_* env vars instead
 firebase-applet-config.json

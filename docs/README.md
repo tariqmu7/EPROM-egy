@@ -11,8 +11,10 @@ and `WORKPLAN.md` (active local-server hardening tracker).
 - [IT_INFRA_REQUEST.md](migration/IT_INFRA_REQUEST.md) — VM / Docker / DNS / TLS spec for IT.
 
 ## runbooks/ — operational procedures
-- [DEPLOYMENT_RUNBOOK.md](runbooks/DEPLOYMENT_RUNBOOK.md) — Docker Compose deploy to the company VM.
+- [DEV_WORKFLOW.md](runbooks/DEV_WORKFLOW.md) — **start here**: how a change goes laptop → PR → staging → production.
+- [DEPLOYMENT_RUNBOOK.md](runbooks/DEPLOYMENT_RUNBOOK.md) — Docker Compose deploy to the company VM (first-time VM setup, full detail).
 - [ROLLBACK_RUNBOOK.md](runbooks/ROLLBACK_RUNBOOK.md) — revert images/code + restore Postgres from a backup.
+- [MONDAY_GO_LIVE_CHECKLIST.md](runbooks/MONDAY_GO_LIVE_CHECKLIST.md) — first-launch cutover checklist.
 
 ## qa/ — quality & task tracking
 - [QA_TASKS.md](qa/QA_TASKS.md)

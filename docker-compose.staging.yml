@@ -1,0 +1,41 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# STAGING STACK — a second, isolated copy of the app on the SAME EPROM VM.
+#
+# Purpose: rehearse a deploy against realistic data before it touches the real
+# users. Staging is a throwaway — its database can be wiped and reloaded from a
+# production dump at any time (deploy/restore-db.sh).
+#
+# It is isolated from production by the compose PROJECT NAME (`ecms-staging`),
+# which gives it its own containers, its own network, and — critically — its own
+# `pgdata` volume. Production data is never touched.
+#
+# This file is NOT auto-merged: it is only active when passed with -f, which
+# also means docker-compose.override.yml (the production 8080 binding) is
+# deliberately skipped. Always drive it through deploy/deploy.sh --staging, or
+# by hand:
+#
+#   docker compose -p ecms-staging --env-file .env.staging \
+#     -f docker-compose.yml -f docker-compose.staging.yml up -d --build
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  web:
+    # `!override` REPLACES the base ports list rather than appending to it —
+    # otherwise staging inherits the base 80/443 bindings too and collides with
+    # both production and the host nginx. See docker-compose.override.yml.
+    ports: !override
+      # Different door than production (8080), and deliberately NOT bound to
+      # 127.0.0.1 — staging is browsed directly at http://<vm-ip>:8081 from the
+      # company network, so there is no host-nginx server block in front of it.
+      #
+      # That means staging is reachable by anyone who can route to the VM. Since
+      # restore-db.sh copies REAL production data into it, treat the staging URL
+      # as carrying production-grade data and firewall port 8081 to your subnet
+      # if the VM is reachable more widely than you expect.
+      - "${WEB_PORT:-8081}:80"
+
+  backup:
+    # Staging data is disposable, so nightly pg_dump is pointless noise. A
+    # service with a profile does not start unless that profile is requested,
+    # which is how we switch the base file's backup service off.
+    profiles: ["never"]
