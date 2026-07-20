@@ -18,6 +18,36 @@ export const POLL_INTERVAL_MS: number = Number(import.meta.env.VITE_POLL_INTERVA
 // in api-client. store.ts passes it to collection()/doc()/writeBatch(); we ignore it.
 export const compatDb = { __eprom: 'db' } as const;
 
+// How often a delta-synced listener does a FULL resync instead of an incremental
+// one. Delta (updated_at > cursor) misses two rare edge cases: a row that was
+// updated so it no longer matches the listener's filter, and a tombstone the
+// client was offline for. A periodic full sync self-heals both. At the default
+// 20s poll, 15 ticks ≈ every 5 minutes.
+const DELTA_FULL_RESYNC_TICKS = 15;
+
+// ── Optimistic-concurrency version cache ────────────────────────────────────
+// The server returns a monotonic `version` per document. We remember the last
+// version seen per (collection/id) so merge-writes can send `expectedVersion`
+// and a lost update becomes a detectable 409 instead of silent data loss.
+// Populated by every read; refreshed on every successful write.
+const versionCache = new Map<string, number>();
+const vkey = (name: string, id: string) => `${name}/${id}`;
+function recordVersion(name: string, id: string, version: unknown): void {
+  if (typeof version === 'number') versionCache.set(vkey(name, id), version);
+}
+
+/** Thrown when a merge-write keeps losing a race after several auto-retries. */
+export class VersionConflictError extends Error {
+  constructor(
+    public collection: string,
+    public id: string,
+    public currentVersion?: number,
+  ) {
+    super(`version conflict on ${collection}/${id}`);
+    this.name = 'VersionConflictError';
+  }
+}
+
 // ── Reference types ─────────────────────────────────────────────────────────
 type WhereOp = '==' | 'in';
 
@@ -112,6 +142,14 @@ interface QuerySpec {
   orderBy?: { field: string; direction: 'asc' | 'desc' };
   limit?: number;
   offset?: number;
+  since?: string | null; // delta cursor
+}
+
+// Query endpoint response (now carries per-doc version + a delta cursor + deletes).
+interface QueryResponse {
+  documents: { id: string; data: DocumentData; version?: number }[];
+  cursor?: string | null;
+  deletions?: { id: string }[];
 }
 
 function toFilter(w: WhereC): Filter {
@@ -156,19 +194,28 @@ function nameOf(ref: CollectionRef | QueryRef): string {
 }
 
 // ── Reads ───────────────────────────────────────────────────────────────────
+// Low-level query that records every returned doc's version (keeps the
+// optimistic-concurrency cache warm) and passes the delta cursor/deletions
+// straight through to the caller.
+async function postQuery(name: string, spec: QuerySpec): Promise<QueryResponse> {
+  const res = await api.post<QueryResponse>(`/col/${name}/query`, spec);
+  for (const d of res.documents) recordVersion(name, d.id, d.version);
+  return res;
+}
+
 export async function getDocs(ref: CollectionRef | QueryRef): Promise<QuerySnapshot> {
   const name = nameOf(ref);
   const spec = ref.__type === 'query' ? buildSpec(ref.constraints) : {};
-  const res = await api.post<{ documents: { id: string; data: DocumentData }[] }>(
-    `/col/${name}/query`,
-    spec,
-  );
+  const res = await postQuery(name, spec);
   return mkQuerySnapshot(res.documents);
 }
 
 export async function getDoc(ref: DocRef): Promise<DocumentSnapshot> {
   try {
-    const res = await api.get<{ id: string; data: DocumentData }>(`/col/${ref.name}/${encodeURIComponent(ref.id)}`);
+    const res = await api.get<{ id: string; data: DocumentData; version?: number }>(
+      `/col/${ref.name}/${encodeURIComponent(ref.id)}`,
+    );
+    recordVersion(ref.name, res.id, res.version);
     return {
       id: res.id,
       exists(): this is QueryDocumentSnapshot {
@@ -191,24 +238,54 @@ export async function getDoc(ref: DocRef): Promise<DocumentSnapshot> {
 }
 
 // ── Writes ──────────────────────────────────────────────────────────────────
+// A merge write (PATCH) with automatic optimistic concurrency: it sends the last
+// known version, and on a 409 re-reads the current version and retries. Because
+// the server re-merges the patch onto the LATEST document, concurrent edits to
+// different fields both succeed; only a genuine same-field race keeps conflicting,
+// which surfaces as VersionConflictError after a few attempts.
+async function patchWithConcurrency(name: string, id: string, data: DocumentData): Promise<void> {
+  const url = `/col/${name}/${encodeURIComponent(id)}`;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const known = versionCache.get(vkey(name, id));
+    try {
+      const res = await api.patch<{ version?: number }>(url, known !== undefined ? { data, expectedVersion: known } : { data });
+      recordVersion(name, id, res?.version);
+      return;
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        const current = (e.body as { currentVersion?: number } | undefined)?.currentVersion;
+        if (typeof current === 'number') versionCache.set(vkey(name, id), current);
+        else versionCache.delete(vkey(name, id)); // unknown → next try sends no expectedVersion
+        continue;
+      }
+      throw e;
+    }
+  }
+  throw new VersionConflictError(name, id, versionCache.get(vkey(name, id)));
+}
+
 export async function setDoc(ref: DocRef, data: DocumentData, options?: { merge?: boolean }): Promise<void> {
   if (options?.merge) {
-    await api.patch(`/col/${ref.name}/${encodeURIComponent(ref.id)}`, { data });
+    await patchWithConcurrency(ref.name, ref.id, data);
   } else {
-    await api.put(`/col/${ref.name}/${encodeURIComponent(ref.id)}`, { data });
+    // Full replace is intentionally last-write-wins (no expectedVersion).
+    const res = await api.put<{ version?: number }>(`/col/${ref.name}/${encodeURIComponent(ref.id)}`, { data });
+    recordVersion(ref.name, ref.id, res?.version);
   }
 }
 
 export async function updateDoc(ref: DocRef, data: DocumentData): Promise<void> {
-  await api.patch(`/col/${ref.name}/${encodeURIComponent(ref.id)}`, { data });
+  await patchWithConcurrency(ref.name, ref.id, data);
 }
 
 export async function deleteDoc(ref: DocRef): Promise<void> {
   await api.del(`/col/${ref.name}/${encodeURIComponent(ref.id)}`);
+  versionCache.delete(vkey(ref.name, ref.id));
 }
 
 export async function addDoc(ref: CollectionRef, data: DocumentData): Promise<DocRef> {
-  const res = await api.post<{ id: string }>(`/col/${ref.name}`, { data });
+  const res = await api.post<{ id: string; version?: number }>(`/col/${ref.name}`, { data });
+  recordVersion(ref.name, res.id, res.version);
   return { __type: 'doc', name: ref.name, id: res.id };
 }
 
@@ -258,10 +335,60 @@ export function onSnapshot(
 ): Unsubscribe {
   let cancelled = false;
 
+  // Single-document listener: just poll the doc.
+  if (ref.__type === 'doc') {
+    const tick = async () => {
+      try {
+        const snap = await getDoc(ref as DocRef);
+        if (!cancelled) onNext(snap);
+      } catch (err) {
+        if (!cancelled && onError) onError(err);
+      }
+    };
+    void tick();
+    const handle = setInterval(() => void tick(), POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(handle);
+    };
+  }
+
+  // Collection / query listener: maintain a local cache and fetch only the rows
+  // that changed since the last poll (delta sync), reconstructing the SAME full
+  // snapshot store.ts already consumes — so no listener code changes. Deletes
+  // arrive as tombstones and evict from the cache. Ordered queries opt out
+  // (their order/limit can't be reconstructed cheaply) and stay full-snapshot.
+  const collRef = ref as CollectionRef | QueryRef;
+  const name = collRef.name;
+  const baseSpec: QuerySpec = collRef.__type === 'query' ? buildSpec(collRef.constraints) : {};
+  const deltaEligible = !baseSpec.orderBy;
+
+  const cache = new Map<string, DocumentData>();
+  let cursor: string | null = null;
+  let tickN = 0;
+
+  const emit = () => {
+    if (cancelled) return;
+    const rows = [...cache.entries()].map(([id, data]) => ({ id, data }));
+    onNext(mkQuerySnapshot(rows));
+  };
+
   const tick = async () => {
     try {
-      const snap = ref.__type === 'doc' ? await getDoc(ref as DocRef) : await getDocs(ref as CollectionRef | QueryRef);
-      if (!cancelled) onNext(snap);
+      const doFull = !deltaEligible || cursor == null || tickN % DELTA_FULL_RESYNC_TICKS === 0;
+      tickN++;
+      if (doFull) {
+        const res = await postQuery(name, baseSpec);
+        cache.clear();
+        for (const d of res.documents) cache.set(d.id, d.data);
+        cursor = res.cursor ?? cursor;
+      } else {
+        const res = await postQuery(name, { ...baseSpec, since: cursor });
+        for (const d of res.documents) cache.set(d.id, d.data);
+        for (const del of res.deletions ?? []) cache.delete(del.id);
+        cursor = res.cursor ?? cursor;
+      }
+      emit();
     } catch (err) {
       if (!cancelled && onError) onError(err);
     }

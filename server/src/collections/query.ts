@@ -13,11 +13,29 @@ export interface QuerySpec {
   orderBy?: { field: string; direction?: 'asc' | 'desc' };
   limit?: number;
   offset?: number;
+  // Delta-sync cursor: when set, only rows changed since this timestamp are
+  // returned, ordered by `updated_at ASC` (overriding `orderBy`). See routes.ts.
+  since?: string | null;
 }
+
+// Hard upper bound on how many rows any single list/query response may return.
+// A caller may ask for fewer, never more. Without this a `GET /col/:name` with no
+// `limit` streams an entire (scoped) collection into memory (finding F-3). Set to
+// the client's own listener cap (MAX_LISTENER_DOCS) so no legitimate read is
+// truncated; a delta poll that hits the cap simply resumes from the advanced
+// cursor next tick.
+export const MAX_PAGE_SIZE = 10000;
 
 // Only simple identifiers are valid JSON field names in this app. Validating
 // against this regex means the field can be safely inlined as data->>'field'
 // (no quote/backslash can appear), which is injection-safe AND portable.
+//
+// NOTE (finding F-6): the generic read path always filters/orders via
+// `data->>'field'`, so it is served by the btree EXPRESSION indexes from
+// migration 001 — not the typed generated columns added in 002. Those columns
+// exist for their CHECK constraints and ad-hoc/reporting SQL; migration 004
+// dropped their now-redundant duplicate indexes. If a hot field ever needs the
+// typed column on the app path, map it here and index the column deliberately.
 const FIELD_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 function fieldExpr(field: string): string {
@@ -80,17 +98,31 @@ export function buildWhere(
     clauses.push(`(${ors.join(' OR ')})`);
   }
 
+  // Delta cursor filters on the real `updated_at` column (not a JSONB field).
+  const isDelta = typeof spec.since === 'string' && spec.since !== '';
+  if (isDelta) {
+    const p = params.push(spec.since);
+    clauses.push(`updated_at > $${p}`);
+  }
+
   let text = clauses.length > 0 ? ` WHERE ${clauses.join(' AND ')}` : '';
 
-  if (spec.orderBy?.field) {
+  if (isDelta) {
+    // Deterministic progression for the cursor; overrides any spec.orderBy.
+    text += ` ORDER BY updated_at ASC`;
+  } else if (spec.orderBy?.field) {
     const dir = spec.orderBy.direction === 'desc' ? 'DESC' : 'ASC';
     text += ` ORDER BY ${fieldExpr(spec.orderBy.field)} ${dir}`;
   }
 
-  if (typeof spec.limit === 'number' && spec.limit > 0) {
-    const p = params.push(Math.floor(spec.limit));
-    text += ` LIMIT $${p}`;
-  }
+  // Always emit a LIMIT: honour a smaller client-requested page, otherwise fall
+  // back to MAX_PAGE_SIZE, and never exceed it. This is the single choke point
+  // both the GET list and POST query paths flow through, so every response is
+  // bounded regardless of the caller (finding F-3).
+  const requested = typeof spec.limit === 'number' && spec.limit > 0 ? Math.floor(spec.limit) : MAX_PAGE_SIZE;
+  const p = params.push(Math.min(requested, MAX_PAGE_SIZE));
+  text += ` LIMIT $${p}`;
+
   if (typeof spec.offset === 'number' && spec.offset > 0) {
     const p = params.push(Math.floor(spec.offset));
     text += ` OFFSET $${p}`;

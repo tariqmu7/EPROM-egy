@@ -41,8 +41,18 @@ export class ApiError extends Error {
   }
 }
 
+// A short correlation id per request. The server echoes it back and stamps it on
+// every log line for that request, so a failure reported by a user can be traced.
+function newRequestId(): string {
+  try {
+    return crypto.randomUUID();
+  } catch {
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { 'X-Request-Id': newRequestId() };
   const token = getToken();
   if (token) headers['Authorization'] = `Bearer ${token}`;
   if (body !== undefined) headers['Content-Type'] = 'application/json';

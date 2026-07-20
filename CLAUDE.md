@@ -213,7 +213,15 @@ Moving parts:
   Postgres, JWT auth). In the browser, `store.ts` still uses Firestore-shaped calls — they are
   served by the compat shims (`src/services/firestore-compat.ts` + `auth-compat.ts`) over
   `src/services/api-client.ts`. `VITE_API_URL` points the SPA at the API (`.env.local` /
-  `.env.production`). Real-time is polling (`VITE_POLL_INTERVAL_MS`), not `onSnapshot`.
+  `.env.production`). Real-time is polling (`VITE_POLL_INTERVAL_MS`), not `onSnapshot` — but the
+  poll is now **delta sync**: each `onSnapshot` listener keeps a local cache and fetches only
+  rows changed since a cursor (`updated_at`), plus hard-deletes as **tombstones**, reconstructing
+  the same full snapshot `store.ts` consumes (so no listener code changed). A full resync runs
+  periodically to self-heal edge cases. Ordered listeners (e.g. `activityLogs`) opt out and stay
+  full-snapshot. Merge-writes (`updateDoc` / `setDoc(merge)`) carry **optimistic concurrency**:
+  the shim sends the last-seen `version`, and on a `409` re-reads and retries (server re-merges),
+  surfacing `VersionConflictError` only on a genuine same-field race. Full-replace `setDoc` and
+  `writeBatch` stay last-write-wins. All of this lives in `firestore-compat.ts`.
 - **Local run:** `run.bat` (or `cd server && npx tsx scripts/serve-local.ts` for the API +
   embedded Postgres, and `npm run dev` for the SPA). Seeded admin comes from `server/.env`
   (`SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`).
@@ -237,11 +245,52 @@ no external cloud. Four services:
 | `backup` | `postgres:16-alpine` | Nightly `pg_dump` → `./backups`, 30-day retention |
 
 ### API surface ([`server/src/app.ts`](server/src/app.ts))
-- `GET /health` — liveness (`{ ok: true }`), unauthenticated.
-- `/auth/*` — public: `login`, `signup`, password reset; `/auth/me` is protected.
+- `GET /health` — liveness (`{ ok: true }`), unauthenticated. `GET /health/ready` also pings the
+  DB (`503` if down) so orchestrators can tell "restart me" from "not ready yet".
+- `/auth/*` — public: `login`, `signup`, password reset; `/auth/me` is protected. Auth endpoints
+  are rate-limited; a blunt global IP rate limit guards the rest (off under `NODE_ENV=test`).
 - `/col/:collection` — authenticated generic CRUD/query over the Postgres tables
   (allowlisted collection names in [`server/src/collections/registry.ts`](server/src/collections/registry.ts)).
-- `/batch` — authenticated multi-write.
+  Every write is validated against a per-collection **zod schema**
+  ([`server/src/collections/schemas.ts`](server/src/collections/schemas.ts)) — a malformed doc is
+  rejected `422` before it hits the DB (permissive: unknown keys pass through; only known
+  identity/enum fields are enforced when present). The role/status/orgLevel value sets live in ONE
+  place — [`server/src/domain/enums.ts`](server/src/domain/enums.ts) — imported by both the zod
+  schemas and `authz.ts`, with a parity test asserting the migration `CHECK`s agree
+  ([`server/src/__tests__/contracts.test.ts`](server/src/__tests__/contracts.test.ts)). Every
+  list/query response is bounded server-side by `MAX_PAGE_SIZE` (no unbounded reads).
+- `/batch` — authenticated multi-write. Inside ONE transaction it authorizes **every** op first,
+  then applies them, so a single forbidden op rolls the whole batch back and never partially applies.
+
+**Response envelope + concurrency.** Reads/writes return `{ id, data, version, createdAt, updatedAt }`
+(additive — the compat shim still reads `.data`). Every table carries a `version` that bumps on
+each write, plus `created_by`/`updated_by` audit columns. A write may send an optional
+`expectedVersion`; a mismatch returns `409 version_conflict` with the current version
+(optimistic concurrency — absent ⇒ legacy last-write-wins). See migration
+[`002_foundation.sql`](server/src/migrations/002_foundation.sql), which also promotes hot JSONB
+fields (role/status/orgLevel/ids…) to typed **generated columns** with `CHECK` enum constraints
+(DB-level defense beneath zod) and adds GIN indexes over `data`. The generic read path filters via
+`data->>'field'` (served by the 001 expression indexes), so migration
+[`004_prune_redundant_indexes.sql`](server/src/migrations/004_prune_redundant_indexes.sql) dropped the
+duplicate generated-column indexes 002 had added — the typed columns remain for their `CHECK`s and
+reporting. Migrations are applied transactionally with checksum drift-detection
+([`server/src/migrate.ts`](server/src/migrate.ts)) — **never edit an applied migration; add a new one.**
+Because there are no foreign keys (dangling refs are dropped at read time), `npm run integrity` (in
+`server/`) reports any orphaned references on demand ([`server/scripts/check-integrity.ts`](server/scripts/check-integrity.ts)).
+
+**Delta sync + tombstones.** `POST /col/:collection/query` accepts an optional `since` cursor;
+when set it returns only rows with `updated_at > since` (ordered by `updated_at`), plus a
+`deletions[]` list from the **`tombstones`** table ([`003_tombstones.sql`](server/src/migrations/003_tombstones.sql))
+so clients can evict hard-deleted ids, plus a `cursor` for the next poll. Every response now
+carries `cursor`. DELETE writes a tombstone; create/set clears it (helpers in
+[`server/src/collections/tombstones.ts`](server/src/collections/tombstones.ts)). The cursor is
+millisecond-precision, so a boundary row may be re-sent once — harmless (the client cache merge is
+idempotent).
+
+**Observability.** Every request gets an `x-request-id` (honoured from the client or generated),
+a per-request child logger, and a structured JSON access log; the error handler logs with that id
+and returns it in the `500` body. Zero-dependency logger in [`server/src/logger.ts`](server/src/logger.ts)
+(`LOG_LEVEL` env; silent under test).
 
 ### Configuration (env vars, all gitignored)
 - **Frontend (Vite):** `VITE_API_URL` (points the SPA at the API — `/api` behind nginx) and

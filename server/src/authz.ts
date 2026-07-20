@@ -9,6 +9,9 @@ import { config } from './config.js';
 import type { CollectionName } from './collections/registry.js';
 import type { Filter, ScopeFilter } from './collections/query.js';
 import type { AuthedUser } from './types.js';
+// Org-level value sets come from the shared enum module so authz can never drift
+// from the zod schemas / migration CHECKs again (was the root cause of F-1).
+import { ORG_LEVEL, ORG_MANAGER_LEVELS } from './domain/enums.js';
 
 export type Action = 'read' | 'create' | 'update' | 'delete';
 
@@ -22,9 +25,6 @@ export interface PolicyCtx {
   // Looks up another user's document (for manager-of checks). Returns null if absent.
   getUserDoc: (id: string) => Promise<Doc | null>;
 }
-
-const ORG_MANAGER_LEVELS = ['CEO', 'GM', 'AGM', 'DM', 'SH', 'SP'];
-const VALID_ORG_LEVELS = ['CEO', 'GM', 'AGM', 'DM', 'SH', 'SP', 'JP', 'FR'];
 
 // ── Helper predicates (mirror the rules' helper functions) ──────────────────
 
@@ -70,7 +70,7 @@ async function isAncestorManager(ctx: PolicyCtx, targetUserId?: string): Promise
 }
 
 function isManagerLevel(user: AuthedUser): boolean {
-  return !!user.orgLevel && ORG_MANAGER_LEVELS.includes(user.orgLevel);
+  return !!user.orgLevel && (ORG_MANAGER_LEVELS as readonly string[]).includes(user.orgLevel);
 }
 
 async function isManagerOf(ctx: PolicyCtx, targetUserId?: string): Promise<boolean> {
@@ -81,7 +81,7 @@ async function isManagerOf(ctx: PolicyCtx, targetUserId?: string): Promise<boole
 
 function isValidOrgLevel(doc?: Doc | null): boolean {
   if (!doc || !('orgLevel' in doc) || doc.orgLevel == null) return true;
-  return VALID_ORG_LEVELS.includes(doc.orgLevel);
+  return (ORG_LEVEL as readonly string[]).includes(doc.orgLevel);
 }
 
 // Collections that only admins may write; everyone authenticated may read.
@@ -113,8 +113,7 @@ export async function can(collection: CollectionName, action: Action, ctx: Polic
     case 'assessments':
       return assessmentsPolicy(action, ctx, admin);
     case 'activityLogs':
-      // read + create: any authenticated; update/delete: admin.
-      return action === 'read' || action === 'create' ? true : admin;
+      return activityLogsPolicy(action, ctx, admin);
     case 'evidences':
       return evidencesPolicy(action, ctx, admin);
     case 'notifications':
@@ -216,6 +215,26 @@ function notificationsPolicy(action: Action, ctx: PolicyCtx): boolean {
   }
 }
 
+function activityLogsPolicy(action: Action, ctx: PolicyCtx, admin: boolean): boolean {
+  const { user, existing, incoming } = ctx;
+  switch (action) {
+    case 'read':
+      // The audit trail is not a public feed. Org-wide readers (admin/CEO) see
+      // everything; everyone else sees only entries they authored. List reads are
+      // held to the same boundary in `listScope` so a query can't over-return.
+      return canReadAll(user) || (!!existing && existing.actorId === canonicalId(user));
+    case 'create': {
+      // Anyone may append to the log, but only under their OWN identity — an
+      // entry can't be attributed to another user's id. System events carry no
+      // actorId (pre-auth) and attribute to no one, so they're allowed.
+      const actorId = incoming?.actorId;
+      return admin || actorId == null || actorId === canonicalId(user);
+    }
+    default:
+      return admin; // update / delete — admin only
+  }
+}
+
 function nominationsPolicy(action: Action, ctx: PolicyCtx, admin: boolean): boolean {
   const { user, existing, incoming } = ctx;
   switch (action) {
@@ -282,7 +301,11 @@ export async function listScope(
       ];
       return { or: cond };
     }
-    // users, activityLogs and the catalog/config collections stay open-read.
+    case 'activityLogs':
+      // A non-privileged reader only ever lists their OWN audit entries (admins /
+      // CEO already returned null above). Mirrors activityLogsPolicy's read rule.
+      return { or: [{ field: 'actorId', op: 'eq', value: self }] };
+    // users and the catalog/config collections stay open-read.
     default:
       return null;
   }

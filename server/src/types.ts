@@ -1,4 +1,5 @@
 // Shared server types + Express request augmentation.
+import type { Logger } from './logger.js';
 
 export interface AuthedUser {
   id: string;
@@ -15,6 +16,7 @@ declare global {
   namespace Express {
     interface Request {
       user?: AuthedUser;
+      log?: Logger; // per-request child logger bound with the requestId
     }
   }
 }

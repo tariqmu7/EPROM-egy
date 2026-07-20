@@ -5,6 +5,24 @@ import { can, listScope, type Action } from '../authz.js';
 import type { AuthedUser } from '../types.js';
 import { isCollection, tableFor, type CollectionName } from './registry.js';
 import { buildWhere, type Filter, type QuerySpec } from './query.js';
+import { validateDoc } from './schemas.js';
+import { writeTombstone, clearTombstone } from './tombstones.js';
+
+// Greatest timestamp (as ISO) across a set of Date/string values, or null.
+// Drives the delta-sync cursor the client sends back on its next poll.
+function maxIso(values: unknown[]): string | null {
+  let best = -Infinity;
+  let iso: string | null = null;
+  for (const v of values) {
+    if (v == null) continue;
+    const t = v instanceof Date ? v.getTime() : Date.parse(String(v));
+    if (Number.isFinite(t) && t > best) {
+      best = t;
+      iso = new Date(t).toISOString();
+    }
+  }
+  return iso;
+}
 
 // Wrap async handlers so thrown errors hit the error middleware.
 const h =
@@ -42,9 +60,17 @@ async function getSubordinateIds(rootCanonicalId: string): Promise<string[]> {
   return [...all];
 }
 
-async function loadDoc(table: string, id: string): Promise<Record<string, any> | null> {
-  const { rows } = await query(`SELECT data FROM ${table} WHERE id = $1`, [id]);
-  return rows.length ? (rows[0].data as Record<string, any>) : null;
+interface DocRow {
+  data: Record<string, any>;
+  version: number;
+}
+
+// Loads the stored document plus its concurrency version. `data` feeds authz;
+// `version` feeds optimistic-concurrency checks on update/delete.
+async function loadRow(table: string, id: string): Promise<DocRow | null> {
+  const { rows } = await query(`SELECT data, version FROM ${table} WHERE id = $1`, [id]);
+  if (!rows.length) return null;
+  return { data: rows[0].data as Record<string, any>, version: Number(rows[0].version ?? 1) };
 }
 
 function ctxBase(user: AuthedUser) {
@@ -71,6 +97,25 @@ function simpleFilters(reqQuery: Record<string, unknown>): Filter[] {
   return filters;
 }
 
+// Uniform response envelope: the document plus its server-owned metadata
+// (version + timestamps). Additive — existing clients read only `id`/`data`.
+function shape(id: string, data: Record<string, any>, meta: { version?: unknown; created_at?: unknown; updated_at?: unknown }) {
+  return {
+    id,
+    data,
+    version: Number(meta.version ?? 1),
+    createdAt: meta.created_at ?? null,
+    updatedAt: meta.updated_at ?? null,
+  };
+}
+
+// Reads an optional `expectedVersion` from a write body for optimistic
+// concurrency. Absent → last-write-wins (unchanged legacy behaviour).
+function expectedVersionOf(req: Request): number | undefined {
+  const v = (req.body as Record<string, unknown> | undefined)?.expectedVersion;
+  return typeof v === 'number' && Number.isFinite(v) ? v : undefined;
+}
+
 export function collectionsRouter(): Router {
   const router = Router();
 
@@ -83,12 +128,43 @@ export function collectionsRouter(): Router {
     return name;
   }
 
+  // Reject a write whose document fails its collection schema (422).
+  function rejectInvalid(name: CollectionName, doc: unknown, res: Response): boolean {
+    const result = validateDoc(name, doc);
+    if (!result.ok) {
+      res.status(422).json({ error: 'validation_failed', message: result.message, issues: result.issues });
+      return true;
+    }
+    return false;
+  }
+
   async function runList(name: CollectionName, spec: QuerySpec, user: AuthedUser, res: Response) {
     const table = tableFor(name);
     const scope = await listScope(name, user, getSubordinateIds);
+    const since = typeof spec.since === 'string' && spec.since !== '' ? spec.since : null;
     const { text, params } = buildWhere(spec, scope);
-    const { rows } = await query(`SELECT id, data FROM ${table}${text}`, params);
-    res.json({ documents: rows.map((r) => ({ id: r.id, data: r.data })) });
+    const { rows } = await query(`SELECT id, data, version, created_at, updated_at FROM ${table}${text}`, params);
+
+    const body: {
+      documents: ReturnType<typeof shape>[];
+      cursor: string | null;
+      deletions?: { id: string }[];
+    } = {
+      documents: rows.map((r) => shape(r.id, r.data, r)),
+      cursor: maxIso(rows.map((r) => r.updated_at)),
+    };
+
+    // On a delta poll, also report hard deletes since the cursor so the client
+    // evicts them, and advance the cursor past the newest deletion too.
+    if (since) {
+      const del = await query('SELECT id, deleted_at FROM tombstones WHERE collection = $1 AND deleted_at > $2', [
+        name,
+        since,
+      ]);
+      body.deletions = del.rows.map((r) => ({ id: r.id as string }));
+      body.cursor = maxIso([body.cursor, ...del.rows.map((r) => r.deleted_at)]) ?? since;
+    }
+    res.json(body);
   }
 
   // LIST (simple equality filters via query string)
@@ -125,16 +201,21 @@ export function collectionsRouter(): Router {
     h(async (req, res) => {
       const name = resolve(req, res);
       if (!name) return;
-      const existing = await loadDoc(tableFor(name), req.params.id);
-      if (!existing) {
+      const table = tableFor(name);
+      const { rows } = await query(
+        `SELECT id, data, version, created_at, updated_at FROM ${table} WHERE id = $1`,
+        [req.params.id],
+      );
+      if (!rows.length) {
         res.status(404).json({ error: 'not found' });
         return;
       }
-      if (!(await authorize(name, 'read', req.user!, { docId: req.params.id, existing }))) {
+      const row = rows[0];
+      if (!(await authorize(name, 'read', req.user!, { docId: req.params.id, existing: row.data }))) {
         res.status(403).json({ error: 'forbidden' });
         return;
       }
-      res.json({ id: req.params.id, data: existing });
+      res.json(shape(row.id, row.data, row));
     }),
   );
 
@@ -145,17 +226,24 @@ export function collectionsRouter(): Router {
       const name = resolve(req, res);
       if (!name) return;
       const id = (req.body?.id as string) || randomUUID();
-      const incoming = { ...(req.body?.data ?? {}), id };
+      const raw = req.body?.data ?? {};
+      if (rejectInvalid(name, raw, res)) return; // reject non-objects/bad enums before spreading
+      const incoming = { ...(raw as Record<string, any>), id };
       if (!(await authorize(name, 'create', req.user!, { docId: id, incoming }))) {
         res.status(403).json({ error: 'forbidden' });
         return;
       }
-      await query(`INSERT INTO ${tableFor(name)} (id, data) VALUES ($1, $2)`, [id, incoming]);
-      res.status(201).json({ id, data: incoming });
+      const { rows } = await query(
+        `INSERT INTO ${tableFor(name)} (id, data, created_by) VALUES ($1, $2, $3)
+         RETURNING version, created_at, updated_at`,
+        [id, incoming, req.user!.id],
+      );
+      await clearTombstone(query, name, id); // a re-created id must not stay tombstoned
+      res.status(201).json(shape(id, incoming, rows[0] ?? {}));
     }),
   );
 
-  // SET (upsert) — PUT /:name/:id  body: { data }
+  // SET (upsert) — PUT /:name/:id  body: { data, expectedVersion? }
   router.put(
     '/:name/:id',
     h(async (req, res) => {
@@ -163,23 +251,33 @@ export function collectionsRouter(): Router {
       if (!name) return;
       const { id } = req.params;
       const table = tableFor(name);
-      const existing = await loadDoc(table, id);
-      const incoming = { ...(req.body?.data ?? {}), id };
+      const existing = await loadRow(table, id);
+      const raw = req.body?.data ?? {};
+      if (rejectInvalid(name, raw, res)) return;
+      const incoming = { ...(raw as Record<string, any>), id };
       const action: Action = existing ? 'update' : 'create';
-      if (!(await authorize(name, action, req.user!, { docId: id, existing, incoming }))) {
+      if (!(await authorize(name, action, req.user!, { docId: id, existing: existing?.data, incoming }))) {
         res.status(403).json({ error: 'forbidden' });
         return;
       }
-      await query(
-        `INSERT INTO ${table} (id, data) VALUES ($1, $2)
-         ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = now()`,
-        [id, incoming],
+      const expected = expectedVersionOf(req);
+      if (existing && expected !== undefined && expected !== existing.version) {
+        res.status(409).json({ error: 'version_conflict', currentVersion: existing.version });
+        return;
+      }
+      const { rows } = await query(
+        `INSERT INTO ${table} (id, data, created_by, updated_by) VALUES ($1, $2, $3, $3)
+         ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, version = ${table}.version + 1,
+           updated_at = now(), updated_by = $3
+         RETURNING version, created_at, updated_at`,
+        [id, incoming, req.user!.id],
       );
-      res.json({ id, data: incoming });
+      await clearTombstone(query, name, id);
+      res.json(shape(id, incoming, rows[0] ?? {}));
     }),
   );
 
-  // UPDATE (merge) — PATCH /:name/:id  body: { data }
+  // UPDATE (merge) — PATCH /:name/:id  body: { data, expectedVersion? }
   router.patch(
     '/:name/:id',
     h(async (req, res) => {
@@ -187,18 +285,29 @@ export function collectionsRouter(): Router {
       if (!name) return;
       const { id } = req.params;
       const table = tableFor(name);
-      const existing = await loadDoc(table, id);
+      const existing = await loadRow(table, id);
       if (!existing) {
         res.status(404).json({ error: 'not found' });
         return;
       }
-      const merged = { ...existing, ...(req.body?.data ?? {}), id };
-      if (!(await authorize(name, 'update', req.user!, { docId: id, existing, incoming: merged }))) {
+      const raw = req.body?.data ?? {};
+      if (rejectInvalid(name, raw, res)) return;
+      const merged = { ...existing.data, ...(raw as Record<string, any>), id };
+      if (!(await authorize(name, 'update', req.user!, { docId: id, existing: existing.data, incoming: merged }))) {
         res.status(403).json({ error: 'forbidden' });
         return;
       }
-      await query(`UPDATE ${table} SET data = $2, updated_at = now() WHERE id = $1`, [id, merged]);
-      res.json({ id, data: merged });
+      const expected = expectedVersionOf(req);
+      if (expected !== undefined && expected !== existing.version) {
+        res.status(409).json({ error: 'version_conflict', currentVersion: existing.version });
+        return;
+      }
+      const { rows } = await query(
+        `UPDATE ${table} SET data = $2, version = version + 1, updated_at = now(), updated_by = $3
+         WHERE id = $1 RETURNING version, created_at, updated_at`,
+        [id, merged, req.user!.id],
+      );
+      res.json(shape(id, merged, rows[0] ?? {}));
     }),
   );
 
@@ -210,16 +319,22 @@ export function collectionsRouter(): Router {
       if (!name) return;
       const { id } = req.params;
       const table = tableFor(name);
-      const existing = await loadDoc(table, id);
+      const existing = await loadRow(table, id);
       if (!existing) {
         res.status(204).end();
         return;
       }
-      if (!(await authorize(name, 'delete', req.user!, { docId: id, existing }))) {
+      if (!(await authorize(name, 'delete', req.user!, { docId: id, existing: existing.data }))) {
         res.status(403).json({ error: 'forbidden' });
         return;
       }
+      const expected = expectedVersionOf(req);
+      if (expected !== undefined && expected !== existing.version) {
+        res.status(409).json({ error: 'version_conflict', currentVersion: existing.version });
+        return;
+      }
       await query(`DELETE FROM ${table} WHERE id = $1`, [id]);
+      await writeTombstone(query, name, id); // let delta clients evict it
       res.status(204).end();
     }),
   );
