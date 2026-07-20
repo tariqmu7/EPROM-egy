@@ -15,7 +15,8 @@ const MethodologyStandards = lazy(() => import('./pages/MethodologyStandards').t
 import { Logo } from './components/Logo';
 import loginBg from './assets/login-bg.jpg';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { dataService, CONFIG, isBootstrapAdminEmail } from './services/store';
+import { ChangePasswordForm } from './components/ChangePasswordForm';
+import { dataService, isBootstrapAdminEmail } from './services/store';
 // Note: OnlineAssessments, ManagerialInterviews, EvidencePortal, BehavioralAssessment
 // are rendered via EvaluationsHub (lazy-loaded above) — no direct import needed.
 import { compatAuth as auth, onAuthStateChanged } from './services/auth-compat';
@@ -32,8 +33,8 @@ const App: React.FC = () => {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [signupSuccess, setSignupSuccess] = useState(false);
-  const [resetSuccess, setResetSuccess] = useState(false);
   const [pendingApproval, setPendingApproval] = useState(false);
+  const [mustChangePassword, setMustChangePassword] = useState(false);
   
   const [activeTab, setActiveTab] = useState('emp-dashboard');
   const [tabKey, setTabKey] = useState(0);
@@ -65,6 +66,8 @@ const App: React.FC = () => {
           const currentUser = await dataService.getCurrentUser();
           if (mounted && currentUser) {
             setUser(currentUser);
+            // Survives a refresh: /auth/me reports the forced-reset flag too.
+            setMustChangePassword(dataService.isPasswordChangeRequired());
             if (currentUser.role === Role.ADMIN) {
               setActiveTab('admin-dashboard');
             } else if (currentUser.role === Role.CEO) {
@@ -97,22 +100,16 @@ const App: React.FC = () => {
   const handleAuth = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setResetSuccess(false);
     setAuthLoading(true);
 
     try {
-        if (isForgotPassword) {
-            const result = await dataService.resetPassword(email);
-            if (result.success) {
-                setResetSuccess(true);
-                setIsForgotPassword(false);
-            } else {
-                setError(result.error || 'Failed to send reset email');
-            }
-        } else if (isLoginMode) {
+        if (isLoginMode) {
             const result = await dataService.loginWithPassword(email, password);
             if (result.user) {
                 setUser(result.user);
+                // An admin-issued temporary password gates the app behind a
+                // forced password change (see the mustChangePassword screen).
+                setMustChangePassword(dataService.isPasswordChangeRequired());
                 // Set default tab based on role
                 if (result.user.role === Role.ADMIN) {
                     setActiveTab('admin-dashboard');
@@ -153,6 +150,7 @@ const App: React.FC = () => {
   const handleLogout = useCallback(async () => {
     await dataService.signOut();
     setUser(null);
+    setMustChangePassword(false);
     setEmail('');
     setPassword('');
   }, []);
@@ -262,6 +260,42 @@ const App: React.FC = () => {
     );
   }
 
+  // --- FORCED PASSWORD CHANGE ---
+  // The session is valid but was opened with an admin-issued temporary
+  // password. Nothing else in the app renders until a new one is chosen.
+  if (user && mustChangePassword) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-8">
+        <div className="w-full max-w-md">
+          <div className="flex items-center gap-4 mb-10 justify-center">
+            <div className="w-16 h-16 rounded-none overflow-hidden flex items-center justify-center bg-white border border-slate-300 p-2">
+              <Logo className="w-full h-full" />
+            </div>
+            <div className="flex flex-col text-left">
+              <span className="font-bold text-2xl tracking-tight leading-none text-slate-900">EPROM CMS</span>
+            </div>
+          </div>
+
+          <div className="bg-white border border-slate-200 p-8">
+            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Choose a New Password</h2>
+            <p className="text-slate-700 mt-2 mb-8">
+              You signed in with a temporary password issued by your administrator. Pick a new password
+              to continue — only you will know it.
+            </p>
+            <ChangePasswordForm forced onSuccess={() => setMustChangePassword(false)} />
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="w-full mt-4 text-sm text-slate-600 hover:text-slate-900 hover:underline font-medium"
+            >
+              Sign out instead
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // --- LOGIN ---
   if (!user) {
     return (
@@ -324,9 +358,9 @@ const App: React.FC = () => {
                         {isForgotPassword ? 'Reset Password' : isLoginMode ? 'Welcome back' : 'Create an account'}
                     </h2>
                     <p className="text-slate-700 mt-2">
-                        {isForgotPassword 
-                            ? 'Enter your email and we will send you a reset link.' 
-                            : isLoginMode 
+                        {isForgotPassword
+                            ? 'Password resets are handled by your system administrator.'
+                            : isLoginMode
                                 ? 'Enter your details to access your dashboard.' 
                                 : 'Join EPROM CMS to manage your professional profile. If your profile was added by your administrator, sign up here with your work email to set your password and activate your account.'}
                     </p>
@@ -347,13 +381,19 @@ const App: React.FC = () => {
                         </div>
                     )}
                     
-                    {resetSuccess && (
-                        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-none flex items-start gap-3">
-                            <CheckCircle size={20} className="mt-0.5 flex-shrink-0 text-emerald-500" />
+                    {/* Self-service reset by email is not built yet — it needs an SMTP
+                        relay the company has not provisioned. Until then an admin issues
+                        a temporary password (Admin → Employees → Reset Password), so say
+                        that plainly rather than promising an email that never arrives. */}
+                    {isForgotPassword && (
+                        <div className="bg-amber-50 border border-amber-200 text-amber-900 p-4 rounded-none flex items-start gap-3">
+                            <Clock size={20} className="mt-0.5 flex-shrink-0 text-amber-600" />
                             <div className="text-sm">
-                                <p className="font-bold">Reset Email Sent</p>
+                                <p className="font-bold">Contact Your Administrator</p>
                                 <p className="text-slate-700 mt-1">
-                                    If an account exists for {email}, a password reset link has been sent.
+                                    Ask your system administrator to reset your password. They will give you a
+                                    temporary one, and you will be asked to choose a new password as soon as you
+                                    sign in with it.
                                 </p>
                             </div>
                         </div>
@@ -376,40 +416,46 @@ const App: React.FC = () => {
                         </div>
                     )}
 
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1.5">Email Address</label>
-                        <div className="relative">
-                            <UserIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-600" size={18} />
-                            <input 
-                                type="email" 
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                className="w-full pl-10 pr-4 py-3 rounded-none border border-slate-300 bg-white focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 outline-none transition-all text-slate-900 placeholder:text-slate-600 "
-                                placeholder="name@company.com"
-                                required
-                            />
+                    {!isForgotPassword && (
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-1.5">Email Address</label>
+                            <div className="relative">
+                                <UserIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-600" size={18} />
+                                <input
+                                    type="email"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    className="w-full pl-10 pr-4 py-3 rounded-none border border-slate-300 bg-white focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 outline-none transition-all text-slate-900 placeholder:text-slate-600 "
+                                    placeholder="name@company.com"
+                                    required
+                                />
+                            </div>
                         </div>
-                    </div>
+                    )}
 
                     {!isForgotPassword && (
                         <div>
                             <div className="flex items-center justify-between mb-1.5">
                                 <label className="block text-sm font-medium text-slate-700">Password</label>
                                 {isLoginMode && (
-                                    <button type="button" onClick={() => { setIsForgotPassword(true); setError(''); setResetSuccess(false); }} className="text-sm text-slate-900 hover:underline font-medium">Forgot password?</button>
+                                    <button type="button" onClick={() => { setIsForgotPassword(true); setError(''); }} className="text-sm text-slate-900 hover:underline font-medium">Forgot password?</button>
                                 )}
                             </div>
                             <div className="relative">
                                 <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-600" size={18} />
-                                <input 
-                                    type="password" 
+                                <input
+                                    type="password"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                     className="w-full pl-10 pr-4 py-3 rounded-none border border-slate-300 bg-white focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 outline-none transition-all text-slate-900 placeholder:text-slate-600 "
                                     placeholder="••••••••"
                                     required={!isForgotPassword}
+                                    minLength={!isLoginMode ? 8 : undefined}
                                 />
                             </div>
+                            {!isLoginMode && (
+                                <p className="mt-1.5 text-xs text-slate-500">Must be at least 8 characters.</p>
+                            )}
                         </div>
                     )}
                     
@@ -419,18 +465,20 @@ const App: React.FC = () => {
                         </div>
                     )}
 
-                    <button 
-                        type="submit" 
-                        disabled={authLoading}
-                        className="w-full bg-blue-700 hover:bg-blue-800 text-white font-medium py-3 rounded-none transition-all flex items-center justify-center gap-2 mt-6 group disabled:opacity-70 disabled:cursor-not-allowed"
-                    >
-                        {authLoading ? <Loader2 className="animate-spin" size={20} /> : (
-                            <>
-                                {isForgotPassword ? 'Send Reset Link' : isLoginMode ? 'Sign in' : 'Create account'}
-                                <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform opacity-70" />
-                            </>
-                        )}
-                    </button>
+                    {!isForgotPassword && (
+                        <button
+                            type="submit"
+                            disabled={authLoading}
+                            className="w-full bg-blue-700 hover:bg-blue-800 text-white font-medium py-3 rounded-none transition-all flex items-center justify-center gap-2 mt-6 group disabled:opacity-70 disabled:cursor-not-allowed"
+                        >
+                            {authLoading ? <Loader2 className="animate-spin" size={20} /> : (
+                                <>
+                                    {isLoginMode ? 'Sign in' : 'Create account'}
+                                    <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform opacity-70" />
+                                </>
+                            )}
+                        </button>
+                    )}
 
                     <div className="text-center mt-8 gap-4 flex flex-col">
                         {isForgotPassword ? (
@@ -458,25 +506,6 @@ const App: React.FC = () => {
                     </div>
                 </form>
 
-                {import.meta.env.DEV && CONFIG.SOURCE === 'MOCK' && isLoginMode && (
-                    <div className="mt-12 pt-8 border-t border-slate-300">
-                        <p className="text-[10px] text-slate-600 mb-4 font-bold uppercase tracking-widest text-center">Development Access</p>
-                        <div className="flex flex-col gap-2">
-                            <button onClick={() => { setEmail('sarah.ahmed@midor.com.eg'); setPassword('any'); }} className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-none  text-sm font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-all flex justify-between items-center">
-                                <span>Employee</span>
-                                <span className="text-slate-600 text-xs">Sarah</span>
-                            </button>
-                            <button onClick={() => { setEmail('sameh.i@zohr.com.eg'); setPassword('any'); }} className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-none  text-sm font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-all flex justify-between items-center">
-                                <span>Manager (SH)</span>
-                                <span className="text-slate-600 text-xs">Sameh</span>
-                            </button>
-                            <button onClick={() => { setEmail('admin@egpc.com.eg'); setPassword('any'); }} className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-none  text-sm font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-all flex justify-between items-center">
-                                <span>Admin</span>
-                                <span className="text-slate-600 text-xs">Mahmoud</span>
-                            </button>
-                        </div>
-                    </div>
-                )}
             </div>
         </div>
       </div>

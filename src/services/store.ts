@@ -27,10 +27,22 @@ import {
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
-  sendPasswordResetEmail,
+  changePassword,
+  adminSetPassword,
+  isPasswordResetRequired,
   compatAuth as auth,
 } from './auth-compat';
 import { localAvatar } from '../utils/localAvatar';
+
+// Temporary password an admin hands to a locked-out user. Cryptographically
+// random; the alphabet drops look-alike characters (0/O, 1/l/I) because these
+// get read aloud over the phone or copied off a sticky note.
+const TEMP_PASSWORD_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+function generateTempPassword(length = 12): string {
+  const bytes = new Uint32Array(length);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => TEMP_PASSWORD_ALPHABET[b % TEMP_PASSWORD_ALPHABET.length]).join('');
+}
 
 // ==========================================
 // 🔧 APP CONFIGURATION
@@ -1152,7 +1164,11 @@ export class DataService {
       
       return { user: newUserProfile };
     } catch (error: any) {
-      return { error: error.message };
+      // Prefer the API's own message (ApiError.body.error, e.g. "password must
+      // be at least 8 characters" / "email already registered") over the opaque
+      // "API 500" that ApiError.message carries.
+      const serverMsg = error?.body?.error;
+      return { error: serverMsg || error.message || 'Sign up failed' };
     } finally {
       this.signUpInProgress = false;
     }
@@ -1267,12 +1283,39 @@ export class DataService {
     }
   }
 
-  async resetPassword(email: string) {
+  // True when the signed-in session logged in with an admin-issued temporary
+  // password — App.tsx blocks the app behind a forced password change.
+  isPasswordChangeRequired() {
+    return isPasswordResetRequired();
+  }
+
+  // Self-service password change. `currentPassword` may be omitted only while
+  // the account is in the forced-reset state.
+  async changePassword(newPassword: string, currentPassword?: string) {
     try {
-      await sendPasswordResetEmail(auth, email.trim().toLowerCase());
-      return { success: true };
+      await changePassword(newPassword, currentPassword);
+      return { success: true as const };
     } catch (error: any) {
-      return { error: error.message };
+      const status = error?.status;
+      if (status === 403) return { error: 'Current password is incorrect.' };
+      if (status === 400) return { error: 'New password must be at least 8 characters.' };
+      return { error: error?.message || 'Could not change password.' };
+    }
+  }
+
+  // ADMIN-only: issue a temporary password for a user who is locked out. The
+  // caller shows the returned password to the admin once — it is never stored
+  // in plaintext anywhere and cannot be retrieved again.
+  async adminResetPassword(userId: string) {
+    const tempPassword = generateTempPassword();
+    try {
+      await adminSetPassword(userId, tempPassword);
+      await this.logActivity('Reset User Password', userId);
+      return { success: true as const, tempPassword };
+    } catch (error: any) {
+      if (error?.status === 403) return { error: 'Only administrators can reset passwords.' };
+      if (error?.status === 404) return { error: 'That user no longer exists.' };
+      return { error: error?.message || 'Could not reset the password.' };
     }
   }
 

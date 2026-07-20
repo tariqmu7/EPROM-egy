@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Globe, Bell, Check, Download, ShieldCheck } from 'lucide-react';
+import { Globe, Bell, Check, Download, ShieldCheck, Lock } from 'lucide-react';
+import { ChangePasswordForm } from '../components/ChangePasswordForm';
 import { useI18n } from '../i18n/I18nContext';
 import { LOCALES } from '../i18n/translations';
 import { Card } from '../components/ui';
@@ -95,6 +96,21 @@ export const SettingsPage: React.FC<{ user: User }> = ({ user }) => {
               />
             </label>
           ))}
+        </div>
+      </Card>
+
+      {/* Self-service password change (the forced variant lives in App.tsx). */}
+      <Card className="p-6">
+        <div className="flex items-center gap-2 mb-1">
+          <Lock size={18} className="text-slate-700" aria-hidden="true" />
+          <h3 className="text-lg font-bold text-slate-900">Password</h3>
+        </div>
+        <p className="text-sm text-slate-600 mb-4">
+          Change the password you use to sign in. If you have forgotten it, ask your administrator to
+          issue a temporary one.
+        </p>
+        <div className="max-w-md">
+          <ChangePasswordForm />
         </div>
       </Card>
 

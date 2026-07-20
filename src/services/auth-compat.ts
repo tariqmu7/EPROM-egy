@@ -73,7 +73,8 @@ async function resolveSession(): Promise<void> {
     return;
   }
   try {
-    const res = await api.get<{ user: { id: string; email?: string } }>('/auth/me');
+    const res = await api.get<{ user: { id: string; email?: string }; mustReset?: boolean }>('/auth/me');
+    mustResetPassword = !!res.mustReset;
     currentUser = mkUser(res.user.id, res.user.email ?? null);
   } catch {
     clearToken();
@@ -81,19 +82,43 @@ async function resolveSession(): Promise<void> {
   }
 }
 
+// True when the last login used an admin-issued temporary password. The app
+// must force a password change before letting the session proceed. Cleared by
+// changePassword() and by signOut().
+let mustResetPassword = false;
+
+export function isPasswordResetRequired(): boolean {
+  return mustResetPassword;
+}
+
 export async function signInWithEmailAndPassword(
   _auth: unknown,
   email: string,
   password: string,
 ): Promise<UserCredential> {
-  const res = await api.post<{ token: string; user: { id: string; email?: string } }>('/auth/login', {
-    email,
-    password,
-  });
+  const res = await api.post<{ token: string; user: { id: string; email?: string }; mustReset?: boolean }>(
+    '/auth/login',
+    { email, password },
+  );
   setToken(res.token);
+  mustResetPassword = !!res.mustReset;
   currentUser = mkUser(res.user.id, res.user.email ?? email);
   notify();
   return { user: currentUser };
+}
+
+// Self-service password change. `currentPassword` is optional only while the
+// account is in the forced-reset state (the server enforces this, not us).
+export async function changePassword(newPassword: string, currentPassword?: string): Promise<void> {
+  await api.post('/auth/change-password', { newPassword, currentPassword });
+  mustResetPassword = false;
+}
+
+// ADMIN-only: stamp a temporary password onto another user's account. The
+// server flags it must_reset, so that user is forced to choose a new one at
+// their next sign-in.
+export async function adminSetPassword(userId: string, newPassword: string): Promise<void> {
+  await api.post('/auth/admin/set-password', { userId, newPassword });
 }
 
 // Signs up a PENDING user. Does NOT establish a session (mirrors the app's
@@ -117,6 +142,7 @@ export async function createUserWithEmailAndPassword(
 export async function signOut(_auth?: unknown): Promise<void> {
   clearToken();
   currentUser = null;
+  mustResetPassword = false;
   notify();
 }
 

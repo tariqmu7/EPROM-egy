@@ -4,7 +4,7 @@ import { useStoreData } from '../hooks/useStoreData';
 import { useSessionState } from '../hooks/useSessionState';
 import { User, Role, JobProfile, Skill, JobProfileSkill, OrgLevel, ORG_LEVEL_LABELS, Department, DepartmentType, DEPT_TYPE_TO_ORG_LEVEL, ORG_HIERARCHY_ORDER, PROFICIENCY_LABELS, Project, EvaluationQuestion, SkillAssessmentMethod, DEFAULT_RATER_WEIGHTS, ASSESSMENT_METHOD_LABELS, ASSESSMENT_FREQUENCY_LABELS } from '../types';
 import { PROFICIENCY_DEFINITIONS } from '../constants';
-import { Plus, Users, Briefcase, ChevronRight, CheckCircle, Shield, ShieldCheck, X, Save, Trash2, ArrowLeft, UserPlus, Building2, Search, Edit2, UserCheck, AlertCircle, Layers, BookOpen, MoreHorizontal, LayoutGrid, Activity, Eye, AlertTriangle, FileSpreadsheet, MapPin, TrendingUp, Calendar, Link2 } from 'lucide-react';
+import { Plus, Users, Briefcase, ChevronRight, CheckCircle, Shield, ShieldCheck, X, Save, Trash2, ArrowLeft, UserPlus, Building2, Search, Edit2, UserCheck, AlertCircle, Layers, BookOpen, MoreHorizontal, LayoutGrid, Activity, Eye, AlertTriangle, FileSpreadsheet, MapPin, TrendingUp, Calendar, Link2, Lock } from 'lucide-react';
 import { SearchableSelect, Option } from '../components/SearchableSelect';
 import { BulkUpload } from '../components/BulkUpload';
 import { AdminAnalytics } from './AdminAnalytics';
@@ -272,6 +272,24 @@ const UserForm: React.FC<{ initialData?: User | null, currentUser: User, onSave:
   const projects = dataService.getAllProjects();
 
   const hqProjectId = projects.find(p => p.name.toUpperCase() === 'HQ')?.id;
+
+  // Admin-issued temporary password (shown once, never re-retrievable).
+  const [tempPassword, setTempPassword] = useState<string | null>(null);
+  const [resetError, setResetError] = useState('');
+  const [resettingPassword, setResettingPassword] = useState(false);
+
+  const handleResetPassword = async () => {
+    if (!initialData) return;
+    setResetError('');
+    setResettingPassword(true);
+    const result = await dataService.adminResetPassword(initialData.id);
+    setResettingPassword(false);
+    if ('error' in result) {
+      setResetError(result.error);
+      return;
+    }
+    setTempPassword(result.tempPassword);
+  };
 
   const [formData, setFormData] = useState<Partial<User>>(() => {
     if (initialData) return { ...initialData };
@@ -703,6 +721,52 @@ const UserForm: React.FC<{ initialData?: User | null, currentUser: User, onSave:
                     </div>
                 </div>
             </div>
+
+            {/* Admin-issued temporary password — the only reset path until an SMTP
+                relay exists for self-service email resets. Shown once; the plaintext
+                is never stored, so a lost one just means issuing another. */}
+            {initialData && (
+                <div className="p-6 bg-slate-50 rounded-sm border border-slate-100 space-y-4">
+                    <h4 className="font-bold text-slate-900 flex items-center gap-2 border-b border-slate-300 pb-2">
+                        <Lock size={16} className="text-slate-900" />
+                        Password
+                    </h4>
+                    {tempPassword ? (
+                        <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-sm">
+                            <p className="text-xs font-bold uppercase tracking-wide text-emerald-800 mb-2">
+                                Temporary password — copy it now
+                            </p>
+                            <code className="block bg-white border border-emerald-200 px-3 py-2 font-mono text-lg tracking-widest text-slate-900 select-all">
+                                {tempPassword}
+                            </code>
+                            <p className="text-xs text-slate-600 mt-2">
+                                Give this to {initialData.name} directly. It will not be shown again, and they must
+                                choose a new password the first time they sign in with it.
+                            </p>
+                        </div>
+                    ) : (
+                        <>
+                            <p className="text-xs text-slate-600">
+                                Issues a temporary password for this employee. They will be forced to set their own
+                                password at their next sign-in.
+                            </p>
+                            {resetError && (
+                                <p className="text-[11px] font-bold text-red-600 flex items-center gap-1">
+                                    <AlertTriangle size={12} /> {resetError}
+                                </p>
+                            )}
+                            <button
+                                type="button"
+                                onClick={handleResetPassword}
+                                disabled={resettingPassword}
+                                className="px-4 py-2 bg-white border border-slate-300 text-slate-800 rounded-sm hover:bg-slate-100 transition-colors font-bold uppercase tracking-wide text-xs disabled:opacity-50"
+                            >
+                                {resettingPassword ? 'Resetting...' : 'Reset Password'}
+                            </button>
+                        </>
+                    )}
+                </div>
+            )}
 
             <div className="pt-6 flex justify-end gap-3 border-t border-slate-100">
                 <button type="button" onClick={onCancel} className="px-6 py-2 text-slate-600 hover:bg-slate-100 rounded-sm transition-colors font-bold uppercase tracking-wide text-xs">Cancel</button>

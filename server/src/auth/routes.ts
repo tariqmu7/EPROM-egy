@@ -3,18 +3,23 @@ import { Router, type Request, type Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { config } from '../config.js';
-import { query } from '../db.js';
+import { query, withTransaction } from '../db.js';
 import { hashPassword, verifyPassword } from './password.js';
 import { signToken } from './jwt.js';
 import { authenticate } from '../middleware/authenticate.js';
 import { isAdmin } from '../authz.js';
 
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20, // per IP per 15 min — blunt brute-force protection
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+// Brute-force protection on auth endpoints. Disabled under test so the suite's
+// many logins aren't throttled (mirrors the global limiter in app.ts).
+const loginLimiter =
+  process.env.NODE_ENV === 'test'
+    ? (_req: Request, _res: Response, next: (e?: unknown) => void) => next()
+    : rateLimit({
+        windowMs: 15 * 60 * 1000,
+        max: 20, // per IP per 15 min — blunt brute-force protection
+        standardHeaders: true,
+        legacyHeaders: false,
+      });
 
 const emailSchema = z.string().email().transform((s) => s.trim().toLowerCase());
 
@@ -80,37 +85,65 @@ export function authRouter(): Router {
       }
       const { email, password, name, profile } = parsed.data;
 
-      const exists = (await query('SELECT 1 FROM auth_credentials WHERE lower(email) = $1', [email])).rows.length > 0;
-      if (exists) {
+      // A credential already means this email has finished signing up before.
+      const credExists =
+        (await query('SELECT 1 FROM auth_credentials WHERE lower(email) = $1', [email])).rows.length > 0;
+      if (credExists) {
         res.status(409).json({ error: 'email already registered' });
         return;
       }
 
-      const id = randomUUID();
-      const userDoc = {
-        ...(profile ?? {}),
-        id,
-        name,
-        email,
-        role: 'EMPLOYEE',
-        status: 'PENDING',
-      };
-      await query('INSERT INTO users (id, data) VALUES ($1, $2)', [id, userDoc]);
-      await query('INSERT INTO auth_credentials (user_id, email, password_hash) VALUES ($1, $2, $3)', [
-        id,
-        email,
-        await hashPassword(password),
-      ]);
+      // An email can already own a users row WITHOUT a credential: profiles
+      // imported from Firebase (Firebase Auth was not migrated) or seeded via
+      // bulk upload. First-time sign-up must LINK the password onto that
+      // existing profile — inserting a second users row would violate the
+      // unique email index (idx_users_email) and 500. Either way the account
+      // lands in the approval queue (PENDING) so an admin confirms the person
+      // before granting access.
+      const existing = (await query("SELECT id FROM users WHERE lower(data->>'email') = $1", [email])).rows[0];
+      const passwordHash = await hashPassword(password);
 
-      res.status(201).json({ pending: true });
+      const id = await withTransaction(async (tx) => {
+        if (existing) {
+          const uid = existing.id as string;
+          await tx(`UPDATE users SET data = data || '{"status":"PENDING"}'::jsonb, updated_at = now() WHERE id = $1`, [
+            uid,
+          ]);
+          await tx('INSERT INTO auth_credentials (user_id, email, password_hash) VALUES ($1, $2, $3)', [
+            uid,
+            email,
+            passwordHash,
+          ]);
+          return uid;
+        }
+        const newId = randomUUID();
+        const userDoc = { ...(profile ?? {}), id: newId, name, email, role: 'EMPLOYEE', status: 'PENDING' };
+        await tx('INSERT INTO users (id, data) VALUES ($1, $2)', [newId, userDoc]);
+        await tx('INSERT INTO auth_credentials (user_id, email, password_hash) VALUES ($1, $2, $3)', [
+          newId,
+          email,
+          passwordHash,
+        ]);
+        return newId;
+      });
+
+      res.status(201).json({ pending: true, id });
     } catch (e) {
       next(e);
     }
   });
 
   // ── WHO AM I (replaces onAuthStateChanged resolution) ──────────────────────
-  router.get('/me', authenticate, async (req: Request, res: Response) => {
-    res.json({ user: { id: req.user!.id, ...req.user!.data } });
+  // Reports `mustReset` too: the client gates the whole app behind a forced
+  // password change, and that gate has to survive a page refresh (which
+  // re-resolves the session here rather than through /login).
+  router.get('/me', authenticate, async (req: Request, res: Response, next) => {
+    try {
+      const cred = (await query('SELECT must_reset FROM auth_credentials WHERE user_id = $1', [req.user!.id])).rows[0];
+      res.json({ user: { id: req.user!.id, ...req.user!.data }, mustReset: !!cred?.must_reset });
+    } catch (e) {
+      next(e);
+    }
   });
 
   // ── CHANGE PASSWORD (authenticated; also completes must_reset) ─────────────

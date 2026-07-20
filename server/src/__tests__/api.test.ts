@@ -46,12 +46,22 @@ beforeAll(async () => {
   db.setPool(new Pool() as any);
   query = db.query;
 
-  const cols = '(id TEXT PRIMARY KEY, data JSONB NOT NULL, updated_at TIMESTAMPTZ, created_at TIMESTAMPTZ)';
+  // Mirrors the shape migrations produce (001 + 002 + 003): document + version +
+  // audit columns + timestamps that default. pg-mem doesn't run the .sql
+  // migrations, so we declare the columns the route/batch SQL depends on here.
+  const cols =
+    '(id TEXT PRIMARY KEY, data JSONB NOT NULL, version INTEGER NOT NULL DEFAULT 1, created_by TEXT, updated_by TEXT, updated_at TIMESTAMPTZ NOT NULL DEFAULT now(), created_at TIMESTAMPTZ NOT NULL DEFAULT now())';
   for (const t of ['users', 'skills', 'assessments', 'evidences', 'nominations', 'notifications']) {
     await query(`CREATE TABLE ${t} ${cols}`);
   }
+  // activityLogs is a camelCase table (quoted, case-sensitive), matching what
+  // registry.tableFor('activityLogs') emits.
+  await query(`CREATE TABLE "activityLogs" ${cols}`);
   await query(
     'CREATE TABLE auth_credentials (user_id TEXT PRIMARY KEY, email TEXT, password_hash TEXT, must_reset BOOLEAN, updated_at TIMESTAMPTZ, created_at TIMESTAMPTZ)',
+  );
+  await query(
+    'CREATE TABLE tombstones (collection TEXT NOT NULL, id TEXT NOT NULL, deleted_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (collection, id))',
   );
 
   await seedUser(ADMIN, 'ADMIN', 'admin-pass');
@@ -243,5 +253,255 @@ describe('read authorization scoping (Section 2 — data privacy)', () => {
     expect(subEvidence.status).toBe(200); // transitive report
     const foreign = await request(app).get('/col/evidences/e-other').set('Authorization', `Bearer ${mgrTok}`);
     expect(foreign.status).toBe(403);
+  });
+});
+
+describe('org-level ACEO can be persisted (regression: F-1)', () => {
+  it('admin can create a user at the ACEO org level', async () => {
+    const adminTok = await login(ADMIN.email, 'admin-pass');
+    const res = await request(app)
+      .put('/col/users/aceo-1')
+      .set('Authorization', `Bearer ${adminTok}`)
+      .send({ data: { name: 'Sector Head', email: 'aceo@eprom.local', role: 'EMPLOYEE', status: 'ACTIVE', orgLevel: 'ACEO' } });
+    expect(res.status).toBe(200);
+    expect(res.body.data.orgLevel).toBe('ACEO');
+  });
+});
+
+describe('activityLogs audit trail (F-2)', () => {
+  beforeAll(async () => {
+    const now = new Date().toISOString();
+    await query('INSERT INTO "activityLogs" (id, data) VALUES ($1, $2)', [
+      'log-emp',
+      { id: 'log-emp', actorId: EMP.id, action: 'Did thing', target: 'X', timestamp: now },
+    ]);
+    await query('INSERT INTO "activityLogs" (id, data) VALUES ($1, $2)', [
+      'log-other',
+      { id: 'log-other', actorId: OTHER.id, action: 'Did thing', target: 'Y', timestamp: now },
+    ]);
+  });
+
+  it('an employee lists only their own audit entries', async () => {
+    const empTok = await login(EMP.email, 'emp-pass');
+    const res = await request(app).post('/col/activityLogs/query').set('Authorization', `Bearer ${empTok}`).send({});
+    expect(res.status).toBe(200);
+    const ids = idsOf(res);
+    expect(ids).toContain('log-emp');
+    expect(ids).not.toContain('log-other');
+  });
+
+  it('admin reads the whole audit trail', async () => {
+    const adminTok = await login(ADMIN.email, 'admin-pass');
+    const ids = idsOf(await request(app).post('/col/activityLogs/query').set('Authorization', `Bearer ${adminTok}`).send({}));
+    expect(ids).toEqual(expect.arrayContaining(['log-emp', 'log-other']));
+  });
+
+  it('a stranger cannot read another user’s audit entry one-by-one', async () => {
+    const empTok = await login(EMP.email, 'emp-pass');
+    const res = await request(app).get('/col/activityLogs/log-other').set('Authorization', `Bearer ${empTok}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('a user cannot forge a log entry under another user id, but can log as themselves', async () => {
+    const empTok = await login(EMP.email, 'emp-pass');
+    const forged = await request(app)
+      .post('/col/activityLogs')
+      .set('Authorization', `Bearer ${empTok}`)
+      .send({ data: { actorId: OTHER.id, action: 'evil', target: 'x', timestamp: new Date().toISOString() } });
+    expect(forged.status).toBe(403);
+
+    const own = await request(app)
+      .post('/col/activityLogs')
+      .set('Authorization', `Bearer ${empTok}`)
+      .send({ data: { actorId: EMP.id, action: 'ok', target: 'x', timestamp: new Date().toISOString() } });
+    expect(own.status).toBe(201);
+  });
+});
+
+describe('batch is atomic and authorized inside the transaction (F-7)', () => {
+  it('a batch containing one forbidden op writes none of them', async () => {
+    const empTok = await login(EMP.email, 'emp-pass');
+    const res = await request(app)
+      .post('/batch')
+      .set('Authorization', `Bearer ${empTok}`)
+      .send({
+        operations: [
+          { type: 'set', collection: 'notifications', id: 'n-batch', data: { userId: EMP.id, title: 't', message: 'm', isRead: false } },
+          { type: 'set', collection: 'skills', id: 'sk-batch', data: { name: 'Nope', category: 'Technical' } }, // admin-only → forbidden
+        ],
+      });
+    expect(res.status).toBe(403);
+    // The authorized op must have rolled back with the forbidden one.
+    const check = await query('SELECT id FROM notifications WHERE id = $1', ['n-batch']);
+    expect(check.rows.length).toBe(0);
+  });
+
+  it('a fully authorized batch applies atomically', async () => {
+    const empTok = await login(EMP.email, 'emp-pass');
+    const res = await request(app)
+      .post('/batch')
+      .set('Authorization', `Bearer ${empTok}`)
+      .send({
+        operations: [
+          { type: 'set', collection: 'notifications', id: 'n-ok-1', data: { userId: EMP.id, title: 'a', message: 'm', isRead: false } },
+          { type: 'set', collection: 'notifications', id: 'n-ok-2', data: { userId: EMP.id, title: 'b', message: 'm', isRead: false } },
+        ],
+      });
+    expect(res.status).toBe(200);
+    expect(res.body.count).toBe(2);
+    const check = await query('SELECT id FROM notifications WHERE id IN ($1, $2)', ['n-ok-1', 'n-ok-2']);
+    expect(check.rows.length).toBe(2);
+  });
+});
+
+describe('write-side validation (data contract)', () => {
+  it('rejects a user document with an invalid role enum (422)', async () => {
+    const adminTok = await login(ADMIN.email, 'admin-pass');
+    const res = await request(app)
+      .put('/col/users/bad-role')
+      .set('Authorization', `Bearer ${adminTok}`)
+      .send({ data: { name: 'X', email: 'x@eprom.local', role: 'SUPERADMIN', status: 'ACTIVE' } });
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('validation_failed');
+  });
+
+  it('rejects a non-object document (422)', async () => {
+    const adminTok = await login(ADMIN.email, 'admin-pass');
+    const res = await request(app)
+      .put('/col/skills/not-an-object')
+      .set('Authorization', `Bearer ${adminTok}`)
+      .send({ data: 'just a string' });
+    expect(res.status).toBe(422);
+  });
+
+  it('accepts a valid document and returns server metadata (version)', async () => {
+    const adminTok = await login(ADMIN.email, 'admin-pass');
+    const res = await request(app)
+      .put('/col/skills/valid-skill')
+      .set('Authorization', `Bearer ${adminTok}`)
+      .send({ data: { name: 'Welding', category: 'Technical' } });
+    expect(res.status).toBe(200);
+    expect(res.body.version).toBe(1);
+  });
+});
+
+describe('delta sync (incremental reads + tombstones)', () => {
+  const auth = async () => `Bearer ${await login(ADMIN.email, 'admin-pass')}`;
+
+  it('a delta query returns only rows changed after the cursor', async () => {
+    const a = await auth();
+    await request(app).put('/col/skills/delta-a').set('Authorization', a).send({ data: { name: 'A', category: 'Technical' } });
+
+    const full = await request(app).post('/col/skills/query').set('Authorization', a).send({});
+    expect(full.body.cursor).toBeTruthy();
+    const cursor = full.body.cursor;
+
+    await new Promise((r) => setTimeout(r, 8)); // let updated_at advance past the cursor
+    await request(app).put('/col/skills/delta-b').set('Authorization', a).send({ data: { name: 'B', category: 'Technical' } });
+
+    const delta = await request(app).post('/col/skills/query').set('Authorization', a).send({ since: cursor });
+    const ids = delta.body.documents.map((d: any) => d.id);
+    expect(ids).toContain('delta-b'); // changed after cursor
+    expect(ids).not.toContain('delta-a'); // unchanged since cursor
+  });
+
+  it('a hard delete surfaces as a tombstone in the delta response', async () => {
+    const a = await auth();
+    await request(app).put('/col/skills/tomb-x').set('Authorization', a).send({ data: { name: 'X', category: 'Technical' } });
+
+    const full = await request(app).post('/col/skills/query').set('Authorization', a).send({});
+    const cursor = full.body.cursor;
+
+    await new Promise((r) => setTimeout(r, 8));
+    const del = await request(app).delete('/col/skills/tomb-x').set('Authorization', a);
+    expect(del.status).toBe(204);
+
+    const delta = await request(app).post('/col/skills/query').set('Authorization', a).send({ since: cursor });
+    const deletedIds = (delta.body.deletions ?? []).map((d: any) => d.id);
+    expect(deletedIds).toContain('tomb-x');
+  });
+});
+
+describe('optimistic concurrency (version)', () => {
+  it('increments version on each write and enforces expectedVersion', async () => {
+    const adminTok = await login(ADMIN.email, 'admin-pass');
+
+    const created = await request(app)
+      .put('/col/skills/conc-skill')
+      .set('Authorization', `Bearer ${adminTok}`)
+      .send({ data: { name: 'Rigging', category: 'Technical' } });
+    expect(created.status).toBe(200);
+    expect(created.body.version).toBe(1);
+
+    const bumped = await request(app)
+      .patch('/col/skills/conc-skill')
+      .set('Authorization', `Bearer ${adminTok}`)
+      .send({ data: { name: 'Rigging v2' }, expectedVersion: 1 });
+    expect(bumped.status).toBe(200);
+    expect(bumped.body.version).toBe(2);
+
+    // A stale writer that still thinks it's on v1 is rejected with the truth.
+    const stale = await request(app)
+      .patch('/col/skills/conc-skill')
+      .set('Authorization', `Bearer ${adminTok}`)
+      .send({ data: { name: 'Rigging conflict' }, expectedVersion: 1 });
+    expect(stale.status).toBe(409);
+    expect(stale.body.currentVersion).toBe(2);
+  });
+});
+
+// Admin-issued temporary password: the only password-recovery path until an
+// SMTP relay exists for self-service email resets.
+describe('admin password reset → forced change', () => {
+  it('non-admins cannot set another user\'s password', async () => {
+    const empTok = await login(EMP.email, 'emp-pass');
+    const res = await request(app)
+      .post('/auth/admin/set-password')
+      .set('Authorization', `Bearer ${empTok}`)
+      .send({ userId: MGR.id, newPassword: 'hijacked-pass' });
+    expect(res.status).toBe(403);
+  });
+
+  // Runs last in the file: it permanently changes EMP's password.
+  it('issues a temp password, flags mustReset, and clears it on change', async () => {
+    const adminTok = await login(ADMIN.email, 'admin-pass');
+    const TEMP = 'Temp-Pass-1234';
+
+    const set = await request(app)
+      .post('/auth/admin/set-password')
+      .set('Authorization', `Bearer ${adminTok}`)
+      .send({ userId: EMP.id, newPassword: TEMP });
+    expect(set.status).toBe(200);
+
+    // The old password no longer works; the temp one does and is flagged.
+    const stale = await request(app).post('/auth/login').send({ email: EMP.email, password: 'emp-pass' });
+    expect(stale.status).toBe(401);
+
+    const fresh = await request(app).post('/auth/login').send({ email: EMP.email, password: TEMP });
+    expect(fresh.status).toBe(200);
+    expect(fresh.body.mustReset).toBe(true);
+    const tok = fresh.body.token;
+
+    // The flag survives a page refresh (which re-resolves via /auth/me).
+    const me = await request(app).get('/auth/me').set('Authorization', `Bearer ${tok}`);
+    expect(me.body.mustReset).toBe(true);
+
+    // While forced, the current password is not required to set a new one.
+    const changed = await request(app)
+      .post('/auth/change-password')
+      .set('Authorization', `Bearer ${tok}`)
+      .send({ newPassword: 'chosen-by-me-9' });
+    expect(changed.status).toBe(200);
+
+    const after = await request(app).post('/auth/login').send({ email: EMP.email, password: 'chosen-by-me-9' });
+    expect(after.status).toBe(200);
+    expect(after.body.mustReset).toBe(false);
+
+    // Now that the account is settled, a change demands the current password.
+    const noCurrent = await request(app)
+      .post('/auth/change-password')
+      .set('Authorization', `Bearer ${after.body.token}`)
+      .send({ newPassword: 'another-new-pw' });
+    expect(noCurrent.status).toBe(403);
   });
 });
