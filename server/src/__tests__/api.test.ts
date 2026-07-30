@@ -54,9 +54,11 @@ beforeAll(async () => {
   for (const t of ['users', 'skills', 'assessments', 'evidences', 'nominations', 'notifications']) {
     await query(`CREATE TABLE ${t} ${cols}`);
   }
-  // activityLogs is a camelCase table (quoted, case-sensitive), matching what
-  // registry.tableFor('activityLogs') emits.
-  await query(`CREATE TABLE "activityLogs" ${cols}`);
+  // Quoted camelCase tables (case-sensitive), matching what registry.tableFor()
+  // emits. workExperiences/appSettings come from migration 005.
+  for (const t of ['activityLogs', 'workExperiences', 'appSettings']) {
+    await query(`CREATE TABLE "${t}" ${cols}`);
+  }
   await query(
     'CREATE TABLE auth_credentials (user_id TEXT PRIMARY KEY, email TEXT, password_hash TEXT, must_reset BOOLEAN, updated_at TIMESTAMPTZ, created_at TIMESTAMPTZ)',
   );
@@ -86,12 +88,22 @@ beforeAll(async () => {
   await seedDoc('evidences', 'e-other', { userId: OTHER.id, status: 'PENDING' });
   await seedDoc('evidences', 'e-sub2', { userId: 'sub-2', status: 'PENDING' });
 
+  // Work experiences (same owner/manager scoping as evidences).
+  await seedDoc('workExperiences', 'we-emp', { userId: EMP.id, employer: 'Acme', jobTitle: 'Tech', startDate: '2015-01-01', status: 'PENDING' });
+  await seedDoc('workExperiences', 'we-emp-verified', { userId: EMP.id, employer: 'Globex', jobTitle: 'Senior Tech', startDate: '2010-01-01', status: 'VERIFIED' });
+  await seedDoc('workExperiences', 'we-other', { userId: OTHER.id, employer: 'Initech', jobTitle: 'Analyst', startDate: '2016-01-01', status: 'PENDING' });
+  await seedDoc('workExperiences', 'we-sub1', { userId: 'sub-1', employer: 'Stark', jobTitle: 'Lead', startDate: '2017-01-01', status: 'PENDING' }); // MGR's DIRECT report
+  await seedDoc('workExperiences', 'we-sub2', { userId: 'sub-2', employer: 'Umbrella', jobTitle: 'Operator', startDate: '2018-01-01', status: 'PENDING' }); // transitive
+
   const { createApp } = await import('../app.js');
   app = createApp();
 });
 
+// The identifier is quoted so camelCase tables (workExperiences, activityLogs)
+// resolve exactly; an unquoted name would be folded to lowercase and miss them.
+// Quoting an all-lowercase name is a no-op, so this is safe for every table.
 async function seedDoc(table: string, id: string, data: Record<string, unknown>) {
-  await query(`INSERT INTO ${table} (id, data) VALUES ($1, $2)`, [id, { id, ...data }]);
+  await query(`INSERT INTO "${table}" (id, data) VALUES ($1, $2)`, [id, { id, ...data }]);
 }
 
 function idsOf(res: { body: { documents: { id: string }[] } }): string[] {
@@ -253,6 +265,133 @@ describe('read authorization scoping (Section 2 — data privacy)', () => {
     expect(subEvidence.status).toBe(200); // transitive report
     const foreign = await request(app).get('/col/evidences/e-other').set('Authorization', `Bearer ${mgrTok}`);
     expect(foreign.status).toBe(403);
+  });
+});
+
+describe('workExperiences authorization (owner submits, manager verifies)', () => {
+  // THE critical test for this collection. runList applies listScope and never
+  // calls can(), so listScope is the ONLY bound on a list read. If the
+  // 'workExperiences' case were ever dropped from listScope, the default (null =
+  // unrestricted) would publish every employee's employment history to every
+  // authenticated user — while get-one kept returning 403 and looked fine.
+  it('list is scoped to own records — an employee cannot enumerate the company', async () => {
+    const empTok = await login(EMP.email, 'emp-pass');
+    const ids = idsOf(
+      await request(app).post('/col/workExperiences/query').set('Authorization', `Bearer ${empTok}`).send({}),
+    );
+    expect(ids.sort()).toEqual(['we-emp', 'we-emp-verified']);
+    expect(ids).not.toContain('we-other');
+    expect(ids).not.toContain('we-sub2');
+  });
+
+  it('a manager lists and reads the subordinate subtree but not a stranger', async () => {
+    const mgrTok = await login(MGR.email, 'mgr-pass');
+    const ids = idsOf(
+      await request(app).post('/col/workExperiences/query').set('Authorization', `Bearer ${mgrTok}`).send({}),
+    );
+    expect(ids).toContain('we-sub2'); // transitive report
+    expect(ids).not.toContain('we-other');
+
+    expect((await request(app).get('/col/workExperiences/we-sub2').set('Authorization', `Bearer ${mgrTok}`)).status).toBe(200);
+    expect((await request(app).get('/col/workExperiences/we-other').set('Authorization', `Bearer ${mgrTok}`)).status).toBe(403);
+  });
+
+  it('an employee cannot submit experience under someone else’s id', async () => {
+    const empTok = await login(EMP.email, 'emp-pass');
+    const forged = await request(app)
+      .put('/col/workExperiences/we-forged')
+      .set('Authorization', `Bearer ${empTok}`)
+      .send({ data: { userId: OTHER.id, employer: 'Acme', jobTitle: 'Tech', startDate: '2020-01-01', status: 'PENDING' } });
+    expect(forged.status).toBe(403);
+
+    const own = await request(app)
+      .put('/col/workExperiences/we-own-new')
+      .set('Authorization', `Bearer ${empTok}`)
+      .send({ data: { userId: EMP.id, employer: 'Acme', jobTitle: 'Tech', startDate: '2020-01-01', status: 'PENDING' } });
+    expect(own.status).toBe(200);
+  });
+
+  it('the owner may edit while PENDING but not after a verdict', async () => {
+    const empTok = await login(EMP.email, 'emp-pass');
+    const whilePending = await request(app)
+      .patch('/col/workExperiences/we-emp')
+      .set('Authorization', `Bearer ${empTok}`)
+      .send({ data: { jobTitle: 'Senior Technician' } });
+    expect(whilePending.status).toBe(200);
+
+    const afterVerdict = await request(app)
+      .patch('/col/workExperiences/we-emp-verified')
+      .set('Authorization', `Bearer ${empTok}`)
+      .send({ data: { jobTitle: 'Rewriting history' } });
+    expect(afterVerdict.status).toBe(403);
+  });
+
+  it('only the DIRECT manager may record a verdict', async () => {
+    const otherTok = await login(OTHER.email, 'other-pass');
+    const strangerVerify = await request(app)
+      .patch('/col/workExperiences/we-sub1')
+      .set('Authorization', `Bearer ${otherTok}`)
+      .send({ data: { status: 'VERIFIED' } });
+    expect(strangerVerify.status).toBe(403);
+
+    const mgrTok = await login(MGR.email, 'mgr-pass');
+    const direct = await request(app)
+      .patch('/col/workExperiences/we-sub1')
+      .set('Authorization', `Bearer ${mgrTok}`)
+      .send({ data: { status: 'VERIFIED', reviewedBy: MGR.id } });
+    expect(direct.status).toBe(200);
+
+    // Deliberate parity with evidence approval: a skip-level manager may READ a
+    // transitive report's record (isAncestorManager) but may NOT sign it off
+    // (isManagerOf is one hop). sub-2 reports to sub-1, not to MGR.
+    expect((await request(app).get('/col/workExperiences/we-sub2').set('Authorization', `Bearer ${mgrTok}`)).status).toBe(200);
+    const skipLevel = await request(app)
+      .patch('/col/workExperiences/we-sub2')
+      .set('Authorization', `Bearer ${mgrTok}`)
+      .send({ data: { status: 'VERIFIED', reviewedBy: MGR.id } });
+    expect(skipLevel.status).toBe(403);
+  });
+
+  it('rejects an invalid status enum (422)', async () => {
+    const empTok = await login(EMP.email, 'emp-pass');
+    const res = await request(app)
+      .put('/col/workExperiences/we-bad')
+      .set('Authorization', `Bearer ${empTok}`)
+      .send({ data: { userId: EMP.id, employer: 'Acme', jobTitle: 'T', startDate: '2020-01-01', status: 'APPROVED' } });
+    expect(res.status).toBe(422);
+  });
+
+  it('a stranger cannot delete, and the owner cannot delete a verified record', async () => {
+    const otherTok = await login(OTHER.email, 'other-pass');
+    expect((await request(app).delete('/col/workExperiences/we-sub2').set('Authorization', `Bearer ${otherTok}`)).status).toBe(403);
+
+    const empTok = await login(EMP.email, 'emp-pass');
+    expect((await request(app).delete('/col/workExperiences/we-emp-verified').set('Authorization', `Bearer ${empTok}`)).status).toBe(403);
+    // ...but may withdraw their own still-pending submission.
+    expect((await request(app).delete('/col/workExperiences/we-own-new').set('Authorization', `Bearer ${empTok}`)).status).toBe(204);
+  });
+
+  it('appSettings is read-open and admin-write', async () => {
+    const empTok = await login(EMP.email, 'emp-pass');
+    const adminTok = await login(ADMIN.email, 'admin-pass');
+    const policy = { bands: [{ minYears: 0, level: 2 }], maxProvisionalLevel: 3, enabled: true };
+
+    const empWrite = await request(app)
+      .put('/col/appSettings/work-experience')
+      .set('Authorization', `Bearer ${empTok}`)
+      .send({ data: policy });
+    expect(empWrite.status).toBe(403);
+
+    const adminWrite = await request(app)
+      .put('/col/appSettings/work-experience')
+      .set('Authorization', `Bearer ${adminTok}`)
+      .send({ data: policy });
+    expect(adminWrite.status).toBe(200);
+
+    // Every client must be able to READ it to compute provisional scores.
+    const empRead = await request(app).get('/col/appSettings/work-experience').set('Authorization', `Bearer ${empTok}`);
+    expect(empRead.status).toBe(200);
+    expect(empRead.body.data.maxProvisionalLevel).toBe(3);
   });
 });
 

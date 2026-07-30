@@ -136,7 +136,12 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
 
   // Items that go inside the combined dropdown button
   const dropdownTabs: { id: string; label: string; icon: LucideIcon }[] = [
-    ...(user.role === Role.ADMIN ? [{ id: 'admin-audit', label: t('nav.auditTrail'), icon: ShieldCheck }] : []),
+    ...(user.role === Role.ADMIN
+      ? [
+          { id: 'admin-experience', label: t('nav.workExperience'), icon: Briefcase },
+          { id: 'admin-audit', label: t('nav.auditTrail'), icon: ShieldCheck },
+        ]
+      : []),
     { id: 'methodology', label: t('nav.methodology'), icon: BadgeCheck },
     { id: 'settings', label: t('nav.settings'), icon: Settings },
   ];

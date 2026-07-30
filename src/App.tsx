@@ -12,6 +12,7 @@ const CEOPanel = lazy(() => import('./pages/CEOPanel').then(m => ({ default: m.C
 const EvaluationsHub = lazy(() => import('./pages/EvaluationsHub').then(m => ({ default: m.EvaluationsHub })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
 const MethodologyStandards = lazy(() => import('./pages/MethodologyStandards').then(m => ({ default: m.MethodologyStandards })));
+const WorkExperienceAdmin = lazy(() => import('./pages/WorkExperienceAdmin').then(m => ({ default: m.WorkExperienceAdmin })));
 import { Logo } from './components/Logo';
 import loginBg from './assets/login-bg.jpg';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -587,7 +588,7 @@ const App: React.FC = () => {
                     >
                         <ArrowLeft size={14} /> Back to Dashboard
                     </button>
-                    <EmployeeDashboard user={targetUser} />
+                    <EmployeeDashboard user={targetUser} readOnly />
                 </div>
             );
         }
@@ -610,6 +611,7 @@ const App: React.FC = () => {
         case 'admin-jobs': return <AdminPanel view="DEPTS" onNavigate={setActiveTab} />;
         case 'admin-skills': return <AdminPanel view="SKILLS" onNavigate={setActiveTab} />;
         case 'admin-depts': return <AdminPanel view="DEPTS" onNavigate={setActiveTab} />;
+        case 'admin-experience': return <WorkExperienceAdmin />;
         case 'settings': return <SettingsPage user={user} />;
         case 'methodology': return <MethodologyStandards />;
         default: return <div className="p-8 text-center text-slate-600">Section Under Construction</div>;

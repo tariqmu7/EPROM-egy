@@ -83,6 +83,8 @@ ECMS/
 | `departments` | Org units with hierarchy (General → Department → Section) |
 | `notifications` | In-app alerts per user |
 | `trainingCourses` | Courses linked to skills for ITP recommendations |
+| `workExperiences` | Employment **outside** the company: employee-submitted, manager-verified. Each record tags skills with `{ claimedLevel, yearsApplied, suggestedLevel, verifiedLevel }`. A VERIFIED record's `verifiedLevel` becomes a **capped provisional** competency baseline (see Skill Scoring). Distinct from `User.careerHistory`, which is internal movement only |
+| `appSettings` | Company-wide admin config, one row per key. Row `work-experience` holds the years→level band table + provisional cap. Read-open, admin-write |
 
 ### Org Hierarchy (OrgLevel enum)
 `CEO` → `ACEO` → `GM` → `AGM` → `DM` → `SH` → `SP` → `JP` → `FR`
@@ -103,6 +105,18 @@ A job profile's `orgLevel` is **derived from the org-chart node's structural typ
 - **360° / OJT skills**: Weighted average — Self 10% + Peer 30% + Manager 60%
 - **Direct assessment skills**: Latest score from WRITTEN_EXAM, INTERVIEW, or PRACTICAL_DEMO
 - **Evidence skills**: Highest `assignedScore` from APPROVED work records
+- **Provisional fallback (work experience)**: when a skill has **no** usable assessment *and* **no**
+  scored approved evidence, the highest `verifiedLevel` across the user's VERIFIED `workExperiences`
+  applies, clamped to `appSettings/work-experience.maxProvisionalLevel` (default L3). A real record
+  always wins. The fallback sits **after** the 360°/direct branch split in `computeSkillScore` — the
+  360° branch never reaches the evidence tier, and `getSkillPrimaryMethod` defaults to
+  `OJT_OBSERVATION`, so putting it inside the `else` would skip most skills.
+- `getUserSkillScore` is a thin cached wrapper over `computeSkillScore`; use
+  `getUserSkillScoreDetail` / `getSkillScoreSource` (`'ASSESSMENT' | 'EVIDENCE' | 'EXPERIENCE' | 'NONE'`)
+  to render the "Provisional" badge. `skillScoreCache` stores `{ score, source }` and **must** be
+  cleared by any new scoring input.
+- **Deliberate exception:** `getEmployeeAssessmentQueue` treats an `EXPERIENCE`-sourced score as 0, so
+  provisional credit never stops the system asking for the assessment that would confirm it.
 
 ### Effective Requirements (`getEffectiveRequirements`)
 The single resolver for "what does this position require". Returns the profile's flat `requiredSkills` list (dropping any that reference deleted skills). All readers — scoring, gap, ITP, career, TNA, assessment queues, and the page components — go through it.
@@ -191,6 +205,7 @@ Moving parts:
 | `evaluations` | `/evaluations` | EvaluationsHub | Employee |
 | `manager-dashboard` | `/manager` | ManagerDashboard | Manager |
 | `admin-dashboard/users/jobs/skills/depts/analytics` | `/admin`, `/admin/users`, … | AdminPanel | Admin |
+| `admin-experience` | `/admin/experience` | WorkExperienceAdmin | Admin |
 | `ceo-dashboard` / `ceo-view-profile` | `/ceo`, `/ceo/profile/:userId` | CEOPanel | CEO |
 
 > **Deploy note:** clean URLs need the host to serve `index.html` for any unknown path (SPA

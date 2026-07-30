@@ -36,3 +36,9 @@ export const NON_MANAGER_ORG_LEVELS = ['JP', 'FR'] as const;
 export const ORG_MANAGER_LEVELS: readonly OrgLevel[] = ORG_LEVEL.filter(
   (l) => !(NON_MANAGER_ORG_LEVELS as readonly string[]).includes(l),
 );
+
+// Lifecycle of an employee-submitted work-experience record. Only VERIFIED
+// entries may contribute a (capped, provisional) competency baseline — see
+// getUserSkillScore in src/services/store.ts.
+export const WORK_EXPERIENCE_STATUS = ['PENDING', 'VERIFIED', 'REJECTED'] as const;
+export type WorkExperienceStatus = (typeof WORK_EXPERIENCE_STATUS)[number];

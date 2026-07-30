@@ -54,6 +54,7 @@ import {
 } from 'lucide-react';
 import { compatAuth as auth } from '../services/auth-compat';
 import { exportCompetenceStatement } from '../utils/competenceStatement';
+import { WorkExperienceSection } from '../components/WorkExperienceSection';
 
 interface EmployeeDashboardProps {
   user: User;
@@ -64,12 +65,19 @@ interface EmployeeDashboardProps {
    * view (CEO/manager profile) so it never rewrites that view's URL.
    */
   routed?: boolean;
+  /**
+   * Suppresses every mutating affordance (currently the Work Experience
+   * add/edit/delete controls). Passed explicitly rather than inferred from
+   * `routed`: that flag means "this instance owns the URL", which only
+   * coincidentally implies "this is my own profile" today.
+   */
+  readOnly?: boolean;
 }
 
-export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({ user, routed = false }) => {
-  const [activeTab, setActiveTab] = usePersistentView<'OVERVIEW' | 'IDP' | 'HISTORY' | 'CERTIFICATES' | 'CAREER'>(
+export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({ user, routed = false, readOnly = false }) => {
+  const [activeTab, setActiveTab] = usePersistentView<'OVERVIEW' | 'IDP' | 'HISTORY' | 'CERTIFICATES' | 'CAREER' | 'EXPERIENCE'>(
     'emp-dashboard',
-    ['OVERVIEW', 'IDP', 'HISTORY', 'CERTIFICATES', 'CAREER'],
+    ['OVERVIEW', 'IDP', 'HISTORY', 'CERTIFICATES', 'CAREER', 'EXPERIENCE'],
     'OVERVIEW',
     routed,
   );
@@ -81,6 +89,9 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
   const [certDeleteId, setCertDeleteId] = useState<string | null>(null);
   const [certDetailView, setCertDetailView] = useState<any | null>(null);
   const [skillDetailView, setSkillDetailView] = useState<{ skill?: Skill; required: number; current: number; gap: number } | null>(null);
+  // Personal/contact details moved out of the page body into an on-demand modal
+  // so the profile header can carry the CV-style professional summary instead.
+  const [showPersonalDetails, setShowPersonalDetails] = useState(false);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -175,11 +186,13 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
     const requirements = dataService.getEffectiveRequirements(jobProfile);
     return requirements.map(req => {
       const skillDetails = dataService.getSkill(req.skillId);
-      const currentScore = dataService.getUserSkillScore(user.id, req.skillId);
+      const { score: currentScore, source } = dataService.getUserSkillScoreDetail(user.id, req.skillId);
       return {
         skill: skillDetails,
         required: req.requiredLevel,
         current: currentScore,
+        // Provisional == credited from verified work experience, not yet measured.
+        isProvisional: source === 'EXPERIENCE',
         gap: Math.max(0, req.requiredLevel - currentScore)
       };
     });
@@ -312,6 +325,116 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
     return Object.values(skillMap).sort((a, b) => a.skill.name.localeCompare(b.skill.name));
   }, [user.id, storeVersion]);
 
+  /* ── CV / Professional Summary ─────────────────────────────────────────────
+     Everything the summary card shows is derived from records the system
+     already holds (job profile, assessments, certificates, career history) —
+     there is no separate CV document to keep in sync. */
+
+  const deptName = useMemo(
+    () => depts.find(d => d.id === user.departmentId)?.name,
+    [depts, user.departmentId]
+  );
+
+  // Academic degrees vs. professional credentials. Declined records never
+  // surface; pending ones do — flagged — so the employee can see what is still
+  // awaiting managerial approval.
+  const { education, credentials } = useMemo(() => {
+    const byDateDesc = (user.certificates || [])
+      .filter(c => c.status !== 'REJECTED')
+      .sort((a, b) => new Date(b.dateAchieved).getTime() - new Date(a.dateAchieved).getTime());
+    return {
+      education: byDateDesc.filter(c => c.category === 'ACADEMIC'),
+      credentials: byDateDesc.filter(c => c.category !== 'ACADEMIC'),
+    };
+  }, [user.certificates]);
+
+  // Proficiency per skill: the position requirements first (authoritative score
+  // via getUserSkillScore), then anything else the employee has ever been
+  // assessed on, so expertise earned in a previous role still counts.
+  const expertise = useMemo(() => {
+    const byId = new Map<string, { id: string; name: string; category?: string; level: number; required?: number }>();
+    skillAnalysis.forEach(s => {
+      if (s.skill) {
+        byId.set(s.skill.id, { id: s.skill.id, name: s.skill.name, category: s.skill.category, level: s.current, required: s.required });
+      }
+    });
+    careerSkillMap.forEach(e => {
+      if (!byId.has(e.skill.id)) {
+        byId.set(e.skill.id, { id: e.skill.id, name: e.skill.name, category: e.skill.category, level: e.latestScore });
+      }
+    });
+    return [...byId.values()]
+      .filter(s => s.level > 0)
+      .sort((a, b) => b.level - a.level || a.name.localeCompare(b.name));
+  }, [skillAnalysis, careerSkillMap]);
+
+  // Headline strengths are the Advanced/Expert competencies; when the employee
+  // has fewer than three of those, fall back to their strongest skills so a new
+  // starter's card is never empty.
+  const topStrengths = useMemo(() => {
+    const advanced = expertise.filter(s => s.level >= 4);
+    return (advanced.length >= 3 ? advanced : expertise).slice(0, 8);
+  }, [expertise]);
+
+  // Length of service is taken from the earliest career-history entry (the list
+  // is newest-first, but the min is computed defensively).
+  const serviceRecord = useMemo(() => {
+    const history = user.careerHistory || [];
+    const startTimes = history.map(h => new Date(h.startDate).getTime()).filter(t => !Number.isNaN(t));
+    const firstStart = startTimes.length ? Math.min(...startTimes) : null;
+    const rawYears = firstStart !== null ? (Date.now() - firstStart) / (365.25 * 86400000) : null;
+    return {
+      firstStart,
+      years: rawYears !== null && rawYears >= 0 ? Math.round(rawYears * 10) / 10 : null,
+      rolesHeld: history.length,
+    };
+  }, [user.careerHistory]);
+
+  // The narrative paragraph — one sentence per dimension, each omitted when the
+  // underlying data does not exist yet.
+  const summaryNarrative = useMemo(() => {
+    const sentences: string[] = [];
+    const band = user.orgLevel ? ORG_LEVEL_LABELS[user.orgLevel] : null;
+
+    const where = [deptName, user.location, user.projectName].filter(Boolean).join(' · ');
+    if (jobProfile?.title || band || where) {
+      const role = jobProfile?.title || 'Position not yet assigned';
+      sentences.push(`${role}${band ? ` (${band})` : ''}${where ? ` — ${where}` : ''}.`);
+    }
+
+    if (serviceRecord.years !== null) {
+      sentences.push(
+        `${serviceRecord.years} year${serviceRecord.years === 1 ? '' : 's'} of recorded service across ` +
+        `${serviceRecord.rolesHeld} position${serviceRecord.rolesHeld === 1 ? '' : 's'}.`
+      );
+    }
+
+    if (skillAnalysis.length > 0) {
+      const pct = Math.round((compliant.length / skillAnalysis.length) * 100);
+      const advanced = expertise.filter(s => s.level >= 4).length;
+      sentences.push(
+        `Assessed against ${skillAnalysis.length} position competenc${skillAnalysis.length === 1 ? 'y' : 'ies'}, ` +
+        `meeting or exceeding ${compliant.length} (${pct}% compliance)` +
+        `${advanced > 0 ? `, with ${advanced} at Advanced level or above` : ''}.`
+      );
+    }
+
+    const topDegree = education[0];
+    if (topDegree) {
+      const extra = education.length - 1;
+      sentences.push(
+        `Holds ${topDegree.degree || topDegree.name}${topDegree.issuer ? ` — ${topDegree.issuer}` : ''}` +
+        `${extra > 0 ? ` (+${extra} further academic qualification${extra === 1 ? '' : 's'})` : ''}.`
+      );
+    }
+
+    if (credentials.length > 0) {
+      sentences.push(`${credentials.length} professional credential${credentials.length === 1 ? '' : 's'} on record.`);
+    }
+
+    return sentences;
+  }, [user.orgLevel, user.location, user.projectName, jobProfile, deptName, serviceRecord, skillAnalysis, compliant, expertise, education, credentials]);
+
   // Forward-looking promotion ladder: from the employee's current org level up
   // to CEO. The engine pulls each higher rung's required skills from this user's
   // job profile, falling back to other profiles in the same General Department,
@@ -332,8 +455,88 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
     REJECTED: { label: 'Declined',             cls: 'bg-red-100 text-red-700 border-red-200' },
   };
 
+  // Scores can carry a fraction (a question-by-question interview average), so
+  // clamp to the 1–5 band before reading the proficiency label.
+  const proficiencyLabel = (level: number) =>
+    PROFICIENCY_DEFINITIONS[Math.min(5, Math.max(1, Math.round(level))) as 1 | 2 | 3 | 4 | 5].label;
+
+  // Rows of the Personal Details modal (the former inline "Professional
+  // Identity" grid). Empty values drop out rather than rendering "N/A".
+  const personalDetails = [
+    { icon: Mail,       label: 'Official Email',       value: user.email,                                                              className: 'lowercase' },
+    { icon: Phone,      label: 'Mobile Phone',         value: user.phone },
+    { icon: MessageCircle, label: 'WhatsApp',          value: user.whatsapp },
+    { icon: Briefcase,  label: 'Position',             value: jobProfile?.title || 'No Job Profile Assigned',                          className: 'uppercase' },
+    { icon: Shield,     label: 'Hierarchy Band',       value: user.orgLevel ? `${ORG_LEVEL_LABELS[user.orgLevel]} (${user.orgLevel})` : 'N/A', className: 'uppercase' },
+    { icon: Building2,  label: 'Department / Section', value: deptName || 'General Site',                                              className: 'uppercase' },
+    { icon: UserCheck,  label: 'Direct Manager',       value: manager?.name || 'N/A',                                                  className: 'uppercase' },
+    { icon: MapPin,     label: 'Site Location',        value: user.location || 'General Site',                                         className: 'uppercase' },
+    { icon: Building,   label: 'Current Project',      value: user.projectName || 'Unassigned',                                        className: 'uppercase' },
+  ].filter(d => !!d.value);
+
   return (
     <>
+    {/* ── Personal Details ───────────────────────────────────────────────
+        The former inline "Professional Identity" grid, now on demand so the
+        profile header can carry the professional summary instead. */}
+    {showPersonalDetails && (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 print:hidden"
+        onClick={() => setShowPersonalDetails(false)}
+      >
+        <div className="bg-white border border-slate-300 shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+          <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+            <div className="flex items-center gap-2">
+              <UserIcon size={16} className="text-blue-600" />
+              <span className="font-bold text-slate-900 text-sm">Personal Details</span>
+              <span className="text-[10px] font-black text-slate-900 tracking-widest bg-white px-2 py-0.5 border border-slate-200">
+                ID: {user.employeeId || 'PENDING'}
+              </span>
+            </div>
+            <button onClick={() => setShowPersonalDetails(false)} className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors">
+              <X size={18} />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-5">
+            <div className="flex items-center gap-4 pb-5 mb-5 border-b border-slate-100">
+              <div className="w-14 h-14 bg-slate-100 ring-1 ring-slate-200 rounded-full overflow-hidden flex items-center justify-center shrink-0">
+                {user.avatarUrl
+                  ? <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
+                  : <UserIcon size={26} className="text-slate-300" />}
+              </div>
+              <div className="min-w-0">
+                <p className="text-lg font-black text-slate-900 tracking-tight truncate">{user.name}</p>
+                <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider truncate">
+                  {jobProfile?.title || 'No Job Profile Assigned'}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-6">
+              {personalDetails.map(detail => (
+                <div key={detail.label} className="flex items-center gap-4">
+                  <div className="w-10 h-10 bg-slate-50 flex items-center justify-center shrink-0 border border-slate-200">
+                    <detail.icon size={18} className="text-slate-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">{detail.label}</p>
+                    <p className={`text-xs font-bold text-slate-800 truncate ${detail.className || ''}`}>{detail.value}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="px-5 py-3 border-t border-slate-200 bg-slate-50 flex justify-end">
+            <button onClick={() => setShowPersonalDetails(false)} className="px-4 py-2 text-xs font-bold text-white bg-slate-800 hover:bg-slate-700 transition-colors">
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
     {/* Certificate Detail Modal */}
     {certDetailView && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -683,117 +886,227 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
         </div>
       </div>
 
-      {/* ── Professional Identity ─────────────────────────────────────── */}
+      {/* ── Professional Summary (CV) ──────────────────────────────────────
+          A one-glance précis of the employee: current role, expertise,
+          education and service record — all derived from existing records.
+          Personal/contact fields live behind the "Personal Details" button. */}
       <div className="bg-white border border-slate-200 p-6 animate-in slide-in-from-top-4 duration-500 shadow-sm print:border-none print:shadow-none">
-        <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-2">
-            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Professional Identity</h3>
-            <span className="text-[10px] font-black text-slate-900 tracking-widest bg-slate-50 px-2 py-0.5 border border-slate-200">ID: {user.employeeId || 'PENDING'}</span>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-6 border-b border-slate-100 pb-2">
+            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Professional Summary</h3>
+            <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black text-slate-900 tracking-widest bg-slate-50 px-2 py-0.5 border border-slate-200">ID: {user.employeeId || 'PENDING'}</span>
+                <button
+                    onClick={() => setShowPersonalDetails(true)}
+                    className="print:hidden flex items-center gap-1.5 px-3 py-1 border border-slate-300 text-[10px] font-black text-slate-600 uppercase tracking-widest hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-colors"
+                    title="View contact and administrative details"
+                >
+                    <UserIcon size={12} /> Personal Details <ChevronRight size={12} />
+                </button>
+            </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-8 gap-y-6">
-            
-            <div className="flex items-center gap-4">
-                <div className="w-10 h-10 bg-slate-50 flex items-center justify-center shrink-0 border border-slate-200">
-                    <Mail size={18} className="text-slate-400" />
+
+        {/* Narrative précis */}
+        {summaryNarrative.length > 0 ? (
+            <p className="text-sm text-slate-600 leading-relaxed max-w-5xl mb-6">
+                <span className="font-black text-slate-900">{user.name}</span>
+                {' — '}
+                {summaryNarrative.join(' ')}
+            </p>
+        ) : (
+            <p className="text-sm text-slate-400 italic leading-relaxed mb-6">
+                This summary builds itself from your job profile, assessments, certificates and career
+                history. Nothing has been recorded yet.
+            </p>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+            {/* Current role + service record */}
+            <div className="lg:col-span-4 bg-slate-50 border border-slate-200 p-5 space-y-4">
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-1.5">
+                    <Briefcase size={11} /> Current Role
+                </p>
+                <div>
+                    <h4 className="text-base font-black text-slate-900 uppercase tracking-tight leading-tight">
+                        {jobProfile?.title || 'No Job Profile Assigned'}
+                    </h4>
+                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mt-1">
+                        {user.orgLevel ? ORG_LEVEL_LABELS[user.orgLevel] : 'Band N/A'}
+                        {deptName ? ` · ${deptName}` : ''}
+                    </p>
                 </div>
-                <div className="min-w-0">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Official Email</p>
-                    <p className="text-xs font-bold text-slate-800 lowercase truncate">{user.email}</p>
-                </div>
+                <dl className="space-y-2 pt-3 border-t border-slate-200">
+                    <div className="flex items-baseline justify-between gap-3">
+                        <dt className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Reports To</dt>
+                        <dd className="text-[11px] font-bold text-slate-700 text-right truncate">{manager?.name || 'N/A'}</dd>
+                    </div>
+                    <div className="flex items-baseline justify-between gap-3">
+                        <dt className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Project / Site</dt>
+                        <dd className="text-[11px] font-bold text-slate-700 text-right truncate">{user.projectName || user.location || 'General Site'}</dd>
+                    </div>
+                    <div className="flex items-baseline justify-between gap-3">
+                        <dt className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Service</dt>
+                        <dd className="text-[11px] font-bold text-slate-700 text-right">
+                            {serviceRecord.years !== null
+                                ? `${serviceRecord.years} yr${serviceRecord.years === 1 ? '' : 's'} · ${serviceRecord.rolesHeld} role${serviceRecord.rolesHeld === 1 ? '' : 's'}`
+                                : 'Not recorded'}
+                        </dd>
+                    </div>
+                    {serviceRecord.firstStart !== null && (
+                        <div className="flex items-baseline justify-between gap-3">
+                            <dt className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Joined</dt>
+                            <dd className="text-[11px] font-bold text-slate-700 text-right">{new Date(serviceRecord.firstStart).toLocaleDateString()}</dd>
+                        </div>
+                    )}
+                </dl>
             </div>
 
-            {user.phone && (
-                <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-slate-50 flex items-center justify-center shrink-0 border border-slate-200">
-                        <Phone size={18} className="text-slate-400" />
-                    </div>
+            {/* Expertise + education + credentials */}
+            <div className="lg:col-span-8 space-y-6">
+
+                {/* Areas of expertise */}
+                <div>
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-1.5 mb-3">
+                        <Zap size={11} /> Areas of Expertise
+                        {topStrengths.length > 0 && (
+                            <span className="text-slate-300 font-bold normal-case tracking-normal">
+                                — top {topStrengths.length} of {expertise.length} assessed
+                            </span>
+                        )}
+                    </p>
+                    {topStrengths.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                            {topStrengths.map(s => (
+                                <button
+                                    key={s.id}
+                                    onClick={() => { setHistorySearchTerm(s.name); setActiveTab('HISTORY'); }}
+                                    className="group flex items-center gap-2 pl-3 pr-2 py-1.5 bg-white border border-slate-200 hover:border-blue-500 transition-colors text-left"
+                                    title={`${proficiencyLabel(s.level)} — view assessment history`}
+                                >
+                                    <span className="text-[11px] font-bold text-slate-800 group-hover:text-blue-700 transition-colors">{s.name}</span>
+                                    <span className={`text-[9px] font-black px-1.5 py-0.5 border uppercase tracking-wider ${
+                                        s.level >= 5 ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                        : s.level >= 4 ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                        : 'bg-slate-50 text-slate-600 border-slate-200'
+                                    }`}>
+                                        L{s.level} {proficiencyLabel(s.level)}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="text-xs text-slate-400 italic">No competency has been assessed yet — your expertise will appear here after your first evaluation.</p>
+                    )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    {/* Education */}
                     <div>
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Mobile Phone</p>
-                        <p className="text-xs font-bold text-slate-800">{user.phone}</p>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-1.5 mb-3">
+                            <GraduationCap size={11} /> Education
+                        </p>
+                        {education.length > 0 ? (
+                            <ul className="space-y-2">
+                                {education.slice(0, 3).map(c => (
+                                    <li key={c.id}>
+                                        <button
+                                            onClick={() => setCertDetailView(c)}
+                                            className="w-full text-left group"
+                                        >
+                                            <p className="text-xs font-bold text-slate-800 group-hover:text-blue-700 transition-colors truncate">
+                                                {c.degree || c.name}
+                                                {c.status !== 'APPROVED' && (
+                                                    <span className="ml-1.5 text-[8px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-1 py-0.5 uppercase align-middle">Pending</span>
+                                                )}
+                                            </p>
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider truncate">
+                                                {c.issuer}{c.dateAchieved ? ` · ${new Date(c.dateAchieved).getFullYear()}` : ''}
+                                            </p>
+                                        </button>
+                                    </li>
+                                ))}
+                                {education.length > 3 && (
+                                    <li>
+                                        <button onClick={() => setActiveTab('CERTIFICATES')} className="text-[10px] font-black text-blue-600 uppercase tracking-wider hover:underline">
+                                            +{education.length - 3} more
+                                        </button>
+                                    </li>
+                                )}
+                            </ul>
+                        ) : (
+                            <p className="text-xs text-slate-400 italic">
+                                No academic qualification recorded.{' '}
+                                <button onClick={() => setActiveTab('CERTIFICATES')} className="print:hidden font-bold text-blue-600 not-italic hover:underline">Add one</button>
+                            </p>
+                        )}
                     </div>
-                </div>
-            )}
 
-            {user.whatsapp && (
-                <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-slate-50 flex items-center justify-center shrink-0 border border-slate-200">
-                        <MessageCircle size={18} className="text-slate-400" />
-                    </div>
+                    {/* Professional credentials */}
                     <div>
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">WhatsApp</p>
-                        <p className="text-xs font-bold text-slate-800">{user.whatsapp}</p>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-1.5 mb-3">
+                            <Award size={11} /> Certifications
+                        </p>
+                        {credentials.length > 0 ? (
+                            <ul className="space-y-2">
+                                {credentials.slice(0, 3).map(c => (
+                                    <li key={c.id}>
+                                        <button
+                                            onClick={() => setCertDetailView(c)}
+                                            className="w-full text-left group"
+                                        >
+                                            <p className="text-xs font-bold text-slate-800 group-hover:text-blue-700 transition-colors truncate">
+                                                {c.name}
+                                                {c.status !== 'APPROVED' && (
+                                                    <span className="ml-1.5 text-[8px] font-black text-amber-600 bg-amber-50 border border-amber-200 px-1 py-0.5 uppercase align-middle">Pending</span>
+                                                )}
+                                            </p>
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider truncate">
+                                                {c.issuer}{c.dateAchieved ? ` · ${new Date(c.dateAchieved).getFullYear()}` : ''}
+                                            </p>
+                                        </button>
+                                    </li>
+                                ))}
+                                {credentials.length > 3 && (
+                                    <li>
+                                        <button onClick={() => setActiveTab('CERTIFICATES')} className="text-[10px] font-black text-blue-600 uppercase tracking-wider hover:underline">
+                                            +{credentials.length - 3} more
+                                        </button>
+                                    </li>
+                                )}
+                            </ul>
+                        ) : (
+                            <p className="text-xs text-slate-400 italic">
+                                No certification recorded.{' '}
+                                <button onClick={() => setActiveTab('CERTIFICATES')} className="print:hidden font-bold text-blue-600 not-italic hover:underline">Add one</button>
+                            </p>
+                        )}
                     </div>
-                </div>
-            )}
-
-            <div className="flex items-center gap-4">
-                <div className="w-10 h-10 bg-slate-50 flex items-center justify-center shrink-0 border border-slate-200">
-                    <Shield size={18} className="text-slate-400" />
-                </div>
-                <div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Hierarchy Band</p>
-                    <p className="text-xs font-bold text-slate-800 uppercase">{user.orgLevel ? `${ORG_LEVEL_LABELS[user.orgLevel]} (${user.orgLevel})` : 'N/A'}</p>
-                </div>
-            </div>
-
-            <div className="flex items-center gap-4">
-                <div className="w-10 h-10 bg-slate-50 flex items-center justify-center shrink-0 border border-slate-200">
-                    <Building2 size={18} className="text-slate-400" />
-                </div>
-                <div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Department / Section</p>
-                    <p className="text-xs font-bold text-slate-800 uppercase">{depts.find(d => d.id === user.departmentId)?.name || 'General Site'}</p>
-                </div>
-            </div>
-            
-            <div className="flex items-center gap-4">
-                <div className="w-10 h-10 bg-slate-50 flex items-center justify-center shrink-0 border border-slate-200">
-                    <UserCheck size={18} className="text-slate-400" />
-                </div>
-                <div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Direct Manager</p>
-                    <p className="text-xs font-bold text-slate-800 uppercase">{manager?.name || 'N/A'}</p>
-                </div>
-            </div>
-
-            <div className="flex items-center gap-4">
-                <div className="w-10 h-10 bg-slate-50 flex items-center justify-center shrink-0 border border-slate-200">
-                    <MapPin size={18} className="text-slate-400" />
-                </div>
-                <div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Site Location</p>
-                    <p className="text-xs font-bold text-slate-800 uppercase">{user.location || 'General Site'}</p>
-                </div>
-            </div>
-            
-            <div className="flex items-center gap-4">
-                <div className="w-10 h-10 bg-slate-50 flex items-center justify-center shrink-0 border border-slate-200">
-                    <Building size={18} className="text-slate-400" />
-                </div>
-                <div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Current Project</p>
-                    <p className="text-xs font-bold text-slate-800 uppercase">{user.projectName || 'Unassigned'}</p>
                 </div>
             </div>
         </div>
       </div>
 
       {/* ── Navigation Tabs ────────────────────────────────────────────── */}
-      <div className="flex items-center gap-8 border-b border-slate-200 overflow-x-auto no-scrollbar print:hidden">
+      {/* Labels are short on purpose: six full titles overflowed the strip and
+          pushed Work Experience out of view. The long name lives in `title`. */}
+      <div className="flex flex-wrap items-center gap-x-5 xl:gap-x-8 gap-y-1 border-b border-slate-200 print:hidden">
         {[
-          { id: 'OVERVIEW', label: 'Dashboard Overview', icon: LayoutGrid },
-          { id: 'HISTORY', label: 'Evaluation History', icon: HistoryIcon },
-          { id: 'CERTIFICATES', label: 'Certificates & Credentials', icon: ShieldCheck },
-          { id: 'IDP', label: 'Individual Development Plan', icon: Target },
-          { id: 'CAREER', label: 'Career & Skill Profile', icon: Briefcase },
+          { id: 'OVERVIEW', label: 'Overview', title: 'Dashboard Overview', icon: LayoutGrid },
+          { id: 'HISTORY', label: 'History', title: 'Evaluation History', icon: HistoryIcon },
+          { id: 'CERTIFICATES', label: 'Certificates', title: 'Certificates & Credentials', icon: ShieldCheck },
+          { id: 'IDP', label: 'Development Plan', title: 'Individual Development Plan', icon: Target },
+          { id: 'CAREER', label: 'Career Profile', title: 'Career & Skill Profile', icon: Briefcase },
+          { id: 'EXPERIENCE', label: 'Work Experience', title: 'Work Experience', icon: Building2 },
         ].map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
-            className={`flex items-center gap-2 pb-4 text-xs font-bold uppercase tracking-wide transition-all whitespace-nowrap border-b-2 ${
+            title={tab.title}
+            className={`flex items-center gap-2 pb-3 pt-1 text-xs font-bold uppercase tracking-wide transition-all whitespace-nowrap border-b-2 ${
               activeTab === tab.id ? 'border-slate-900 text-slate-900' : 'border-transparent text-slate-400 hover:text-slate-600'
             }`}
           >
-            <tab.icon size={16} />
+            <tab.icon size={16} className="shrink-0" />
             {tab.label}
           </button>
         ))}
@@ -834,8 +1147,9 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
             </div>
         </div>
 
-        {/* Right Column: Dynamic View */}
-        <div className="lg:col-span-8">
+        {/* Right Column: Dynamic View. `min-w-0` keeps wide children (tables,
+            long titles) inside the grid track instead of blowing the page out. */}
+        <div className="lg:col-span-8 min-w-0">
             
             {activeTab === 'HISTORY' && (
                 <div className="space-y-8 animate-in slide-in-from-right-4 duration-500">
@@ -945,6 +1259,14 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                                             <div className="flex justify-between items-center">
                                                 <span className="text-[11px] font-bold text-slate-800 uppercase group-hover:text-blue-600 transition-colors flex items-center gap-2">
                                                     {item.skill?.name}
+                                                    {item.isProvisional && (
+                                                        <span
+                                                            title="Credited from verified work experience — not yet formally assessed"
+                                                            className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 border border-indigo-200 text-[8px] font-black tracking-wider normal-case"
+                                                        >
+                                                            Provisional
+                                                        </span>
+                                                    )}
                                                     <ArrowRight size={10} className="opacity-0 group-hover:opacity-100 transition-opacity text-blue-600" />
                                                 </span>
                                                 <span className="text-[10px] font-black text-slate-600">
@@ -954,8 +1276,19 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                                             <div className="h-1.5 bg-slate-200 w-full relative">
                                                 {/* Required Marker */}
                                                 <div className="absolute top-0 bottom-0 bg-slate-900 w-0.5 z-10" style={{ left: `${(item.required / 5) * 100}%` }}></div>
-                                                {/* Current Score Bar */}
-                                                <div className={`h-full absolute left-0 top-0 transition-all duration-1000 ${item.current >= item.required ? 'bg-emerald-500' : 'bg-amber-400'}`} style={{ width: `${(item.current / 5) * 100}%` }}></div>
+                                                {/* Current Score Bar — striped while provisional, so an
+                                                    unverified level never reads as a measured one. */}
+                                                <div
+                                                    className={`h-full absolute left-0 top-0 transition-all duration-1000 ${
+                                                        item.isProvisional ? 'bg-indigo-300' : item.current >= item.required ? 'bg-emerald-500' : 'bg-amber-400'
+                                                    }`}
+                                                    style={{
+                                                        width: `${(item.current / 5) * 100}%`,
+                                                        ...(item.isProvisional
+                                                            ? { backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(255,255,255,.6) 3px, rgba(255,255,255,.6) 6px)' }
+                                                            : {}),
+                                                    }}
+                                                ></div>
                                             </div>
                                         </div>
                                     ))}
@@ -1584,9 +1917,13 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                 </div>
             )}
 
+            {activeTab === 'EXPERIENCE' && (
+                <WorkExperienceSection user={user} readOnly={readOnly} />
+            )}
+
         </div>
       </div>
-      
+
       {/* Print-only CSS for Professional CV */}
       <style>{`
         @media print {

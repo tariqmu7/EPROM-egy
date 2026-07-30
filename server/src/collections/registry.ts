@@ -17,6 +17,12 @@ export const COLLECTIONS = {
   assessmentInstructions: '"assessmentInstructions"',
   trainingCourses: '"trainingCourses"',
   projects: 'projects',
+  // NOTE: a new collection needs BOTH a `can()` case and a `listScope()` case in
+  // authz.ts. runList applies only listScope (it never calls can()), so a
+  // registry entry without a listScope case is readable org-wide by any
+  // authenticated user — see authz.ts and __tests__/api.test.ts.
+  workExperiences: '"workExperiences"',
+  appSettings: '"appSettings"',
 } as const;
 
 export type CollectionName = keyof typeof COLLECTIONS;

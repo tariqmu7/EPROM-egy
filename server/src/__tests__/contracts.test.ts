@@ -8,16 +8,33 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { ROLE, USER_STATUS, ORG_LEVEL, ORG_MANAGER_LEVELS } from '../domain/enums.js';
+import { readdirSync } from 'node:fs';
+import {
+  ROLE,
+  USER_STATUS,
+  ORG_LEVEL,
+  ORG_MANAGER_LEVELS,
+  WORK_EXPERIENCE_STATUS,
+} from '../domain/enums.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const migration = readFileSync(join(here, '..', 'migrations', '002_foundation.sql'), 'utf8');
+const migrationsDir = join(here, '..', 'migrations');
+
+// Concatenate EVERY migration rather than reading 002 alone: enum CHECKs are
+// added by whichever migration creates the table (005 introduces
+// chk_workexperiences_status), and a parity test that only looks at one file
+// silently stops covering new constraints.
+const migration = readdirSync(migrationsDir)
+  .filter((f) => f.endsWith('.sql'))
+  .sort()
+  .map((f) => readFileSync(join(migrationsDir, f), 'utf8'))
+  .join('\n');
 
 // Pull the quoted values from the `IN ('A','B',…)` that follows a named CHECK
 // constraint in the migration SQL.
 function inValuesFor(constraintName: string): string[] {
   const idx = migration.indexOf(constraintName);
-  expect(idx, `constraint ${constraintName} should exist in 002_foundation.sql`).toBeGreaterThan(-1);
+  expect(idx, `constraint ${constraintName} should exist in a migration`).toBeGreaterThan(-1);
   const after = migration.slice(idx);
   const m = after.match(/IN \(([^)]*)\)/);
   expect(m, `an IN (...) list should follow ${constraintName}`).toBeTruthy();
@@ -38,6 +55,10 @@ describe('enum ↔ migration CHECK parity', () => {
   it('org levels match on both the users and jobProfiles constraints', () => {
     expect(sorted(inValuesFor('chk_users_orglevel'))).toEqual(sorted(ORG_LEVEL));
     expect(sorted(inValuesFor('chk_jobprofiles_orglevel'))).toEqual(sorted(ORG_LEVEL));
+  });
+
+  it('work-experience statuses match (005)', () => {
+    expect(sorted(inValuesFor('chk_workexperiences_status'))).toEqual(sorted(WORK_EXPERIENCE_STATUS));
   });
 });
 

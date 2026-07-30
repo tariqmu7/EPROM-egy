@@ -40,7 +40,7 @@ vi.mock('../auth-compat', () => ({
 // ────────────────────────────────────────────────────────────────────────────
 
 import { DataService } from '../store';
-import type { User, Skill, Assessment, Evidence, SkillAssessmentMethod, JobProfile, TrainingCourse, Department } from '../../types';
+import type { User, Skill, Assessment, Evidence, SkillAssessmentMethod, JobProfile, TrainingCourse, Department, WorkExperience } from '../../types';
 import { Role } from '../../types';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -108,6 +108,21 @@ function makeEvidence(overrides: Partial<Evidence> = {}): Evidence {
     title: 'Evidence 1',
     ...overrides,
   } as Evidence;
+}
+
+function makeWorkExperience(overrides: Partial<WorkExperience> = {}): WorkExperience {
+  return {
+    id: 'we1',
+    userId: 'u1',
+    employer: 'Acme Corp',
+    jobTitle: 'Technician',
+    startDate: '2010-01-01',
+    endDate: '2020-01-01',
+    skills: [],
+    status: 'VERIFIED',
+    submittedAt: '2025-01-01',
+    ...overrides,
+  } as WorkExperience;
 }
 
 function makeMethod(overrides: Partial<SkillAssessmentMethod> = {}): SkillAssessmentMethod {
@@ -951,5 +966,353 @@ describe('generateDepartmentalTNA', () => {
     expect(tna[0].totalGap).toBe(8);
     expect(tna[0].averageGap).toBe(4);
     expect(tna[0].priority).toBe('HIGH');
+  });
+});
+
+// ─── Work experience → provisional competency baseline ───────────────────────
+
+describe('work experience scoring (provisional baseline)', () => {
+  let svc: DataService;
+
+  // Default policy: bands 0-2→L2, 2-5→L3, 5-10→L4, 10+→L5, capped at L3.
+  const OJT_SKILL = makeSkill({ id: 'skill1', assessmentMethod: 'OJT_OBSERVATION' });
+  const EXAM_SKILL = makeSkillWithMethods([makeMethod({ method: 'WRITTEN_EXAM' })], { id: 'skill1' });
+  const USER = makeUser({ id: 'u1' });
+
+  const verified = (level: number, skillId = 'skill1') =>
+    makeWorkExperience({
+      status: 'VERIFIED',
+      skills: [{ skillId, claimedLevel: level, yearsApplied: 12, verifiedLevel: level }],
+    });
+
+  beforeEach(() => {
+    svc = makeSvc();
+    inject(svc, { users: [USER], skills: [EXAM_SKILL], assessments: [], evidences: [], workExperiences: [] });
+  });
+
+  it('yields no score when the employee has no work experience', () => {
+    expect(svc.getUserSkillScore('u1', 'skill1')).toBe(0);
+    expect(svc.getSkillScoreSource('u1', 'skill1')).toBe('NONE');
+  });
+
+  it('credits a verified level and reports it as provisional', () => {
+    inject(svc, { workExperiences: [verified(3)] });
+    expect(svc.getUserSkillScore('u1', 'skill1')).toBe(3);
+    expect(svc.getSkillScoreSource('u1', 'skill1')).toBe('EXPERIENCE');
+  });
+
+  it('caps the provisional score at the policy maximum', () => {
+    // Verifier confirmed Level 5, but tenure alone may not exceed the L3 cap.
+    inject(svc, { workExperiences: [verified(5)] });
+    expect(svc.getUserSkillScore('u1', 'skill1')).toBe(3);
+    expect(svc.getSkillScoreSource('u1', 'skill1')).toBe('EXPERIENCE');
+  });
+
+  it('takes the highest verified level across employers', () => {
+    inject(svc, {
+      workExperiences: [
+        makeWorkExperience({ id: 'we1', status: 'VERIFIED', skills: [{ skillId: 'skill1', claimedLevel: 1, yearsApplied: 1, verifiedLevel: 1 }] }),
+        makeWorkExperience({ id: 'we2', status: 'VERIFIED', skills: [{ skillId: 'skill1', claimedLevel: 3, yearsApplied: 4, verifiedLevel: 3 }] }),
+      ],
+    });
+    expect(svc.getUserSkillScore('u1', 'skill1')).toBe(3);
+  });
+
+  it('ignores entries that are not VERIFIED', () => {
+    for (const status of ['PENDING', 'REJECTED'] as const) {
+      const s = makeSvc();
+      inject(s, {
+        users: [USER], skills: [EXAM_SKILL], assessments: [], evidences: [],
+        workExperiences: [makeWorkExperience({ status, skills: [{ skillId: 'skill1', claimedLevel: 3, yearsApplied: 9, verifiedLevel: 3 }] })],
+      });
+      expect(s.getUserSkillScore('u1', 'skill1')).toBe(0);
+      expect(s.getSkillScoreSource('u1', 'skill1')).toBe('NONE');
+    }
+  });
+
+  it('ignores a verified entry whose skill was never given a level', () => {
+    inject(svc, {
+      workExperiences: [makeWorkExperience({ status: 'VERIFIED', skills: [{ skillId: 'skill1', claimedLevel: 4, yearsApplied: 9 }] })],
+    });
+    expect(svc.getUserSkillScore('u1', 'skill1')).toBe(0);
+  });
+
+  it('ignores experience tagged against a different skill', () => {
+    inject(svc, { workExperiences: [verified(3, 'other-skill')] });
+    expect(svc.getUserSkillScore('u1', 'skill1')).toBe(0);
+  });
+
+  it('yields nothing when the policy is disabled', () => {
+    inject(svc, {
+      workExperiences: [verified(3)],
+      appSettings: { 'work-experience': { enabled: false, maxProvisionalLevel: 3, bands: [] } },
+    });
+    expect(svc.getUserSkillScore('u1', 'skill1')).toBe(0);
+    expect(svc.getSkillScoreSource('u1', 'skill1')).toBe('NONE');
+  });
+
+  it('honours an admin-raised cap', () => {
+    inject(svc, {
+      workExperiences: [verified(5)],
+      appSettings: { 'work-experience': { enabled: true, maxProvisionalLevel: 5, bands: [] } },
+    });
+    expect(svc.getUserSkillScore('u1', 'skill1')).toBe(5);
+  });
+
+  // ── Precedence: a real record always wins ──────────────────────────────────
+
+  it('a direct assessment outranks experience, even when scored lower', () => {
+    inject(svc, {
+      workExperiences: [verified(3)],
+      assessments: [makeAssessment({ type: 'WRITTEN_EXAM', score: 2, date: '2025-06-01' })],
+    });
+    expect(svc.getUserSkillScore('u1', 'skill1')).toBe(2);
+    expect(svc.getSkillScoreSource('u1', 'skill1')).toBe('ASSESSMENT');
+  });
+
+  it('approved evidence outranks experience', () => {
+    inject(svc, {
+      workExperiences: [verified(3)],
+      evidences: [makeEvidence({ status: 'APPROVED', assignedScore: 2 })],
+    });
+    expect(svc.getUserSkillScore('u1', 'skill1')).toBe(2);
+    expect(svc.getSkillScoreSource('u1', 'skill1')).toBe('EVIDENCE');
+  });
+
+  it('a 360 manager rating outranks experience on a behavioral skill', () => {
+    inject(svc, {
+      skills: [OJT_SKILL],
+      workExperiences: [verified(3)],
+      assessments: [makeAssessment({ type: 'MANAGER', score: 2, raterId: 'mgr1' })],
+    });
+    expect(svc.getUserSkillScore('u1', 'skill1')).toBe(2);
+    expect(svc.getSkillScoreSource('u1', 'skill1')).toBe('ASSESSMENT');
+  });
+
+  // REGRESSION: the 360/OJT branch returns early and never reaches the evidence
+  // tier, and an unconfigured skill defaults to OJT_OBSERVATION — so a fallback
+  // written inside the `else` would skip most skills in the catalog.
+  it('falls through to experience on a behavioral skill with no ratings', () => {
+    inject(svc, { skills: [OJT_SKILL], workExperiences: [verified(3)] });
+    expect(svc.getUserSkillScore('u1', 'skill1')).toBe(3);
+    expect(svc.getSkillScoreSource('u1', 'skill1')).toBe('EXPERIENCE');
+  });
+
+  it('falls through to experience for a skill with no assessment config at all', () => {
+    inject(svc, { skills: [makeSkill({ id: 'skill1' })], workExperiences: [verified(3)] });
+    expect(svc.getUserSkillScore('u1', 'skill1')).toBe(3);
+    expect(svc.getSkillScoreSource('u1', 'skill1')).toBe('EXPERIENCE');
+  });
+
+  it('getUserSkillScoreDetail returns score and source together', () => {
+    inject(svc, { workExperiences: [verified(3)] });
+    expect(svc.getUserSkillScoreDetail('u1', 'skill1')).toEqual({ score: 3, source: 'EXPERIENCE' });
+  });
+
+  it('sums verified years across employers for display', () => {
+    inject(svc, {
+      workExperiences: [
+        makeWorkExperience({ id: 'we1', status: 'VERIFIED', skills: [{ skillId: 'skill1', claimedLevel: 3, yearsApplied: 4, verifiedLevel: 3 }] }),
+        makeWorkExperience({ id: 'we2', status: 'VERIFIED', skills: [{ skillId: 'skill1', claimedLevel: 2, yearsApplied: 2.5, verifiedLevel: 2 }] }),
+        makeWorkExperience({ id: 'we3', status: 'PENDING', skills: [{ skillId: 'skill1', claimedLevel: 5, yearsApplied: 99, verifiedLevel: 5 }] }),
+      ],
+    });
+    expect(svc.getExperienceYears('u1', 'skill1')).toBe(6.5);
+  });
+});
+
+describe('work experience never suppresses a real assessment', () => {
+  // The single deliberate exception to "provisional counts like any other
+  // score": if experience satisfied the requirement here, the system would stop
+  // asking for the assessment that would actually confirm it.
+  it('keeps the skill in the assessment queue despite a sufficient provisional score', () => {
+    const svc = makeSvc();
+    inject(svc, {
+      users: [makeUser({ id: 'u1', jobProfileId: 'job1', orgLevel: 'SP' })],
+      skills: [makeSkillWithMethods([makeMethod({ method: 'WRITTEN_EXAM' })], { id: 'skill1' })],
+      jobs: [{ id: 'job1', title: 'Tech', departmentId: 'dept1', orgLevel: 'SP', requiredSkills: [{ skillId: 'skill1', requiredLevel: 3 }] } as JobProfile],
+      assessments: [], evidences: [], scheduledAssessments: [],
+      workExperiences: [makeWorkExperience({ status: 'VERIFIED', skills: [{ skillId: 'skill1', claimedLevel: 3, yearsApplied: 12, verifiedLevel: 3 }] })],
+    });
+
+    // The provisional score meets the requirement…
+    expect(svc.getUserSkillScore('u1', 'skill1')).toBe(3);
+    // …but the exam is still queued, and shows the employee at 0 (unmeasured).
+    const queue = svc.getEmployeeAssessmentQueue('u1')!;
+    const queued = [...queue.writtenExams, ...queue.managerialInterviews, ...queue.evaluations360, ...queue.workRecords];
+    expect(queued.map((q: any) => q.skill.id)).toContain('skill1');
+    expect(queued.find((q: any) => q.skill.id === 'skill1').currentLevel).toBe(0);
+  });
+
+  it('closes the ITP gap once experience is verified', () => {
+    const base = {
+      users: [makeUser({ id: 'u1', jobProfileId: 'job1', orgLevel: 'SP' })],
+      skills: [makeSkillWithMethods([makeMethod({ method: 'WRITTEN_EXAM' })], { id: 'skill1' })],
+      jobs: [{ id: 'job1', title: 'Tech', departmentId: 'dept1', orgLevel: 'SP', requiredSkills: [{ skillId: 'skill1', requiredLevel: 3 }] } as JobProfile],
+      assessments: [], evidences: [], trainingCourses: [],
+    };
+
+    const without = makeSvc();
+    inject(without, { ...base, workExperiences: [] });
+    expect(without.generateIndividualTrainingPlan('u1')!.recommendations).toHaveLength(1);
+
+    const withExp = makeSvc();
+    inject(withExp, {
+      ...base,
+      workExperiences: [makeWorkExperience({ status: 'VERIFIED', skills: [{ skillId: 'skill1', claimedLevel: 3, yearsApplied: 12, verifiedLevel: 3 }] })],
+    });
+    expect(withExp.generateIndividualTrainingPlan('u1')!.recommendations).toHaveLength(0);
+  });
+});
+
+describe('work experience submission + verification', () => {
+  let svc: DataService;
+  let mockBatch: { set: ReturnType<typeof vi.fn>; commit: ReturnType<typeof vi.fn> };
+
+  const EMPLOYEE = makeUser({ id: 'emp1', managerId: 'mgr1' });
+  const MANAGER = makeUser({ id: 'mgr1', orgLevel: 'SH', managerId: undefined });
+  const LONER = makeUser({ id: 'emp2', managerId: undefined });
+
+  const draft = {
+    userId: 'emp1',
+    employer: 'Acme Corp',
+    jobTitle: 'Senior Technician',
+    startDate: '2010-01-01',
+    endDate: '2020-01-01',
+    skills: [{ skillId: 'skill1', claimedLevel: 4, yearsApplied: 7 }],
+  };
+
+  beforeEach(async () => {
+    const { writeBatch, updateDoc } = await import('../firestore-compat');
+    mockBatch = { set: vi.fn(), commit: vi.fn().mockResolvedValue(undefined) };
+    (writeBatch as ReturnType<typeof vi.fn>).mockReturnValue(mockBatch);
+    (updateDoc as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+
+    svc = makeSvc();
+    inject(svc, {
+      users: [EMPLOYEE, MANAGER, LONER],
+      skills: [makeSkill({ id: 'skill1' })],
+      workExperiences: [],
+      assessments: [], evidences: [], notifications: [],
+    });
+  });
+
+  afterEach(() => vi.clearAllMocks());
+
+  it('submits as PENDING and stamps the band-table suggestion', async () => {
+    const result = await svc.addWorkExperience(draft);
+    expect(result.status).toBe('PENDING');
+    // 7 years lands in the 5-10 band → suggests Level 4 (above the L3 cap: the
+    // suggestion is honest, the cap constrains what reaches the score).
+    expect(result.skills[0].suggestedLevel).toBe(4);
+    expect(result.skills[0].verifiedLevel).toBeUndefined();
+    expect(mockBatch.commit).toHaveBeenCalled();
+  });
+
+  it('notifies the manager on submission', async () => {
+    await svc.addWorkExperience(draft);
+    expect(mockBatch.set).toHaveBeenCalledTimes(2);
+    const [, [, notif]] = mockBatch.set.mock.calls;
+    expect(notif.userId).toBe('mgr1');
+    expect(notif.actionLink).toBe('manager-approvals');
+  });
+
+  it('writes only the record when the employee has no manager', async () => {
+    await svc.addWorkExperience({ ...draft, userId: 'emp2' });
+    expect(mockBatch.set).toHaveBeenCalledTimes(1);
+  });
+
+  it('verification applies the reviewer override', async () => {
+    const entry = makeWorkExperience({ id: 'we1', userId: 'emp1', status: 'PENDING', skills: [{ skillId: 'skill1', claimedLevel: 4, yearsApplied: 7, suggestedLevel: 4 }] });
+    inject(svc, { workExperiences: [entry] });
+
+    await svc.verifyWorkExperience('we1', 'VERIFIED', 'mgr1', { skill1: 2 }, 'Partial scope');
+
+    const { updateDoc } = await import('../firestore-compat');
+    const [, payload] = (updateDoc as ReturnType<typeof vi.fn>).mock.calls[0];
+    const saved = JSON.parse(payload.skills);
+    expect(saved[0].verifiedLevel).toBe(2);
+    expect(payload.status).toBe('VERIFIED');
+    expect(payload.reviewedBy).toBe('mgr1');
+    expect(payload.reviewerComment).toBe('Partial scope');
+  });
+
+  it('verification falls back to the stamped suggestion when not overridden', async () => {
+    inject(svc, {
+      workExperiences: [makeWorkExperience({ id: 'we1', userId: 'emp1', status: 'PENDING', skills: [{ skillId: 'skill1', claimedLevel: 4, yearsApplied: 7, suggestedLevel: 4 }] })],
+    });
+    await svc.verifyWorkExperience('we1', 'VERIFIED', 'mgr1');
+
+    const { updateDoc } = await import('../firestore-compat');
+    const [, payload] = (updateDoc as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(JSON.parse(payload.skills)[0].verifiedLevel).toBe(4);
+  });
+
+  it('rejection clears every level so nothing can be credited', async () => {
+    inject(svc, {
+      workExperiences: [makeWorkExperience({ id: 'we1', userId: 'emp1', status: 'PENDING', skills: [{ skillId: 'skill1', claimedLevel: 4, yearsApplied: 7, suggestedLevel: 4 }] })],
+    });
+    await svc.verifyWorkExperience('we1', 'REJECTED', 'mgr1', undefined, 'Cannot confirm');
+
+    const { updateDoc } = await import('../firestore-compat');
+    const [, payload] = (updateDoc as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(payload.status).toBe('REJECTED');
+    expect(JSON.parse(payload.skills)[0].verifiedLevel).toBeUndefined();
+  });
+
+  it('editing a verified record re-opens it and drops the old verdict', async () => {
+    inject(svc, {
+      workExperiences: [makeWorkExperience({ id: 'we1', userId: 'emp1', status: 'VERIFIED', reviewedBy: 'mgr1', skills: [{ skillId: 'skill1', claimedLevel: 4, yearsApplied: 7, verifiedLevel: 4 }] })],
+    });
+    await svc.updateWorkExperience('we1', { jobTitle: 'Lead Technician' });
+
+    const { updateDoc } = await import('../firestore-compat');
+    const [, payload] = (updateDoc as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(payload.status).toBe('PENDING');
+    expect(payload.reviewedBy).toBeUndefined();
+    expect(JSON.parse(payload.skills)[0].verifiedLevel).toBeUndefined();
+  });
+});
+
+describe('getPendingWorkExperienceVerifications', () => {
+  const MANAGER = makeUser({ id: 'mgr1', orgLevel: 'SH', managerId: undefined });
+  const REPORT = makeUser({ id: 'emp1', managerId: 'mgr1' });
+  const STRANGER = makeUser({ id: 'emp9', managerId: 'other-mgr' });
+  const ADMIN_USER = makeUser({ id: 'adm1', role: Role.ADMIN, managerId: undefined });
+
+  const pending = (id: string, userId: string) => makeWorkExperience({ id, userId, status: 'PENDING' });
+
+  function svcWith() {
+    const svc = makeSvc();
+    inject(svc, {
+      users: [MANAGER, REPORT, STRANGER, ADMIN_USER],
+      departments: [],
+      workExperiences: [
+        pending('we-report', 'emp1'),
+        pending('we-stranger', 'emp9'),
+        pending('we-own', 'mgr1'),
+        makeWorkExperience({ id: 'we-done', userId: 'emp1', status: 'VERIFIED' }),
+      ],
+    });
+    return svc;
+  }
+
+  it('a manager sees pending entries from their own reports only', () => {
+    const ids = svcWith().getPendingWorkExperienceVerifications('mgr1').map(w => w.id);
+    expect(ids).toContain('we-report');
+    expect(ids).not.toContain('we-stranger');
+  });
+
+  it('nobody verifies their own experience', () => {
+    expect(svcWith().getPendingWorkExperienceVerifications('mgr1').map(w => w.id)).not.toContain('we-own');
+  });
+
+  it('already-reviewed entries drop out of the queue', () => {
+    expect(svcWith().getPendingWorkExperienceVerifications('mgr1').map(w => w.id)).not.toContain('we-done');
+  });
+
+  it('an admin sees every pending entry', () => {
+    const ids = svcWith().getPendingWorkExperienceVerifications('adm1').map(w => w.id);
+    expect(ids).toEqual(expect.arrayContaining(['we-report', 'we-stranger', 'we-own']));
   });
 });

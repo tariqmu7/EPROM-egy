@@ -1,11 +1,11 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { dataService } from '../services/store';
 import { useStoreData } from '../hooks/useStoreData';
-import { User, Evidence } from '../types';
+import { User, Evidence, WorkExperience, PROFICIENCY_LABELS, EMPLOYMENT_TYPE_LABELS } from '../types';
 import {
   CheckCircle, XCircle, FileText, Download, Eye, Clock, History,
   AlertTriangle, ShieldCheck, Users, ChevronRight, MessageSquare,
-  Award, Layers, ExternalLink, X, Calendar, Hash, Link2
+  Award, Layers, ExternalLink, X, Calendar, Hash, Link2, Building2, Sparkles
 } from 'lucide-react';
 
 const CERT_STATUS_LABEL: Record<string, { label: string; className: string }> = {
@@ -24,7 +24,7 @@ const STATUS_PILL: Record<string, string> = {
 
 // ── main component ────────────────────────────────────────────────────────────
 
-type MainTab = 'EVIDENCE' | 'CERTIFICATES';
+type MainTab = 'EVIDENCE' | 'CERTIFICATES' | 'EXPERIENCE';
 type SubTab  = 'PENDING' | 'HISTORY';
 
 export const SupervisorApproval: React.FC<{ currentUser: User }> = ({ currentUser }) => {
@@ -42,6 +42,12 @@ export const SupervisorApproval: React.FC<{ currentUser: User }> = ({ currentUse
   const [certTarget,  setCertTarget]  = useState<{ userId: string; certId: string } | null>(null);
   const [certComment, setCertComment] = useState('');
   const [certDetail,  setCertDetail]  = useState<{ user: User; certificate: any } | null>(null);
+
+  // Work-experience review state. `experienceLevels` holds the reviewer's
+  // per-skill decision, keyed by skillId, seeded from the stamped suggestion.
+  const [selectedExperience, setSelectedExperience] = useState<WorkExperience | null>(null);
+  const [experienceLevels, setExperienceLevels] = useState<Record<string, number>>({});
+  const [experienceComment, setExperienceComment] = useState('');
 
   const storeVersion = useStoreData();
 
@@ -75,6 +81,27 @@ export const SupervisorApproval: React.FC<{ currentUser: User }> = ({ currentUse
       .sort((a, b) => new Date(b.reviewedAt || 0).getTime() - new Date(a.reviewedAt || 0).getTime()),
     [allTeamEvidences]
   );
+
+  // ── Work Experience ──────────────────────────────────────────────────────────
+
+  const allTeamExperiences = useMemo(() => {
+    const all = dataService.getWorkExperiences();
+    if (currentUser.role === 'ADMIN' || currentUser.role === 'CEO') return all;
+    return all.filter(w => managedUserIds.has(w.userId));
+  }, [currentUser, managedUserIds, refreshKey, storeVersion]);
+
+  const pendingExperiences = useMemo(
+    () => allTeamExperiences.filter(w => w.status === 'PENDING'),
+    [allTeamExperiences]
+  );
+  const historyExperiences = useMemo(
+    () => allTeamExperiences
+      .filter(w => w.status !== 'PENDING')
+      .sort((a, b) => new Date(b.reviewedAt || 0).getTime() - new Date(a.reviewedAt || 0).getTime()),
+    [allTeamExperiences]
+  );
+
+  const activeExperienceList = subTab === 'PENDING' ? pendingExperiences : historyExperiences;
 
   // ── Certificates ─────────────────────────────────────────────────────────────
 
@@ -148,6 +175,37 @@ export const SupervisorApproval: React.FC<{ currentUser: User }> = ({ currentUse
     setIsProcessing(false);
     setRefreshKey(k => k + 1);
   }, [selectedEvidence, reviewerComment, currentUser.id, getRequiredLevel, isProcessing]);
+
+  // ── Actions — Work Experience ────────────────────────────────────────────────
+
+  /** Open a record for review, seeding each level with the stamped suggestion. */
+  const openExperience = useCallback((we: WorkExperience) => {
+    setSelectedExperience(we);
+    setExperienceComment(we.reviewerComment || '');
+    const seeded: Record<string, number> = {};
+    for (const s of we.skills || []) {
+      seeded[s.skillId] = s.verifiedLevel ?? s.suggestedLevel ?? dataService.suggestExperienceLevel(s.yearsApplied) ?? 1;
+    }
+    setExperienceLevels(seeded);
+  }, []);
+
+  const commitExperienceDecision = useCallback(async (decision: 'VERIFIED' | 'REJECTED') => {
+    if (!selectedExperience || isProcessing) return;
+    setIsProcessing(true);
+    try {
+      await dataService.verifyWorkExperience(
+        selectedExperience.id, decision, currentUser.id,
+        decision === 'VERIFIED' ? experienceLevels : undefined,
+        experienceComment || undefined,
+      );
+      setSelectedExperience(null);
+      setExperienceComment('');
+      setExperienceLevels({});
+      setRefreshKey(k => k + 1);
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [selectedExperience, experienceLevels, experienceComment, currentUser.id, isProcessing]);
 
   // ── Actions — Certificates ───────────────────────────────────────────────────
 
@@ -429,11 +487,12 @@ export const SupervisorApproval: React.FC<{ currentUser: User }> = ({ currentUse
       {/* Main tabs */}
       <div className="flex border-b border-slate-300 bg-white">
         {([['EVIDENCE', 'Evidence Review', FileText, pendingEvidences.length],
-           ['CERTIFICATES', 'Certificate Approvals', Award, pendingCertificates.length]] as const).map(
+           ['CERTIFICATES', 'Certificate Approvals', Award, pendingCertificates.length],
+           ['EXPERIENCE', 'Work Experience', Building2, pendingExperiences.length]] as const).map(
           ([key, label, Icon, count]) => (
             <button
               key={key}
-              onClick={() => { setMainTab(key as MainTab); setSubTab('PENDING'); setSelectedEvidence(null); }}
+              onClick={() => { setMainTab(key as MainTab); setSubTab('PENDING'); setSelectedEvidence(null); setSelectedExperience(null); }}
               className={`flex items-center gap-2 px-6 py-3 text-sm font-bold border-b-2 transition-colors ${
                 mainTab === key
                   ? 'border-slate-800 text-slate-900'
@@ -545,6 +604,198 @@ export const SupervisorApproval: React.FC<{ currentUser: User }> = ({ currentUse
               <div className="bg-slate-50 border border-dashed border-slate-300 h-full min-h-[400px] flex flex-col items-center justify-center text-slate-400 rounded-none">
                 <Eye size={40} className="mb-3" />
                 <p className="text-sm font-medium">Select an item from the queue to review</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── WORK EXPERIENCE TAB ── */}
+      {mainTab === 'EXPERIENCE' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left list */}
+          <div className="lg:col-span-1 flex flex-col bg-white border border-slate-300 overflow-hidden" style={{ height: 640 }}>
+            <div className="flex border-b border-slate-300 bg-slate-50 shrink-0">
+              {(['PENDING', 'HISTORY'] as const).map(t => (
+                <button
+                  key={t}
+                  onClick={() => { setSubTab(t); setSelectedExperience(null); }}
+                  className={`flex-1 py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors ${
+                    subTab === t ? 'text-slate-900 border-b-2 border-slate-700 bg-white' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  {t === 'PENDING' ? <Clock size={13} /> : <History size={13} />}
+                  {t === 'PENDING' ? 'Pending' : 'History'}
+                  {t === 'PENDING' && pendingExperiences.length > 0 && (
+                    <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-1 py-0.5">{pendingExperiences.length}</span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            <div className="overflow-y-auto divide-y divide-slate-100 flex-grow">
+              {activeExperienceList.length === 0 ? (
+                <div className="p-8 text-center text-slate-500 flex flex-col items-center">
+                  {subTab === 'PENDING'
+                    ? <><CheckCircle size={32} className="mb-3 text-emerald-400" /><p>All caught up!</p></>
+                    : <><History size={32} className="mb-3 text-slate-300" /><p>No history yet.</p></>}
+                </div>
+              ) : (
+                activeExperienceList.map(we => {
+                  const owner = users.find(u => u.id === we.userId);
+                  const active = selectedExperience?.id === we.id;
+                  return (
+                    <button
+                      key={we.id}
+                      onClick={() => openExperience(we)}
+                      className={`w-full text-left p-4 transition-colors ${active ? 'bg-slate-100' : 'hover:bg-slate-50'}`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-slate-800 truncate">{owner?.name || 'Unknown employee'}</p>
+                          <p className="text-xs text-slate-500 truncate mt-0.5">{we.jobTitle} · {we.employer}</p>
+                        </div>
+                        <span className={`shrink-0 px-1.5 py-0.5 border text-[10px] font-bold ${STATUS_PILL[we.status]}`}>
+                          {we.status}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 mt-1.5">
+                        {(we.skills || []).length} skill{(we.skills || []).length === 1 ? '' : 's'} tagged
+                      </p>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* Right detail / review */}
+          <div className="lg:col-span-2">
+            {selectedExperience ? (
+              <div className="bg-white border border-slate-300 p-6">
+                <div className="flex items-start justify-between gap-3 pb-4 border-b border-slate-200">
+                  <div className="min-w-0">
+                    <h3 className="text-base font-bold text-slate-900">{selectedExperience.jobTitle}</h3>
+                    <p className="text-sm text-slate-600 mt-0.5">{selectedExperience.employer}</p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      {users.find(u => u.id === selectedExperience.userId)?.name} ·{' '}
+                      {selectedExperience.startDate} → {selectedExperience.endDate || 'Present'}
+                      {selectedExperience.employmentType ? ` · ${EMPLOYMENT_TYPE_LABELS[selectedExperience.employmentType]}` : ''}
+                      {selectedExperience.location ? ` · ${selectedExperience.location}` : ''}
+                    </p>
+                  </div>
+                  <button onClick={() => setSelectedExperience(null)} className="p-1.5 text-slate-400 hover:text-slate-700" aria-label="Close">
+                    <X size={16} />
+                  </button>
+                </div>
+
+                {selectedExperience.responsibilities && (
+                  <div className="py-4 border-b border-slate-200">
+                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">Responsibilities</p>
+                    <p className="text-sm text-slate-700 whitespace-pre-line">{selectedExperience.responsibilities}</p>
+                  </div>
+                )}
+
+                <div className="py-4">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">Claimed Competencies</p>
+                  <p className="text-xs text-slate-500 mb-3">
+                    Set the level you can vouch for. Verified levels count towards the employee's profile
+                    (capped at Level {dataService.getWorkExperiencePolicy().maxProvisionalLevel}) until a formal assessment replaces them.
+                  </p>
+
+                  {(selectedExperience.skills || []).length === 0 ? (
+                    <p className="text-xs text-slate-400 italic">No skills were tagged on this record.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {selectedExperience.skills.map(s => {
+                        const skill = skills.find(x => x.id === s.skillId);
+                        const suggestion = s.suggestedLevel ?? dataService.suggestExperienceLevel(s.yearsApplied);
+                        return (
+                          <div key={s.skillId} className="p-3 border border-slate-200 bg-slate-50">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold text-slate-800 truncate">{skill?.name || 'Unknown skill'}</p>
+                                <p className="text-[11px] text-slate-500 mt-0.5">
+                                  {s.yearsApplied} yrs · employee claims L{s.claimedLevel}
+                                  {suggestion > 0 && (
+                                    <span className="inline-flex items-center gap-1 ml-2 text-indigo-600">
+                                      <Sparkles className="w-3 h-3" /> suggests L{suggestion}
+                                    </span>
+                                  )}
+                                </p>
+                              </div>
+                              {subTab === 'PENDING' ? (
+                                <select
+                                  className="px-2 py-1.5 text-xs border border-slate-300 bg-white outline-none focus:ring-2 focus:ring-slate-800"
+                                  value={experienceLevels[s.skillId] ?? suggestion ?? 1}
+                                  onChange={e => setExperienceLevels(prev => ({ ...prev, [s.skillId]: Number(e.target.value) }))}
+                                  aria-label={`Verified level for ${skill?.name || 'skill'}`}
+                                >
+                                  {[1, 2, 3, 4, 5].map(l => (
+                                    <option key={l} value={l}>L{l} — {PROFICIENCY_LABELS[l]}</option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <span className="px-2 py-1 text-xs font-bold border border-slate-300 bg-white">
+                                  {s.verifiedLevel ? `L${s.verifiedLevel}` : '—'}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {subTab === 'PENDING' ? (
+                  <div className="pt-4 border-t border-slate-200">
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1" htmlFor="we-review-comment">
+                      Reviewer Note
+                    </label>
+                    <textarea
+                      id="we-review-comment"
+                      rows={2}
+                      className="w-full px-3 py-2 text-sm border border-slate-300 outline-none focus:ring-2 focus:ring-slate-800"
+                      value={experienceComment}
+                      onChange={e => setExperienceComment(e.target.value)}
+                      placeholder="Optional — required context if you are lowering a level or rejecting."
+                    />
+                    <div className="flex justify-end gap-2 mt-3">
+                      <button
+                        onClick={() => commitExperienceDecision('REJECTED')}
+                        disabled={isProcessing}
+                        className="px-4 py-2 text-sm font-bold text-rose-700 border border-rose-300 hover:bg-rose-50 disabled:opacity-50 inline-flex items-center gap-1.5"
+                      >
+                        <XCircle size={15} /> Reject
+                      </button>
+                      <button
+                        onClick={() => commitExperienceDecision('VERIFIED')}
+                        disabled={isProcessing}
+                        className="px-4 py-2 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 inline-flex items-center gap-1.5"
+                      >
+                        <ShieldCheck size={15} /> {isProcessing ? 'Saving…' : 'Verify Experience'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="pt-4 border-t border-slate-200 text-xs text-slate-500">
+                    {selectedExperience.status} on{' '}
+                    {selectedExperience.reviewedAt ? new Date(selectedExperience.reviewedAt).toLocaleDateString() : '—'}
+                    {' by '}
+                    {users.find(u => u.id === selectedExperience.reviewedBy)?.name || 'a reviewer'}
+                    {selectedExperience.reviewerComment && (
+                      <p className="mt-2 text-slate-700 bg-slate-50 border border-slate-200 px-3 py-2">
+                        {selectedExperience.reviewerComment}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="bg-slate-50 border border-dashed border-slate-300 h-full min-h-[400px] flex flex-col items-center justify-center text-slate-400">
+                <Building2 size={40} className="mb-3" />
+                <p className="text-sm font-medium">Select a record from the queue to review</p>
               </div>
             )}
           </div>

@@ -74,7 +74,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
                 </span>
             </div>
         </div>
-        <EmployeeDashboard user={selectedMember} />
+        <EmployeeDashboard user={selectedMember} readOnly />
       </div>
     );
   }

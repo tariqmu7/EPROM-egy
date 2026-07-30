@@ -68,7 +68,7 @@ describe('routes: round-trip', () => {
     'emp-assessment', 'emp-appraisal', 'evidence-portal', 'manager-dashboard',
     'manager-approvals', 'ceo-dashboard', 'admin-dashboard', 'admin-analytics',
     'admin-appraisal', 'admin-audit', 'admin-users', 'admin-jobs', 'admin-skills',
-    'admin-depts', 'settings', 'methodology',
+    'admin-depts', 'admin-experience', 'settings', 'methodology',
   ];
 
   it.each(tabs)('tab %s -> path -> same tab', (tab) => {
@@ -117,7 +117,7 @@ describe('routes: sub-view routing', () => {
   });
 
   it('round-trips every dashboard sub-view', () => {
-    for (const sub of ['overview', 'idp', 'history', 'certificates', 'career']) {
+    for (const sub of ['overview', 'idp', 'history', 'certificates', 'career', 'experience']) {
       const path = routeToPath({ tab: 'emp-dashboard', subView: sub });
       const back = pathToRoute(path);
       expect(back?.tab).toBe('emp-dashboard');

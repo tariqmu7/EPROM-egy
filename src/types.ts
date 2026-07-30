@@ -397,6 +397,97 @@ export interface CareerHistoryEntry {
   reason?: string; // e.g., 'PROMOTION', 'TRANSFER', 'NEW_HIRE'
 }
 
+// ─── Work Experience (employment OUTSIDE the company) ───────────────────────
+// Employee-submitted, manager-verified. Distinct from CareerHistoryEntry above,
+// which records INTERNAL movement only (it is keyed to a real jobProfileId +
+// departmentId and so cannot represent a prior employer).
+//
+// Only a VERIFIED record influences competency, and then only as a capped
+// PROVISIONAL baseline — see getUserSkillScore in services/store.ts. It never
+// outranks a real assessment or scored evidence.
+//
+// Deliberately NOT a field on User: verifying an embedded array would mean
+// writing the user document, and the server's usersPolicy lets any SH-or-above
+// update any user — far too broad for a scoring input. It lives in its own
+// `workExperiences` collection with owner/manager scoping, like `evidences`.
+export type WorkExperienceStatus = 'PENDING' | 'VERIFIED' | 'REJECTED';
+
+export const WORK_EXPERIENCE_STATUS_LABELS: Record<WorkExperienceStatus, string> = {
+  PENDING: 'Awaiting Verification',
+  VERIFIED: 'Verified',
+  REJECTED: 'Rejected',
+};
+
+export type EmploymentType =
+  | 'FULL_TIME' | 'PART_TIME' | 'CONTRACT' | 'SECONDMENT' | 'CONSULTANT' | 'INTERNSHIP';
+
+export const EMPLOYMENT_TYPE_LABELS: Record<EmploymentType, string> = {
+  FULL_TIME: 'Full Time',
+  PART_TIME: 'Part Time',
+  CONTRACT: 'Contract',
+  SECONDMENT: 'Secondment',
+  CONSULTANT: 'Consultant',
+  INTERNSHIP: 'Internship',
+};
+
+/** One skill tagged on a work-experience entry. */
+export interface WorkExperienceSkill {
+  skillId: string;
+  claimedLevel: number;      // 1-5, the employee's own claim
+  yearsApplied: number;      // years this skill was applied in THIS role
+  suggestedLevel?: number;   // stamped from the band table at submit time (audit trail)
+  verifiedLevel?: number;    // 1-5, the verifier's final call. Set only when VERIFIED.
+}
+
+export interface WorkExperience {
+  id: string;
+  userId: string;            // canonical User.id (owner)
+  employer: string;
+  jobTitle: string;
+  employmentType?: EmploymentType;
+  location?: string;
+  startDate: string;         // ISO yyyy-mm-dd
+  endDate?: string;          // absent => still there (see isCurrent)
+  isCurrent?: boolean;
+  responsibilities?: string;
+  skills: WorkExperienceSkill[];
+  status: WorkExperienceStatus;
+  submittedAt: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+  reviewerComment?: string;
+  fileUrl?: string;          // optional supporting document (base64 data URL, as Evidence)
+  fileName?: string;
+}
+
+/** One years→level band. `maxYears` is omitted on the open-ended top band. */
+export interface ExperienceLevelBand {
+  minYears: number;          // inclusive
+  maxYears?: number;         // exclusive
+  level: number;             // 1-5
+}
+
+/** Admin-configurable policy governing the experience→competency translation. */
+export interface WorkExperiencePolicy {
+  bands: ExperienceLevelBand[];  // ascending, non-overlapping
+  maxProvisionalLevel: number;   // hard ceiling on any experience-derived score
+  enabled: boolean;              // master switch
+}
+
+/**
+ * Where a user's skill score came from. Drives the "Provisional" badge and lets
+ * callers treat an unverified experience-derived score differently from a
+ * measured one (the assessment queue does exactly that).
+ */
+export type SkillScoreSource = 'ASSESSMENT' | 'EVIDENCE' | 'EXPERIENCE' | 'NONE';
+
+export const SKILL_SCORE_SOURCE_LABELS: Record<SkillScoreSource, string> = {
+  ASSESSMENT: 'Assessed',
+  EVIDENCE: 'Evidence-based',
+  EXPERIENCE: 'Provisional — from experience',
+  NONE: 'Not yet assessed',
+};
+
 export interface User {
   id: string;
   name: string;

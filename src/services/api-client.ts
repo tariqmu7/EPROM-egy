@@ -41,6 +41,21 @@ export class ApiError extends Error {
   }
 }
 
+// The API host was unreachable — the request never got a response. `fetch` rejects
+// with a bare `TypeError: Failed to fetch` here, which surfaces verbatim on the
+// login screen and tells the user nothing. Name the actual cause instead: the API
+// is down, the wrong VITE_API_URL is baked in, or CORS/TLS blocked the call.
+export class ApiNetworkError extends Error {
+  constructor(public baseUrl: string, public cause?: unknown) {
+    super(
+      `Cannot reach the API server at ${baseUrl}. Make sure the backend is running ` +
+        `(run.bat, or "cd server && npx tsx scripts/serve-local.ts") and that ` +
+        `VITE_API_URL points at it.`,
+    );
+    this.name = 'ApiNetworkError';
+  }
+}
+
 // A short correlation id per request. The server echoes it back and stamps it on
 // every log line for that request, so a failure reported by a user can be traced.
 function newRequestId(): string {
@@ -57,11 +72,18 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   if (token) headers['Authorization'] = `Bearer ${token}`;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
 
-  const res = await fetch(`${API_BASE}${path}`, {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch (e) {
+    // Only a transport-level failure lands here; HTTP errors come back as a
+    // response and are handled below.
+    throw new ApiNetworkError(API_BASE, e);
+  }
 
   // 204 No Content
   if (res.status === 204) return undefined as T;

@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { dataService } from '../services/store';
 import { useStoreData } from '../hooks/useStoreData';
 import { User, Role } from '../types';
-import { CheckCircle, AlertTriangle, Clock } from 'lucide-react';
+import { CheckCircle, AlertTriangle, Clock, Briefcase } from 'lucide-react';
 
 export const CompetencyMatrix: React.FC<{ currentUser: User }> = ({ currentUser }) => {
   const [selectedDeptId, setSelectedDeptId] = useState<string>('ALL');
@@ -61,6 +61,21 @@ export const CompetencyMatrix: React.FC<{ currentUser: User }> = ({ currentUser 
     return map;
   }, [relevantUsers, relevantSkills, storeVersion]);
 
+  // ── Provisional set: "userId::skillId" scored only from verified work
+  //    experience. Shown distinctly so a compliance view never presents an
+  //    unmeasured level as a confirmed one.
+  const provisionalKeys = useMemo(() => {
+    const keys = new Set<string>();
+    relevantUsers.forEach((user: User) => {
+      relevantSkills.forEach(skill => {
+        if (dataService.getSkillScoreSource(user.id, skill.id) === 'EXPERIENCE') {
+          keys.add(`${user.id}::${skill.id}`);
+        }
+      });
+    });
+    return keys;
+  }, [relevantUsers, relevantSkills, storeVersion]);
+
   // ── Pending evidence set: "userId::skillId" for O(1) lookups ────────────
   const pendingEvidenceKeys = useMemo(() => {
     const keys = new Set<string>();
@@ -70,10 +85,13 @@ export const CompetencyMatrix: React.FC<{ currentUser: User }> = ({ currentUser 
   }, [storeVersion]); // recomputed whenever a Firestore snapshot lands
 
   // ── Cell status (O(1) using pre-computed maps) ───────────────────────────
-  const getCellStatus = (userId: string, skillId: string, requiredLevel: number): 'VERIFIED' | 'PENDING' | 'GAP' => {
+  const getCellStatus = (userId: string, skillId: string, requiredLevel: number): 'VERIFIED' | 'PENDING' | 'GAP' | 'PROVISIONAL' => {
     if (pendingEvidenceKeys.has(`${userId}::${skillId}`)) return 'PENDING';
     const score = scoreMap[userId]?.[skillId] ?? 0;
-    return score >= requiredLevel ? 'VERIFIED' : 'GAP';
+    if (score < requiredLevel) return 'GAP';
+    // Meets the requirement — but on unverified experience alone, so it is not
+    // the same claim as an assessed VERIFIED.
+    return provisionalKeys.has(`${userId}::${skillId}`) ? 'PROVISIONAL' : 'VERIFIED';
   };
 
   // ── Column rollup status ─────────────────────────────────────────────────
@@ -94,17 +112,21 @@ export const CompetencyMatrix: React.FC<{ currentUser: User }> = ({ currentUser 
 
     if (relevantReqs.length === 0) return 'N/A';
 
-    let hasGap     = false;
-    let hasPending = false;
+    let hasGap         = false;
+    let hasPending     = false;
+    let hasProvisional = false;
 
     for (const req of relevantReqs) {
       const status = getCellStatus(user.id, req.skillId, req.requiredLevel);
-      if (status === 'GAP')     hasGap     = true;
-      if (status === 'PENDING') hasPending = true;
+      if (status === 'GAP')         hasGap         = true;
+      if (status === 'PENDING')     hasPending     = true;
+      if (status === 'PROVISIONAL') hasProvisional = true;
     }
 
-    if (hasGap)     return 'GAP';
-    if (hasPending) return 'PENDING';
+    if (hasGap)         return 'GAP';
+    if (hasPending)     return 'PENDING';
+    // One unmeasured skill is enough to stop the column claiming full assurance.
+    if (hasProvisional) return 'PROVISIONAL';
     return 'VERIFIED';
   };
 
@@ -183,6 +205,10 @@ export const CompetencyMatrix: React.FC<{ currentUser: User }> = ({ currentUser 
                         bgColor = 'bg-slate-100 text-slate-800 border-slate-200';
                         icon    = <CheckCircle size={14} />;
                         label   = 'Verified Safe';
+                      } else if (status === 'PROVISIONAL') {
+                        bgColor = 'bg-indigo-50 text-indigo-700 border-indigo-200';
+                        icon    = <Briefcase size={14} />;
+                        label   = 'Provisional';
                       } else if (status === 'PENDING') {
                         bgColor = 'bg-slate-100 text-slate-800 border-slate-200';
                         icon    = <Clock size={14} />;

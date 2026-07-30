@@ -44,6 +44,7 @@ const TAB_PATHS: Record<string, string> = {
   'admin-jobs': '/admin/jobs',
   'admin-skills': '/admin/skills',
   'admin-depts': '/admin/departments',
+  'admin-experience': '/admin/experience',
   'settings': '/settings',
   'methodology': '/methodology',
 };
@@ -87,7 +88,7 @@ export interface SubViewSpec {
 export const SUB_VIEWS: Record<string, SubViewSpec> = {
   'emp-dashboard': {
     parentPath: '/dashboard',
-    values: ['overview', 'idp', 'history', 'certificates', 'career'],
+    values: ['overview', 'idp', 'history', 'certificates', 'career', 'experience'],
     default: 'overview',
   },
   // NOTE: page-level sub-views only. In-page state that depends on a selection

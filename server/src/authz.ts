@@ -95,6 +95,10 @@ const ADMIN_WRITE_COLLECTIONS: CollectionName[] = [
   'assessmentInstructions',
   'trainingCourses',
   'projects',
+  // Company-wide admin config (e.g. the work-experience → level band table).
+  // Every authenticated client reads it to compute provisional scores; only an
+  // admin may change it.
+  'appSettings',
 ];
 
 // ── Main entry point ────────────────────────────────────────────────────────
@@ -116,6 +120,8 @@ export async function can(collection: CollectionName, action: Action, ctx: Polic
       return activityLogsPolicy(action, ctx, admin);
     case 'evidences':
       return evidencesPolicy(action, ctx, admin);
+    case 'workExperiences':
+      return workExperiencesPolicy(action, ctx, admin);
     case 'notifications':
       return notificationsPolicy(action, ctx);
     case 'nominations':
@@ -199,6 +205,43 @@ async function evidencesPolicy(action: Action, ctx: PolicyCtx, admin: boolean): 
       return isManagerOf(ctx, existing?.userId);
     case 'delete':
       return admin;
+  }
+}
+
+// Work experience is employee-submitted and manager-verified, so it takes the
+// same owner-scoped shape as evidences above — including the deliberate split
+// between canonicalId(user) on READ and the raw user.id on create/update
+// (activity documents store the canonical id, while a freshly created doc is
+// stamped with the auth uid). Do NOT "harmonise" those two: post-migration they
+// legitimately differ, and collapsing them breaks either reads or writes.
+//
+// Verification is a manager write: a direct manager may PATCH a subordinate's
+// entry, which is how status=VERIFIED and the per-skill verifiedLevel are set.
+// The owner may keep editing only while the entry is still PENDING — once a
+// verdict exists, changing it requires re-submission through the client, which
+// resets the status.
+async function workExperiencesPolicy(action: Action, ctx: PolicyCtx, admin: boolean): Promise<boolean> {
+  const { user, existing, incoming } = ctx;
+  switch (action) {
+    case 'read': {
+      if (canReadAll(user)) return true;
+      if (!existing) return false;
+      if (existing.userId === canonicalId(user)) return true; // own record
+      return isAncestorManager(ctx, existing.userId); // a subordinate's
+    }
+    case 'create':
+      return !!incoming && (incoming.userId === user.id || admin);
+    case 'update':
+      if (admin) return true;
+      if (existing && existing.userId === user.id && existing.status === 'PENDING') return true;
+      return isManagerOf(ctx, existing?.userId);
+    case 'delete':
+      // Deliberately looser than evidencesPolicy (admin-only): an employee may
+      // withdraw a record they submitted by mistake, but only while it is still
+      // PENDING. Once verified it is part of the competency audit trail and only
+      // an admin may remove it.
+      if (admin) return true;
+      return !!existing && existing.userId === user.id && existing.status === 'PENDING';
   }
 }
 
@@ -290,6 +333,13 @@ export async function listScope(
       };
     }
     case 'evidences': {
+      const subtree = await getSubordinateIds(self);
+      return { or: [{ field: 'userId', op: 'in', value: subtree }] }; // own + subordinates
+    }
+    case 'workExperiences': {
+      // MANDATORY, not an optimization: runList applies listScope and never
+      // calls can(), so without this case every authenticated user could list
+      // the whole company's employment history. Mirrors evidences.
       const subtree = await getSubordinateIds(self);
       return { or: [{ field: 'userId', op: 'in', value: subtree }] }; // own + subordinates
     }

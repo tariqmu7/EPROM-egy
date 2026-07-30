@@ -1,4 +1,5 @@
-import { User, Role, JobProfile, Skill, Project, Department, Assessment, ActivityLog, ORG_HIERARCHY_ORDER, ORG_LEVEL_NUMBERS, Notification, AssessmentCycle, Nomination, IndividualTrainingPlan, TrainingRecommendation, OrgLevel, Evidence, PromotionRequirement, CareerProgressionPlan, CareerLevelProgress, TrainingCourse, ScheduledAssessment, AssessmentMethod, UserStatus, Certificate, CareerHistoryEntry, SkillLevel, EvaluationQuestion, AssessmentPlan, AssessmentInstruction, SkillAssessmentMethod, AssessmentFrequency, AssessmentAudience, JobProfileSkill, DepartmentType, DEPT_TYPE_TO_ORG_LEVEL, RaterWeights, DEFAULT_RATER_WEIGHTS } from '../types';
+import { User, Role, JobProfile, Skill, Project, Department, Assessment, ActivityLog, ORG_HIERARCHY_ORDER, ORG_LEVEL_NUMBERS, Notification, AssessmentCycle, Nomination, IndividualTrainingPlan, TrainingRecommendation, OrgLevel, Evidence, PromotionRequirement, CareerProgressionPlan, CareerLevelProgress, TrainingCourse, ScheduledAssessment, AssessmentMethod, UserStatus, Certificate, CareerHistoryEntry, SkillLevel, EvaluationQuestion, AssessmentPlan, AssessmentInstruction, SkillAssessmentMethod, AssessmentFrequency, AssessmentAudience, JobProfileSkill, DepartmentType, DEPT_TYPE_TO_ORG_LEVEL, RaterWeights, DEFAULT_RATER_WEIGHTS, WorkExperience, WorkExperienceSkill, WorkExperienceStatus, WorkExperiencePolicy, SkillScoreSource } from '../types';
+import { DEFAULT_WORK_EXPERIENCE_POLICY, suggestLevelFromYears } from '../constants/experiencePolicy';
 import {
   collection,
   doc,
@@ -172,12 +173,21 @@ export class DataService {
   private assessmentPlans: AssessmentPlan[] = [];
   private assessmentInstructions: AssessmentInstruction[] = [];
   private projects: Project[] = [];
+  private workExperiences: WorkExperience[] = [];
+  // Company-wide admin config, keyed by document id (e.g. 'work-experience').
+  private appSettings: Record<string, any> = {};
 
   // A3.2: Per-pair cache for getUserSkillScore(). Keyed by "userId:skillId".
-  // Cleared whenever assessments or evidences snapshots arrive so stale scores
-  // are never served. Avoids rescanning the full arrays on every skill-gap/ITP
-  // call while remaining conservative about staleness.
-  private skillScoreCache = new Map<string, number>();
+  // Cleared whenever assessments, evidences, work-experience or app-settings
+  // snapshots arrive so stale scores are never served. Avoids rescanning the
+  // full arrays on every skill-gap/ITP call while remaining conservative about
+  // staleness.
+  //
+  // Holds provenance alongside the number so getSkillScoreSource() (the
+  // "Provisional" badge) never has to recompute — and so callers that must treat
+  // an unverified experience-derived score differently (the assessment queue)
+  // can tell them apart.
+  private skillScoreCache = new Map<string, { score: number; source: SkillScoreSource }>();
 
   
   public isInitialized = false;
@@ -385,6 +395,8 @@ export class DataService {
     this.assessmentPlans = [];
     this.assessmentInstructions = [];
     this.projects = [];
+    this.workExperiences = [];
+    this.appSettings = {};
     this.usersLoaded = false;
     this._permissionError = null;
     this.skillScoreCache.clear();
@@ -857,6 +869,51 @@ export class DataService {
       );
     }
 
+    // Work Experiences — identical scoping tiers to evidences above (own
+    // submissions / subtree / full), because the server applies the same
+    // owner+manager listScope to this collection.
+    {
+      let workExperienceQuery;
+      if (scopeToSelf && selfId) {
+        workExperienceQuery = query(collection(db, 'workExperiences'), where('userId', '==', selfId), limit(MAX_LISTENER_DOCS));
+      } else if (!isPrivileged && selfId && directReportIds.length > 0) {
+        const subtreeIds = [...new Set([selfId, ...directReportIds])];
+        workExperienceQuery = query(collection(db, 'workExperiences'), where('userId', 'in', subtreeIds), limit(MAX_LISTENER_DOCS));
+      } else {
+        workExperienceQuery = query(collection(db, 'workExperiences'), limit(MAX_LISTENER_DOCS));
+      }
+      this.unsubscribers.push(
+        onSnapshot(workExperienceQuery, (snapshot) => {
+          this.workExperiences = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              ...data,
+              // preparePayload stringifies this on the way out (see users.certificates).
+              skills: safeJsonField<WorkExperienceSkill[]>(data.skills, [], `workExperiences.skills (${doc.id})`),
+            } as WorkExperience;
+          });
+          // Verified experience is a scoring input — a stale cache would hide a
+          // verification until some unrelated snapshot happened to arrive.
+          this.skillScoreCache.clear();
+          this.scheduleNotify();
+        }, this.handleError('workExperiences'))
+      );
+    }
+
+    // App Settings — company-wide admin config. Read-open, admin-write.
+    // Changing the work-experience cap or bands re-values every provisional
+    // score, so this clears the score cache too.
+    this.unsubscribers.push(
+      onSnapshot(query(collection(db, 'appSettings'), limit(MAX_LISTENER_DOCS)), (snapshot) => {
+        const next: Record<string, any> = {};
+        for (const d of snapshot.docs) next[d.id] = { id: d.id, ...d.data() };
+        this.appSettings = next;
+        this.skillScoreCache.clear();
+        this.scheduleNotify();
+      }, this.handleError('appSettings'))
+    );
+
     // Training Courses
     this.unsubscribers.push(
       onSnapshot(query(collection(db, 'trainingCourses'), limit(MAX_LISTENER_DOCS)), (snapshot) => {
@@ -1064,6 +1121,249 @@ export class DataService {
         actionLink: 'evidence-portal'
       });
     }
+  }
+
+  // --- WORK EXPERIENCE ---
+  // Employee-submitted external employment, verified by the direct manager.
+  // A VERIFIED entry's per-skill verifiedLevel becomes a capped PROVISIONAL
+  // baseline in getUserSkillScore — never overriding a real assessment.
+
+  /** Company-wide translation policy: shipped defaults + any admin override. */
+  getWorkExperiencePolicy(): WorkExperiencePolicy {
+    const override = this.appSettings['work-experience'];
+    if (!override) return DEFAULT_WORK_EXPERIENCE_POLICY;
+    return {
+      enabled: typeof override.enabled === 'boolean' ? override.enabled : DEFAULT_WORK_EXPERIENCE_POLICY.enabled,
+      maxProvisionalLevel: Number(override.maxProvisionalLevel) || DEFAULT_WORK_EXPERIENCE_POLICY.maxProvisionalLevel,
+      bands: Array.isArray(override.bands) && override.bands.length > 0
+        ? override.bands
+        : DEFAULT_WORK_EXPERIENCE_POLICY.bands,
+    };
+  }
+
+  /** What the band table proposes for N years. 0 when nothing matches. */
+  suggestExperienceLevel(yearsApplied: number): number {
+    return suggestLevelFromYears(yearsApplied, this.getWorkExperiencePolicy());
+  }
+
+  async updateWorkExperiencePolicy(policy: WorkExperiencePolicy) {
+    await this.persistItem('appSettings', { id: 'work-experience', ...policy });
+    this.skillScoreCache.clear();
+    await this.logActivity('Updated Work Experience Policy', `Cap: Level ${policy.maxProvisionalLevel}, ${policy.enabled ? 'enabled' : 'disabled'}`);
+  }
+
+  getWorkExperiences(userId?: string, filters?: { status?: WorkExperienceStatus }): WorkExperience[] {
+    return this.workExperiences
+      .filter(w => (userId ? w.userId === userId : true))
+      .filter(w => (filters?.status ? w.status === filters.status : true))
+      .sort((a, b) => {
+        // Current roles (no end date) first, then most recent.
+        const aEnd = a.endDate || '9999-12-31';
+        const bEnd = b.endDate || '9999-12-31';
+        if (aEnd !== bEnd) return bEnd.localeCompare(aEnd);
+        return (b.startDate || '').localeCompare(a.startDate || '');
+      });
+  }
+
+  /**
+   * PENDING entries this reviewer may act on. Admin/CEO see everything;
+   * a manager sees their visible subtree. Own entries are excluded — nobody
+   * verifies their own experience.
+   */
+  getPendingWorkExperienceVerifications(managerId: string): WorkExperience[] {
+    const reviewer = this.getUserById(managerId);
+    const seesAll = reviewer?.role === Role.ADMIN || reviewer?.role === Role.CEO;
+    const visibleIds = seesAll ? null : new Set(this.getSubordinatesRecursive(managerId).map(u => u.id));
+    return this.getWorkExperiences(undefined, { status: 'PENDING' })
+      .filter(w => w.userId !== managerId)
+      .filter(w => (visibleIds ? visibleIds.has(w.userId) : true));
+  }
+
+  async addWorkExperience(entry: Omit<WorkExperience, 'id' | 'status' | 'submittedAt' | 'reviewedAt' | 'reviewedBy'>) {
+    const id = doc(collection(db, 'workExperiences')).id;
+    const newEntry: WorkExperience = {
+      ...entry,
+      id,
+      // Stamp the band-table suggestion at submit time so the verifier sees what
+      // was proposed, and so a later policy change doesn't silently rewrite the
+      // basis of an existing verdict.
+      skills: (entry.skills || []).map(s => ({
+        ...s,
+        suggestedLevel: this.suggestExperienceLevel(s.yearsApplied),
+      })),
+      status: 'PENDING',
+      submittedAt: new Date().toISOString(),
+    };
+
+    // Batch the entry + manager notification so neither is orphaned on failure
+    // (same reasoning as addEvidence).
+    const batch = writeBatch(db);
+    batch.set(doc(db, 'workExperiences', id), this.preparePayload('workExperiences', newEntry));
+
+    const user = this.users.find(u => u.id === entry.userId);
+    if (user && user.managerId) {
+      const notifId = doc(collection(db, 'notifications')).id;
+      batch.set(doc(db, 'notifications', notifId), {
+        id: notifId,
+        userId: user.managerId,
+        title: 'Work Experience Submitted',
+        message: `${user.name} submitted work experience at ${newEntry.employer} for verification.`,
+        type: 'INFO',
+        createdAt: new Date().toISOString(),
+        isRead: false,
+        actionLink: 'manager-approvals',
+      });
+    }
+
+    try {
+      await batch.commit();
+    } catch (e) {
+      this.handleFirestoreError(e, OperationType.WRITE, `workExperiences/${id}`);
+      throw e;
+    }
+    await this.logActivity('Submitted Work Experience', `${newEntry.employer} — ${newEntry.jobTitle}`);
+    return newEntry;
+  }
+
+  /**
+   * Owner edit. Any change re-opens verification and drops the previous verdict:
+   * a verified level must always trace back to the record the verifier actually
+   * saw.
+   */
+  async updateWorkExperience(
+    id: string,
+    updates: Partial<Omit<WorkExperience, 'id' | 'userId' | 'status' | 'submittedAt' | 'reviewedAt' | 'reviewedBy'>>,
+  ) {
+    const existing = this.workExperiences.find(w => w.id === id);
+    if (!existing) return;
+    const wasActedOn = existing.status === 'VERIFIED' || existing.status === 'REJECTED';
+
+    const skills = (updates.skills ?? existing.skills ?? []).map(s => ({
+      ...s,
+      suggestedLevel: this.suggestExperienceLevel(s.yearsApplied),
+      verifiedLevel: undefined,
+    }));
+
+    const updated: WorkExperience = {
+      ...existing,
+      ...updates,
+      skills,
+      status: 'PENDING',
+      submittedAt: new Date().toISOString(),
+      reviewedAt: undefined,
+      reviewedBy: undefined,
+      reviewerComment: undefined,
+    };
+    await this.updateItem('workExperiences', updated);
+    this.skillScoreCache.clear();
+
+    const user = this.users.find(u => u.id === existing.userId);
+    if (user && user.managerId) {
+      await this.addNotification({
+        userId: user.managerId,
+        title: 'Work Experience Re-Submitted',
+        message: `${user.name} edited their ${existing.employer} experience${wasActedOn ? ` (previously ${existing.status.toLowerCase()})` : ''} and it requires re-verification.`,
+        type: 'WARNING',
+        actionLink: 'manager-approvals',
+      });
+    }
+  }
+
+  async deleteWorkExperience(id: string) {
+    const existing = this.workExperiences.find(w => w.id === id);
+    if (!existing) return;
+    const wasActedOn = existing.status === 'VERIFIED' || existing.status === 'REJECTED';
+    await this.deleteItem('workExperiences', id);
+    this.skillScoreCache.clear();
+
+    const user = this.users.find(u => u.id === existing.userId);
+    if (wasActedOn && user && user.managerId) {
+      await this.addNotification({
+        userId: user.managerId,
+        title: 'Work Experience Withdrawn',
+        message: `${user.name} deleted their ${existing.employer} experience that was previously ${existing.status.toLowerCase()}. No further action is needed.`,
+        type: 'INFO',
+        actionLink: 'manager-approvals',
+      });
+    }
+  }
+
+  /**
+   * Record a verdict. `finalLevels` maps skillId → the level the verifier
+   * confirmed; anything absent falls back to the stamped suggestion. Rejecting
+   * clears every level so the record can never contribute a score.
+   */
+  async verifyWorkExperience(
+    id: string,
+    decision: 'VERIFIED' | 'REJECTED',
+    reviewerId: string,
+    finalLevels?: Record<string, number>,
+    comment?: string,
+  ) {
+    const existing = this.workExperiences.find(w => w.id === id);
+    if (!existing) return;
+
+    const skills = (existing.skills || []).map(s => {
+      if (decision === 'REJECTED') return { ...s, verifiedLevel: undefined };
+      const raw = finalLevels?.[s.skillId] ?? s.suggestedLevel ?? this.suggestExperienceLevel(s.yearsApplied);
+      return { ...s, verifiedLevel: Math.min(Math.max(Math.round(raw), 1), 5) };
+    });
+
+    const updated: WorkExperience = {
+      ...existing,
+      skills,
+      status: decision,
+      reviewedAt: new Date().toISOString(),
+      reviewedBy: reviewerId,
+      reviewerComment: comment || undefined,
+    };
+    await this.updateItem('workExperiences', updated);
+    // The listener also clears this, but that is a poll away — clear now so a
+    // same-tick re-render shows the new score.
+    this.skillScoreCache.clear();
+
+    await this.addNotification({
+      userId: existing.userId,
+      title: `Work Experience ${decision === 'VERIFIED' ? 'Verified' : 'Rejected'}`,
+      message: `Your work experience at ${existing.employer} was ${decision.toLowerCase()}.${comment ? ` Reviewer note: ${comment}` : ''}`,
+      type: decision === 'VERIFIED' ? 'SUCCESS' : 'ERROR',
+      actionLink: 'emp-dashboard',
+    });
+    await this.logActivity(
+      decision === 'VERIFIED' ? 'Verified Work Experience' : 'Rejected Work Experience',
+      `${existing.employer} — ${existing.jobTitle}`,
+    );
+  }
+
+  /**
+   * The capped provisional level this user's VERIFIED experience supports for a
+   * skill, or 0. Takes the MAX rather than re-deriving from summed years: a
+   * human already made a per-entry judgement, and re-computing would override
+   * them.
+   */
+  getExperienceBaseline(userId: string, skillId: string): number {
+    const policy = this.getWorkExperiencePolicy();
+    if (!policy.enabled) return 0;
+
+    let best = 0;
+    for (const we of this.workExperiences) {
+      if (we.userId !== userId || we.status !== 'VERIFIED') continue;
+      for (const s of we.skills || []) {
+        if (s.skillId === skillId && (s.verifiedLevel ?? 0) > best) best = s.verifiedLevel!;
+      }
+    }
+    if (best <= 0) return 0;
+    const cap = Math.min(5, Math.max(1, Math.round(policy.maxProvisionalLevel)));
+    return Math.min(Math.max(Math.round(best), 1), cap);
+  }
+
+  /** Total verified years applied to a skill across employers. Display only. */
+  getExperienceYears(userId: string, skillId: string): number {
+    return this.workExperiences
+      .filter(w => w.userId === userId && w.status === 'VERIFIED')
+      .flatMap(w => w.skills || [])
+      .filter(s => s.skillId === skillId)
+      .reduce((sum, s) => sum + (Number(s.yearsApplied) || 0), 0);
   }
 
   // --- Nominations ---
@@ -1403,6 +1703,11 @@ export class DataService {
       if (item.interviewQuestions) payload.interviewQuestions = JSON.stringify(item.interviewQuestions);
       if (item.threeSixtyQuestions) payload.threeSixtyQuestions = JSON.stringify(item.threeSixtyQuestions);
     }
+    if (collectionName === 'workExperiences' && item.skills) {
+      // NOTE: the server's workExperiencesSchema deliberately does not declare
+      // `skills`, because this stringify means it arrives as a string.
+      payload.skills = JSON.stringify(item.skills);
+    }
 
     // Remove undefined values for Firestore
     Object.keys(payload).forEach(key => {
@@ -1434,6 +1739,12 @@ export class DataService {
       }
       if (item.method !== undefined && !VALID_ASSESSMENT_METHODS.includes(item.method)) {
         throw new Error(`Invalid assessment method value: "${item.method}"`);
+      }
+    }
+    if (collectionName === 'workExperiences') {
+      const VALID_WE_STATUSES: WorkExperienceStatus[] = ['PENDING', 'VERIFIED', 'REJECTED'];
+      if (item.status !== undefined && !VALID_WE_STATUSES.includes(item.status)) {
+        throw new Error(`Invalid work experience status value: "${item.status}"`);
       }
     }
   }
@@ -1733,7 +2044,13 @@ export class DataService {
     const workRecords: any[] = [];
 
     requirements.forEach(req => {
-      const currentScore = this.getUserSkillScore(userId, req.skillId);
+      // A provisional (work-experience) score must NOT satisfy the requirement
+      // here: treating unverified history as "already at level" would stop the
+      // system ever asking for the assessment that would actually confirm it.
+      // Everywhere else — ITP, career path, gap reporting — the provisional
+      // score counts; this queue is the deliberate exception.
+      const scoreDetail = this.getUserSkillScoreDetail(userId, req.skillId);
+      const currentScore = scoreDetail.source === 'EXPERIENCE' ? 0 : scoreDetail.score;
       const skill = this.getSkill(req.skillId);
       if (!skill) return;
 
@@ -2183,19 +2500,26 @@ export class DataService {
     );
   }
 
-  getUserSkillScore(userId: string, skillId: string, includeArchived: boolean = false): number {
-    // A3.2: Cache by userId:skillId (non-archived path only; archived is a rare
-    // historical query so we don't pollute the hot cache with it).
-    if (!includeArchived) {
-      const cacheKey = `${userId}:${skillId}`;
-      const cached = this.skillScoreCache.get(cacheKey);
-      if (cached !== undefined) return cached;
-    }
-
+  /**
+   * The uncached score computation, plus where the number came from.
+   *
+   * Score precedence, strongest first:
+   *   1. A real assessment (360° blend, or the latest direct exam/interview/demo)
+   *   2. Approved evidence carrying an assignedScore
+   *   3. VERIFIED work experience — a capped PROVISIONAL baseline
+   * Tier 3 is reached only when 1 and 2 produced nothing at all, so recorded
+   * measurement always beats self-reported history.
+   */
+  private computeSkillScore(
+    userId: string,
+    skillId: string,
+    includeArchived: boolean,
+  ): { score: number; source: SkillScoreSource } {
     const skill = this.getSkill(skillId);
-    if (!skill) return 0;
+    if (!skill) return { score: 0, source: 'NONE' };
 
     let result: number;
+    let source: SkillScoreSource;
 
     // Behavioral (360) Logic
     if (this.getSkillPrimaryMethod(skillId) === 'OJT_OBSERVATION') {
@@ -2203,7 +2527,7 @@ export class DataService {
       if (!includeArchived) {
         userAssessments = userAssessments.filter(a => !a.isArchived);
       }
-      if (userAssessments.length === 0) { result = 0; }
+      if (userAssessments.length === 0) { result = 0; source = 'NONE'; }
       else {
         // Average across *distinct raters*, counting each rater only once at
         // their most recent rating. The 360 average is meant to blend multiple
@@ -2238,6 +2562,7 @@ export class DataService {
         if (avgMgr  !== null) { weightedScore += avgMgr  * rw.manager; totalWeight += rw.manager; }
 
         result = totalWeight === 0 ? 0 : Math.round(weightedScore / totalWeight);
+        source = result > 0 ? 'ASSESSMENT' : 'NONE';
       }
     } else {
       // Evidence, Online Assessment, or Interview Logic
@@ -2248,20 +2573,66 @@ export class DataService {
 
       if (directAssessments.length > 0) {
         result = directAssessments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0].score;
+        source = 'ASSESSMENT';
       } else {
         const relevantEvidence = this.evidences.filter(e => e.userId === userId && e.skillId === skillId && e.status === 'APPROVED' && e.assignedScore);
-        if (relevantEvidence.length === 0) { result = 0; }
+        if (relevantEvidence.length === 0) { result = 0; source = 'NONE'; }
         else {
           const maxScore = Math.max(...relevantEvidence.map(e => e.assignedScore || 0));
           result = Math.min(Math.max(Math.round(maxScore), 1), 5);
+          source = 'EVIDENCE';
         }
       }
     }
 
-    if (!includeArchived) {
-      this.skillScoreCache.set(`${userId}:${skillId}`, result);
+    // ── Provisional baseline from VERIFIED work experience ────────────────────
+    // Placed AFTER the if/else deliberately, so BOTH branches fall through here.
+    // The 360°/OJT branch never reaches the evidence tier, and an unconfigured
+    // skill defaults to OJT_OBSERVATION (getSkillPrimaryMethod), so putting this
+    // inside the `else` would skip most skills.
+    //
+    // `result === 0` is precisely "no usable assessment AND no scored evidence".
+    if (result === 0) {
+      const provisional = this.getExperienceBaseline(userId, skillId);
+      if (provisional > 0) {
+        result = provisional;
+        source = 'EXPERIENCE';
+      }
     }
-    return result;
+
+    return { score: result, source };
+  }
+
+  getUserSkillScore(userId: string, skillId: string, includeArchived: boolean = false): number {
+    // A3.2: Cache by userId:skillId (non-archived path only; archived is a rare
+    // historical query so we don't pollute the hot cache with it).
+    if (!includeArchived) {
+      const cached = this.skillScoreCache.get(`${userId}:${skillId}`);
+      if (cached !== undefined) return cached.score;
+    }
+    const computed = this.computeSkillScore(userId, skillId, includeArchived);
+    if (!includeArchived) {
+      this.skillScoreCache.set(`${userId}:${skillId}`, computed);
+    }
+    return computed.score;
+  }
+
+  /**
+   * Where the live score came from, so a page can badge a provisional
+   * (experience-derived) number without recomputing it.
+   */
+  getSkillScoreSource(userId: string, skillId: string): SkillScoreSource {
+    return this.getUserSkillScoreDetail(userId, skillId).source;
+  }
+
+  /** Score + provenance in one pass, for callers that need both. */
+  getUserSkillScoreDetail(userId: string, skillId: string): { score: number; source: SkillScoreSource } {
+    const key = `${userId}:${skillId}`;
+    const cached = this.skillScoreCache.get(key);
+    if (cached !== undefined) return cached;
+    const computed = this.computeSkillScore(userId, skillId, false);
+    this.skillScoreCache.set(key, computed);
+    return computed;
   }
 
   getAssessments(filters: { raterId?: string, subjectId?: string, cycleId?: string, skillId?: string, includeArchived?: boolean }) {

@@ -10,10 +10,10 @@ export default defineConfig({
       // Regression ratchet: locked to current actual coverage so it can only
       // improve, never regress. Raise these as tests are added (target: 70%).
       thresholds: {
-        lines: 28,
-        functions: 24,
-        branches: 24,
-        statements: 28,
+        lines: 36,
+        functions: 31,
+        branches: 31,
+        statements: 35,
       },
     },
   },

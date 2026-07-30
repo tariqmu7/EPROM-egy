@@ -22,7 +22,7 @@ import { z } from 'zod';
 import type { CollectionName } from './registry.js';
 // Canonical enums — the single source of truth shared with authz.ts (and
 // asserted against the migration CHECK constraints in contracts.test.ts).
-import { ROLE, USER_STATUS, ORG_LEVEL } from '../domain/enums.js';
+import { ROLE, USER_STATUS, ORG_LEVEL, WORK_EXPERIENCE_STATUS } from '../domain/enums.js';
 
 // A non-empty string, when the field is present. Used for owner/reference ids
 // whose wrong type would break authz scoping or joins.
@@ -74,7 +74,21 @@ const notificationsSchema = baseDoc.extend({
   userId: id.optional(),
 });
 
+const workExperiencesSchema = baseDoc.extend({
+  userId: id.optional(),
+  employer: z.string().min(1).optional(),
+  jobTitle: z.string().min(1).optional(),
+  startDate: z.string().min(1).optional(),
+  status: z.enum(WORK_EXPERIENCE_STATUS).optional(),
+  // `skills` is deliberately NOT declared. store.ts's preparePayload
+  // JSON.stringify()s nested arrays before writing (same as users.certificates),
+  // so on the wire this field is a STRING, not an array. passthrough() carries it
+  // untouched. Declaring it as z.array() here would 422 every write.
+});
+
 // Collections without a specific contract still must be JSON objects.
+// (`appSettings` is intentionally absent — it holds free-form admin config and
+// is already admin-write-only via ADMIN_WRITE_COLLECTIONS in authz.ts.)
 const SCHEMAS: Partial<Record<CollectionName, z.ZodTypeAny>> = {
   users: usersSchema,
   assessments: assessmentsSchema,
@@ -82,6 +96,7 @@ const SCHEMAS: Partial<Record<CollectionName, z.ZodTypeAny>> = {
   jobProfiles: jobProfilesSchema,
   departments: departmentsSchema,
   notifications: notificationsSchema,
+  workExperiences: workExperiencesSchema,
 };
 
 export interface ValidationResult {
