@@ -64,7 +64,7 @@ async function main() {
   process.env.JWT_EXPIRES_IN = '12h';
   process.env.BCRYPT_ROUNDS = process.env.BCRYPT_ROUNDS ?? '10';
   process.env.CORS_ORIGINS = process.env.CORS_ORIGINS ?? 'http://localhost:5173,http://localhost:4173';
-  process.env.ALLOW_SIGNUP = 'true';
+  process.env.ALLOW_SIGNUP = process.env.ALLOW_SIGNUP ?? 'false';
   process.env.BOOTSTRAP_ADMIN_EMAIL = process.env.BOOTSTRAP_ADMIN_EMAIL ?? 'tarekmoh123@gmail.com';
 
   const { runMigrations } = await import('../src/migrate.js');

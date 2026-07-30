@@ -3348,8 +3348,21 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
   }, []);
 
   const handleDelete = useCallback(async (type: 'USER' | 'JOB' | 'SKILL' | 'DEPT' | 'PROJECT', id: string) => {
-      if (window.confirm("Are you sure you want to delete this record? This action cannot be undone.")) {
-          if (type === 'USER') await dataService.removeUser(id);
+      // Deleting an employee is spelled out separately: it also destroys their
+      // sign-in and hands their email address back, which is not what "delete a
+      // record" implies on its own.
+      const message = type === 'USER'
+        ? "Delete this employee?\n\nTheir past assessments, evidence and history are kept, but their sign-in is removed: the password is deleted and the email address is freed for someone else to use. They will not be able to log in again.\n\nThis cannot be undone."
+        : "Are you sure you want to delete this record? This action cannot be undone.";
+      if (window.confirm(message)) {
+          if (type === 'USER') {
+              const result = await dataService.removeUser(id);
+              if (result && !result.loginReleased) {
+                  window.alert(
+                      `The employee was removed, but their sign-in could not be released — ${result.email ?? 'their email address'} is still in use and they can still log in.\n\nCheck your connection and tell your system administrator, who can release it on the server.`,
+                  );
+              }
+          }
           if (type === 'JOB') await dataService.removeJobProfile(id);
           if (type === 'SKILL') await dataService.removeSkill(id);
           if (type === 'DEPT') await dataService.removeDepartment(id);

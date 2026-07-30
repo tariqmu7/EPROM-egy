@@ -65,6 +65,10 @@ beforeAll(async () => {
   await query(
     'CREATE TABLE tombstones (collection TEXT NOT NULL, id TEXT NOT NULL, deleted_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (collection, id))',
   );
+  // Migration 001; /auth/admin/release-login clears any outstanding token here.
+  await query(
+    'CREATE TABLE password_reset_tokens (token TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires_at TIMESTAMPTZ NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now())',
+  );
 
   await seedUser(ADMIN, 'ADMIN', 'admin-pass');
   await seedUser(EMP, 'EMPLOYEE', 'emp-pass', { managerId: 'mgr-x', orgLevel: 'JP' });
@@ -642,5 +646,105 @@ describe('admin password reset → forced change', () => {
       .set('Authorization', `Bearer ${after.body.token}`)
       .send({ newPassword: 'another-new-pw' });
     expect(noCurrent.status).toBe(403);
+  });
+});
+
+describe('self-registration is off by default', () => {
+  // No ALLOW_SIGNUP in this suite's env, so config falls back to its default.
+  // This test is the guard on that default: flip it back to `true` in config.ts
+  // and the API starts letting strangers claim email addresses again.
+  it('rejects a sign-up when the flag is unset', async () => {
+    const res = await request(app)
+      .post('/auth/signup')
+      .send({ email: 'walk-in@eprom.local', password: 'longenough1', name: 'Walk In' });
+    expect(res.status).toBe(403);
+    // No half-made account is left behind.
+    const { rows } = await query("SELECT id FROM users WHERE lower(data->>'email') = $1", ['walk-in@eprom.local']);
+    expect(rows.length).toBe(0);
+  });
+
+  it('advertises the setting to the login screen', async () => {
+    const res = await request(app).get('/auth/config');
+    expect(res.status).toBe(200);
+    expect(res.body.allowSignup).toBe(false);
+  });
+});
+
+describe('deleting an employee releases their login', () => {
+  const LEAVER = { id: 'leaver-1', email: 'leaver@eprom.local' };
+
+  it('is admin-only', async () => {
+    await seedUser(LEAVER, 'EMPLOYEE', 'leaver-pass');
+    const otherTok = await login(OTHER.email, 'other-pass');
+    const res = await request(app)
+      .post('/auth/admin/release-login')
+      .set('Authorization', `Bearer ${otherTok}`)
+      .send({ userId: LEAVER.id });
+    expect(res.status).toBe(403);
+  });
+
+  it('refuses to release the caller\'s own login', async () => {
+    const adminTok = await login(ADMIN.email, 'admin-pass');
+    const res = await request(app)
+      .post('/auth/admin/release-login')
+      .set('Authorization', `Bearer ${adminTok}`)
+      .send({ userId: ADMIN.id });
+    expect(res.status).toBe(400);
+  });
+
+  it('destroys the password, frees the email, and keeps the archived profile', async () => {
+    const adminTok = await login(ADMIN.email, 'admin-pass');
+    // An outstanding reset token must not survive as a back door.
+    await query('INSERT INTO password_reset_tokens (token, user_id, expires_at) VALUES ($1, $2, $3)', [
+      'tok-leaver',
+      LEAVER.id,
+      new Date(Date.now() + 3600_000).toISOString(),
+    ]);
+    // What the UI does first: archive the profile.
+    const before = (await query('SELECT data FROM users WHERE id = $1', [LEAVER.id])).rows[0].data;
+    await query('UPDATE users SET data = $2 WHERE id = $1', [LEAVER.id, { ...before, isArchived: true }]);
+
+    const res = await request(app)
+      .post('/auth/admin/release-login')
+      .set('Authorization', `Bearer ${adminTok}`)
+      .send({ userId: LEAVER.id });
+    expect(res.status).toBe(200);
+    expect(res.body.emailReleased).toBe(LEAVER.email);
+
+    // Password and token are gone.
+    expect((await query('SELECT 1 FROM auth_credentials WHERE user_id = $1', [LEAVER.id])).rows.length).toBe(0);
+    expect((await query('SELECT 1 FROM password_reset_tokens WHERE user_id = $1', [LEAVER.id])).rows.length).toBe(0);
+
+    // The profile survives for history, but no longer holds the address — the
+    // KEY is removed, not blanked, so the unique email index lets it be reissued.
+    const row = (await query('SELECT data FROM users WHERE id = $1', [LEAVER.id])).rows[0];
+    expect(row).toBeTruthy();
+    expect(row.data.email).toBeUndefined();
+    expect(row.data.archivedEmail).toBe(LEAVER.email);
+    expect(row.data.isArchived).toBe(true);
+    expect((await query("SELECT id FROM users WHERE lower(data->>'email') = $1", [LEAVER.email])).rows.length).toBe(0);
+
+    // They cannot sign in, with the old password or any other.
+    const relogin = await request(app).post('/auth/login').send({ email: LEAVER.email, password: 'leaver-pass' });
+    expect(relogin.status).toBe(401);
+  });
+
+  it('is idempotent — a second release is a no-op, not an error', async () => {
+    const adminTok = await login(ADMIN.email, 'admin-pass');
+    const res = await request(app)
+      .post('/auth/admin/release-login')
+      .set('Authorization', `Bearer ${adminTok}`)
+      .send({ userId: LEAVER.id });
+    expect(res.status).toBe(200);
+    expect(res.body.emailReleased).toBe(null);
+  });
+
+  it('blocks login for an archived profile whose credential survived', async () => {
+    // Pre-existing state: archived before this feature shipped, credential intact.
+    const legacy = { id: 'legacy-archived', email: 'legacy@eprom.local' };
+    await seedUser(legacy, 'EMPLOYEE', 'legacy-pass', { isArchived: true });
+    const res = await request(app).post('/auth/login').send({ email: legacy.email, password: 'legacy-pass' });
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('account_not_active');
   });
 });

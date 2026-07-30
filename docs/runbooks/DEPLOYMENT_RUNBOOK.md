@@ -74,7 +74,11 @@ PostgreSQL) to the company Linux VM via **Docker Compose**. Run each step in seq
      ```
    - `BOOTSTRAP_ADMIN_EMAIL` — the email that gets admin access on first run.
    - `CORS_ORIGINS` — the DNS name(s) users will hit, e.g. `https://cms.eprom.local`.
-   - `ALLOW_SIGNUP` — `true` to let users self-register (creates PENDING accounts).
+   - `ALLOW_SIGNUP` — defaults to `false`: self-registration is off and accounts are
+     created by an admin (Admin → Employees → add user + Reset Password issues a
+     temporary one). Set to `true` only if you want users to self-register (creates
+     PENDING accounts needing admin approval). `BOOTSTRAP_ADMIN_EMAIL` can always
+     sign up, even when the flag is off, so a fresh install can be claimed.
 
    > This file holds secrets and is **git-ignored** — never commit it.
 

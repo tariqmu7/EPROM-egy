@@ -20,7 +20,7 @@ import { ChangePasswordForm } from './components/ChangePasswordForm';
 import { dataService, isBootstrapAdminEmail } from './services/store';
 // Note: OnlineAssessments, ManagerialInterviews, EvidencePortal, BehavioralAssessment
 // are rendered via EvaluationsHub (lazy-loaded above) — no direct import needed.
-import { compatAuth as auth, onAuthStateChanged } from './services/auth-compat';
+import { compatAuth as auth, onAuthStateChanged, fetchAuthConfig } from './services/auth-compat';
 import { User, Role } from './types';
 import { ShieldCheck, Loader2, Lock, User as UserIcon, CheckCircle, ArrowRight, Activity, X, ArrowLeft, Clock } from 'lucide-react';
 
@@ -34,6 +34,9 @@ const App: React.FC = () => {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [signupSuccess, setSignupSuccess] = useState(false);
+  // Self-registration is admin-controlled (ALLOW_SIGNUP on the API). Assume off
+  // until the server says otherwise, so the sign-up link never flashes.
+  const [allowSignup, setAllowSignup] = useState(false);
   const [pendingApproval, setPendingApproval] = useState(false);
   const [mustChangePassword, setMustChangePassword] = useState(false);
   
@@ -96,6 +99,17 @@ const App: React.FC = () => {
       mounted = false;
       unsubscribe();
     };
+  }, []);
+
+  // Ask the API once whether self-registration is enabled.
+  useEffect(() => {
+    let mounted = true;
+    fetchAuthConfig().then((cfg) => {
+      if (!mounted) return;
+      setAllowSignup(cfg.allowSignup);
+      if (!cfg.allowSignup) setIsLoginMode(true);
+    });
+    return () => { mounted = false; };
   }, []);
 
   const handleAuth = useCallback(async (e: React.FormEvent) => {
@@ -490,12 +504,12 @@ const App: React.FC = () => {
                             >
                                 Back to Sign in
                             </button>
-                        ) : (
+                        ) : allowSignup ? (
                             <div>
                                 <span className="text-slate-700 text-sm">
                                     {isLoginMode ? "Don't have an account? " : "Already have an account? "}
                                 </span>
-                                <button 
+                                <button
                                     type="button"
                                     onClick={() => { setIsLoginMode(!isLoginMode); setError(''); setIsForgotPassword(false); }}
                                     className="text-sm text-slate-900 font-semibold hover:underline"
@@ -503,6 +517,12 @@ const App: React.FC = () => {
                                     {isLoginMode ? 'Sign up' : 'Sign in'}
                                 </button>
                             </div>
+                        ) : (
+                            /* Self-registration is off: accounts are created by an admin,
+                               so point users there rather than at a form that can't work. */
+                            <p className="text-slate-700 text-sm">
+                                Accounts are created by your system administrator. Contact them to get access.
+                            </p>
                         )}
                     </div>
                 </form>

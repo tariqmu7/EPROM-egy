@@ -29,7 +29,10 @@ export const config = {
   bcryptRounds: Number(process.env.BCRYPT_ROUNDS ?? 12),
 
   bootstrapAdminEmail: (process.env.BOOTSTRAP_ADMIN_EMAIL ?? '').trim().toLowerCase(),
-  allowSignup: (process.env.ALLOW_SIGNUP ?? 'true') === 'true',
+  // Self-registration is OFF unless explicitly enabled. Accounts are created by
+  // an admin (Admin → Employees), who issues a temporary password. The bootstrap
+  // admin email stays exempt so a fresh install can still be claimed.
+  allowSignup: (process.env.ALLOW_SIGNUP ?? 'false') === 'true',
 };
 
 export type Config = typeof config;

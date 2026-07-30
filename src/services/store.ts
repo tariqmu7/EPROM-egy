@@ -30,6 +30,7 @@ import {
   onAuthStateChanged,
   changePassword,
   adminSetPassword,
+  releaseUserLogin,
   isPasswordResetRequired,
   compatAuth as auth,
 } from './auth-compat';
@@ -3269,7 +3270,28 @@ export class DataService {
       this.handleFirestoreError(e, OperationType.DELETE, `users/${id}`);
       throw e;
     }
-    await this.logActivity('Removed Employee', user.name);
+
+    // Deleting a person must also take their way in. The profile stays archived
+    // for history, but the credential is destroyed and the email address is
+    // freed (moved to `archivedEmail`) so it can be issued to someone else.
+    // Runs AFTER the archive commits, so a failure here leaves a deleted-but-
+    // still-signed-in account rather than a live account with no login — and it
+    // is idempotent, so re-running Delete finishes the job.
+    let loginReleased = true;
+    try {
+      await releaseUserLogin(id);
+    } catch (e) {
+      // Reported back to the caller rather than thrown: the removal itself
+      // succeeded, and throwing here would read as "the delete failed".
+      loginReleased = false;
+      console.error('[removeUser] archived but failed to release login', id, e);
+    }
+
+    await this.logActivity(
+      loginReleased ? 'Removed Employee' : 'Removed Employee (sign-in NOT released)',
+      user.name,
+    );
+    return { loginReleased, email: user.email ?? null };
   }
 
   async removeJobProfile(id: string) {

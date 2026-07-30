@@ -52,6 +52,14 @@ export function authRouter(): Router {
         return;
       }
       const data = userRow.data as Record<string, any>;
+      // A deleted (archived) employee must never get back in, even if a
+      // credential survived — e.g. a profile archived before /admin/release-login
+      // existed, or one restored from an older backup. Reported as
+      // `account_not_active` so this doesn't become an is-this-person-here probe.
+      if (data.isArchived) {
+        res.status(403).json({ error: 'account_not_active', status: 'ARCHIVED' });
+        return;
+      }
       if (data.status && data.status !== 'ACTIVE') {
         res.status(403).json({ error: 'account_not_active', status: data.status });
         return;
@@ -64,13 +72,17 @@ export function authRouter(): Router {
     }
   });
 
+  // ── PUBLIC CONFIG ─────────────────────────────────────────────────────────
+  // Lets the SPA hide the sign-up form when self-registration is off, instead of
+  // offering a form that can only ever fail with 403. The server remains the
+  // enforcement point — this is presentation only.
+  router.get('/config', (_req: Request, res: Response) => {
+    res.json({ allowSignup: config.allowSignup });
+  });
+
   // ── SIGNUP (self-registration → PENDING, needs admin approval) ─────────────
   router.post('/signup', loginLimiter, async (req: Request, res: Response, next) => {
     try {
-      if (!config.allowSignup) {
-        res.status(403).json({ error: 'signup disabled' });
-        return;
-      }
       const parsed = z
         .object({
           email: emailSchema,
@@ -84,6 +96,14 @@ export function authRouter(): Router {
         return;
       }
       const { email, password, name, profile } = parsed.data;
+
+      // Self-registration off: only the configured bootstrap admin may still
+      // claim their account (first-run / recovery), everyone else is created by
+      // an admin. Checked after parsing so the exemption can look at the email.
+      if (!config.allowSignup && (!config.bootstrapAdminEmail || email !== config.bootstrapAdminEmail)) {
+        res.status(403).json({ error: 'Self-registration is disabled. Ask your administrator for an account.' });
+        return;
+      }
 
       // A credential already means this email has finished signing up before.
       const credExists =
@@ -208,6 +228,75 @@ export function authRouter(): Router {
         [parsed.data.userId, String((target.data as any).email ?? ''), await hashPassword(parsed.data.newPassword)],
       );
       res.json({ ok: true, mustReset: true });
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // ── ADMIN: release a deleted employee's login ──────────────────────────────
+  // "Delete" in Admin → Employees ARCHIVES the profile so assessment history,
+  // evidence and org-chart references survive. That used to leave the person's
+  // sign-in behind: the credential row stayed, and the email stayed in the user
+  // document — where the unique index on lower(data->>'email') keeps the address
+  // claimed forever. So a leaver could still log in, and their address could
+  // never be reissued.
+  //
+  // This frees both, in ONE transaction:
+  //   • credential + any outstanding reset tokens are deleted → no password and
+  //     no route back in (and /login now also refuses archived profiles);
+  //   • the address moves out of `email` into `archivedEmail` → the index no
+  //     longer holds it, so the address can be used for a new account, while the
+  //     archived record still shows who it belonged to.
+  // The KEY is removed, not blanked: several archived profiles with `email: ''`
+  // would collide on that same unique index.
+  //
+  // Idempotent — safe to re-run on a profile whose login is already released.
+  router.post('/admin/release-login', authenticate, async (req: Request, res: Response, next) => {
+    try {
+      if (!isAdmin(req.user!)) {
+        res.status(403).json({ error: 'admin only' });
+        return;
+      }
+      const parsed = z.object({ userId: z.string().min(1) }).safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: 'userId required' });
+        return;
+      }
+      const { userId } = parsed.data;
+      // An admin releasing their own login would lock themselves out of the
+      // system they'd need in order to undo it.
+      if (userId === req.user!.id) {
+        res.status(400).json({ error: 'cannot release your own login' });
+        return;
+      }
+      const target = (await query('SELECT id FROM users WHERE id = $1', [userId])).rows[0];
+      if (!target) {
+        res.status(404).json({ error: 'user not found' });
+        return;
+      }
+
+      const freedEmail = await withTransaction(async (tx) => {
+        await tx('DELETE FROM auth_credentials WHERE user_id = $1', [userId]);
+        await tx('DELETE FROM password_reset_tokens WHERE user_id = $1', [userId]);
+        // Read-modify-write under a row lock rather than jsonb surgery in SQL:
+        // the document is the app's shape, and this keeps the key removal
+        // obvious (and portable to the pg-mem test harness).
+        const row = (await tx('SELECT data FROM users WHERE id = $1 FOR UPDATE', [userId])).rows[0];
+        const data = { ...((row?.data ?? {}) as Record<string, any>) };
+        const currentEmail = typeof data.email === 'string' && data.email ? data.email : null;
+        if (currentEmail) {
+          delete data.email;
+          data.archivedEmail = currentEmail;
+          await tx(
+            `UPDATE users SET data = $2, version = version + 1, updated_at = now(), updated_by = $3 WHERE id = $1`,
+            [userId, data, req.user!.id],
+          );
+        }
+        // Null on a repeat call — nothing was left to free.
+        return currentEmail;
+      });
+
+      res.json({ ok: true, emailReleased: freedEmail });
     } catch (e) {
       next(e);
     }

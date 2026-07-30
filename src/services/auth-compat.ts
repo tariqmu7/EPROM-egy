@@ -121,6 +121,26 @@ export async function adminSetPassword(userId: string, newPassword: string): Pro
   await api.post('/auth/admin/set-password', { userId, newPassword });
 }
 
+// ADMIN-only: give a deleted employee's sign-in back to the pool. Deletes their
+// password and frees their email address for reuse; the archived profile itself
+// stays for history. Called by DataService.removeUser after the archive commits.
+export async function releaseUserLogin(userId: string): Promise<string | null> {
+  const res = await api.post<{ emailReleased?: string | null }>('/auth/admin/release-login', { userId });
+  return res?.emailReleased ?? null;
+}
+
+// Public server config for the login screen. Only tells the UI whether to offer
+// the sign-up form; the server still enforces the rule on /auth/signup. Falls
+// back to "off" if the API can't be reached — never advertise a form that fails.
+export async function fetchAuthConfig(): Promise<{ allowSignup: boolean }> {
+  try {
+    const res = await api.get<{ allowSignup?: boolean }>('/auth/config');
+    return { allowSignup: !!res?.allowSignup };
+  } catch {
+    return { allowSignup: false };
+  }
+}
+
 // Signs up a PENDING user. Does NOT establish a session (mirrors the app's
 // pending-approval flow). Returns the new user id as `uid` for store.ts.
 export async function createUserWithEmailAndPassword(

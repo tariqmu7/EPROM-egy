@@ -36,7 +36,7 @@ services:
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-12h}
       BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
       BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL}
-      ALLOW_SIGNUP: ${ALLOW_SIGNUP:-true}
+      ALLOW_SIGNUP: ${ALLOW_SIGNUP:-false}
       CORS_ORIGINS: ${CORS_ORIGINS}
     depends_on:
       postgres:
