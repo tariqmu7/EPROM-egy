@@ -24,9 +24,13 @@ import type { CollectionName } from './registry.js';
 // asserted against the migration CHECK constraints in contracts.test.ts).
 import { ROLE, USER_STATUS, ORG_LEVEL, WORK_EXPERIENCE_STATUS } from '../domain/enums.js';
 
-// A non-empty string, when the field is present. Used for owner/reference ids
-// whose wrong type would break authz scoping or joins.
-const id = z.string().min(1);
+// A reference id, when the field is present. Must be a string; the EMPTY STRING
+// is accepted and means "not set" — the frontend forms write `''` for cleared
+// selects (e.g. a user with no job profile / department yet), so rejecting it
+// would 422 every legitimate create. What this still blocks is a non-string
+// (number/object/array) id, which is what would actually break authz scoping
+// or joins.
+const id = z.string();
 
 // Base every document shares: an object with an optional string `id`, allowing
 // any additional keys. Per-collection schemas `.extend()` this and stay

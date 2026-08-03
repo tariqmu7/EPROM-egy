@@ -31,12 +31,23 @@ export function clearToken(): void {
   }
 }
 
+// Pull the human-readable part out of the API's error envelope
+// (`{ error, message?, issues? }`), if there is one.
+function detailOf(body: unknown): string {
+  if (!body || typeof body !== 'object') return '';
+  const b = body as { error?: unknown; message?: unknown };
+  const parts = [b.error, b.message].filter((p): p is string => typeof p === 'string' && p.length > 0);
+  return parts.join(' — ');
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
     public body: unknown,
   ) {
-    super(`API ${status}`);
+    // Surface the server's own explanation. Without it every rejection reads as
+    // a bare "API 422" in the console and the offending field stays invisible.
+    super(`API ${status}${detailOf(body) ? `: ${detailOf(body)}` : ''}`);
     this.name = 'ApiError';
   }
 }
