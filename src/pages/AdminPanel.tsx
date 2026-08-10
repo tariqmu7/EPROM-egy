@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef, useLayoutEffe
 import { dataService } from '../services/store';
 import { useStoreData } from '../hooks/useStoreData';
 import { useSessionState } from '../hooks/useSessionState';
-import { User, Role, JobProfile, Skill, JobProfileSkill, OrgLevel, ORG_LEVEL_LABELS, Department, DepartmentType, DEPT_TYPE_TO_ORG_LEVEL, ORG_HIERARCHY_ORDER, PROFICIENCY_LABELS, Project, EvaluationQuestion, SkillAssessmentMethod, DEFAULT_RATER_WEIGHTS, ASSESSMENT_METHOD_LABELS, ASSESSMENT_FREQUENCY_LABELS } from '../types';
+import { User, Role, JobProfile, Skill, JobProfileSkill, OrgLevel, ORG_LEVEL_LABELS, Department, DepartmentType, DEPT_TYPE_TO_ORG_LEVEL, ORG_HIERARCHY_ORDER, PROFICIENCY_LABELS, Project, EvaluationQuestion, SkillAssessmentMethod, DEFAULT_RATER_WEIGHTS, ASSESSMENT_METHOD_LABELS, ASSESSMENT_FREQUENCY_LABELS, SKILL_CRITICALITIES, SKILL_CRITICALITY_LABELS, SKILL_CRITICALITY_DESCRIPTIONS, SKILL_CRITICALITY_WEIGHTS, skillCriticalityOf } from '../types';
 import { PROFICIENCY_DEFINITIONS } from '../constants';
 import { Plus, Users, Briefcase, ChevronRight, CheckCircle, Shield, ShieldCheck, X, Save, Trash2, ArrowLeft, UserPlus, Building2, Search, Edit2, UserCheck, AlertCircle, Layers, BookOpen, MoreHorizontal, LayoutGrid, Activity, Eye, AlertTriangle, FileSpreadsheet, MapPin, TrendingUp, Calendar, Link2, Lock } from 'lucide-react';
 import { SearchableSelect, Option } from '../components/SearchableSelect';
@@ -10,6 +10,7 @@ import { BulkUpload } from '../components/BulkUpload';
 import { AdminAnalytics } from './AdminAnalytics';
 import { AnnualAppraisalAdmin } from './AnnualAppraisalAdmin';
 import { AssessmentMethodEditor } from '../components/AssessmentMethodEditor';
+import { CriticalityBadge } from '../components/CriticalityBadge';
 import { AuditTrail } from './AuditTrail';
 
 // --- Reusable Form Wrapper ---
@@ -1260,6 +1261,9 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
        name: formData.name,
        category: formData.category,
        subcategory: formData.subcategory,
+       // Always written explicitly: a skill saved without a choice is STANDARD,
+       // never "unset", so nothing ranks on an absent field.
+       criticality: skillCriticalityOf(formData.criticality),
        levels: formData.levels as any,
        status: 'APPROVED',
        // How AND when this skill is assessed now lives inline on the skill.
@@ -1334,8 +1338,43 @@ const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill) => vo
               placeholder="Select Category..."
             />
          </div>
+         {/* Criticality — the one judgement the maths cannot make. It never
+             changes a score; it decides which gap is trained first. */}
+         <div className="md:col-span-2">
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+               Criticality — how much a gap on this skill matters
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+               {SKILL_CRITICALITIES.map(level => {
+                  const selected = skillCriticalityOf(formData.criticality) === level;
+                  return (
+                    <button
+                      key={level}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, criticality: level })}
+                      className={`text-left p-3 border transition-all ${selected
+                        ? 'border-slate-900 bg-slate-900 text-white'
+                        : 'border-slate-300 bg-white text-slate-700 hover:border-slate-500'}`}
+                    >
+                      <span className="block text-[11px] font-black uppercase tracking-wider">
+                        {SKILL_CRITICALITY_LABELS[level]}
+                      </span>
+                      <span className={`block text-[10px] mt-1 leading-snug ${selected ? 'text-slate-200' : 'text-slate-500'}`}>
+                        {SKILL_CRITICALITY_DESCRIPTIONS[level]}
+                      </span>
+                      <span className={`block text-[9px] mt-1 font-bold ${selected ? 'text-slate-300' : 'text-slate-400'}`}>
+                        Gap weight ×{SKILL_CRITICALITY_WEIGHTS[level]}
+                      </span>
+                    </button>
+                  );
+               })}
+            </div>
+            <p className="text-[10px] text-slate-500 mt-2">
+               Used to rank training needs and individual plans worst-first. It never changes anyone's score.
+            </p>
+         </div>
          <div>
-            <SearchableSelect 
+            <SearchableSelect
               label="Subcategory (Optional)"
               options={[
                 { value: 'Maintenance', label: 'Maintenance' },
@@ -3137,7 +3176,9 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
   const [errorMessage, setErrorMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
-  const [bulkType, setBulkType] = useState<'USER' | 'JOB' | 'SKILL' | 'DEPT' | 'PROJECT'>('USER');
+  // COURSE has no form here — the catalogue is its own page (TrainingCatalogue);
+  // the overview card only offers its bulk import.
+  const [bulkType, setBulkType] = useState<'USER' | 'JOB' | 'SKILL' | 'DEPT' | 'PROJECT' | 'COURSE'>('USER');
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -3181,6 +3222,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
   const skills = useMemo(() => dataService.getAllSkills(), [refreshKey, storeVersion]);
   const depts = useMemo(() => dataService.getAllDepartments(), [refreshKey, storeVersion]);
   const projects = useMemo(() => dataService.getAllProjects(), [refreshKey, storeVersion]);
+  const courses = useMemo(() => dataService.getAllTrainingCourses(), [refreshKey, storeVersion]);
   const logs = useMemo(() => dataService.getSystemLogs(), [refreshKey, storeVersion]);
 
   const hqProjectId = useMemo(() => {
@@ -3571,6 +3613,37 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                     <div className="h-1 w-full bg-blue-700 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></div>
                 </div>
 
+                {/* The catalogue is what turns a detected gap into a named course. */}
+                <div onClick={() => onNavigate('admin-courses')} className="bg-white rounded-none cursor-pointer border border-slate-300 hover: transition-all group overflow-hidden text-left">
+                     <div className="p-6">
+                        <div className="flex justify-between items-start mb-4">
+                             <div className="w-12 h-12 bg-slate-50 text-slate-700 rounded-sm flex items-center justify-center group-hover:bg-slate-600 group-hover:text-white transition-colors">
+                                <BookOpen size={24} />
+                            </div>
+                             <span className="text-xs font-bold bg-slate-100 text-slate-700 px-2 py-1 rounded-none uppercase">Courses</span>
+                        </div>
+                        <h3 className="font-bold text-slate-900 text-lg">Training Catalogue</h3>
+                        <p className="text-sm text-slate-700 mt-1">Courses linked to skills</p>
+
+                        <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
+                            <span className="text-2xl font-bold text-slate-900">{courses.length}</span>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); setBulkType('COURSE'); setShowBulkUpload(true); }}
+                                    className="p-2 bg-slate-50 hover:bg-slate-100 text-blue-700 rounded-sm border border-slate-200 transition-colors"
+                                    title="Bulk Upload Training Courses"
+                                >
+                                    <FileSpreadsheet size={16} />
+                                </button>
+                                <span className="text-xs font-semibold text-slate-700 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                                    Manage <ChevronRight size={14} />
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="h-1 w-full bg-slate-600 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></div>
+                </div>
+
                 <div className="lg:col-span-4 bg-gradient-to-br from-slate-900 to-slate-800 rounded-none  p-8 text-white relative overflow-hidden">
                     <div className="absolute top-0 right-0 -mt-10 -mr-10 h-64 w-64 rounded-none bg-blue-800/10 blur-3xl"></div>
                     <div className="relative z-10">
@@ -3786,7 +3859,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                        <thead className="bg-slate-50 text-slate-700 font-bold text-xs uppercase tracking-wider border-b border-slate-300">
                            <tr>
                                {view === 'USERS' && <><th className="p-4 pl-6">Employee</th><th className="p-4">Role & Dept</th><th className="p-4">Level</th><th className="p-4">Status</th></>}
-                               {view === 'SKILLS' && <><th className="p-4 pl-6">Identifier</th><th className="p-4">Skill Name</th><th className="p-4">Category</th><th className="p-4">Definition</th><th className="p-4">Status</th></>}
+                               {view === 'SKILLS' && <><th className="p-4 pl-6">Identifier</th><th className="p-4">Skill Name</th><th className="p-4">Category</th><th className="p-4">Criticality</th><th className="p-4">Definition</th><th className="p-4">Status</th></>}
                                <th className="p-4 text-right pr-6">Actions</th>
                            </tr>
                        </thead>
@@ -3860,6 +3933,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                                    <td className="p-4">
                                        <span className="px-2 py-1 bg-slate-50 text-slate-900 border border-slate-300 rounded-none text-[10px] font-bold uppercase tracking-wide">{skill.category}</span>
                                    </td>
+                                   <td className="p-4"><CriticalityBadge criticality={skill.criticality} /></td>
                                    <td className="p-4 text-slate-700 truncate max-w-xs text-xs">{dataService.getSkillAssessmentQuestion(skill.id) || '-'}</td>
                                    <td className="p-4">
                                        {skill.status === 'PENDING' ? (

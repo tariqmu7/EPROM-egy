@@ -5,7 +5,8 @@ import { User, Evidence, WorkExperience, PROFICIENCY_LABELS, EMPLOYMENT_TYPE_LAB
 import {
   CheckCircle, XCircle, FileText, Download, Eye, Clock, History,
   AlertTriangle, ShieldCheck, Users, ChevronRight, MessageSquare,
-  Award, Layers, ExternalLink, X, Calendar, Hash, Link2, Building2, Sparkles
+  Award, Layers, ExternalLink, X, Calendar, Hash, Link2, Building2, Sparkles,
+  Target, TrendingUp
 } from 'lucide-react';
 
 const CERT_STATUS_LABEL: Record<string, { label: string; className: string }> = {
@@ -24,7 +25,7 @@ const STATUS_PILL: Record<string, string> = {
 
 // ── main component ────────────────────────────────────────────────────────────
 
-type MainTab = 'EVIDENCE' | 'CERTIFICATES' | 'EXPERIENCE';
+type MainTab = 'EVIDENCE' | 'CERTIFICATES' | 'EXPERIENCE' | 'DEVELOPMENT';
 type SubTab  = 'PENDING' | 'HISTORY';
 
 export const SupervisorApproval: React.FC<{ currentUser: User }> = ({ currentUser }) => {
@@ -48,6 +49,10 @@ export const SupervisorApproval: React.FC<{ currentUser: User }> = ({ currentUse
   const [selectedExperience, setSelectedExperience] = useState<WorkExperience | null>(null);
   const [experienceLevels, setExperienceLevels] = useState<Record<string, number>>({});
   const [experienceComment, setExperienceComment] = useState('');
+
+  // Development-plan sign-off state (which item is being verified + the note).
+  const [signOffTarget, setSignOffTarget] = useState<{ planId: string; itemId: string } | null>(null);
+  const [signOffComment, setSignOffComment] = useState('');
 
   const storeVersion = useStoreData();
 
@@ -102,6 +107,15 @@ export const SupervisorApproval: React.FC<{ currentUser: User }> = ({ currentUse
   );
 
   const activeExperienceList = subTab === 'PENDING' ? pendingExperiences : historyExperiences;
+
+  // ── Development plans ────────────────────────────────────────────────────────
+  // Items the employee has marked complete and that nobody has verified yet.
+  // Signing one off re-reads the current score and stores it on the item, which
+  // is what turns "we recommended training" into "the level moved".
+  const pendingSignOffs = useMemo(
+    () => dataService.getPendingDevelopmentSignOffs(currentUser.id),
+    [currentUser.id, refreshKey, storeVersion],
+  );
 
   // ── Certificates ─────────────────────────────────────────────────────────────
 
@@ -488,11 +502,12 @@ export const SupervisorApproval: React.FC<{ currentUser: User }> = ({ currentUse
       <div className="flex border-b border-slate-300 bg-white">
         {([['EVIDENCE', 'Evidence Review', FileText, pendingEvidences.length],
            ['CERTIFICATES', 'Certificate Approvals', Award, pendingCertificates.length],
-           ['EXPERIENCE', 'Work Experience', Building2, pendingExperiences.length]] as const).map(
+           ['EXPERIENCE', 'Work Experience', Building2, pendingExperiences.length],
+           ['DEVELOPMENT', 'Development Sign-Off', Target, pendingSignOffs.length]] as const).map(
           ([key, label, Icon, count]) => (
             <button
               key={key}
-              onClick={() => { setMainTab(key as MainTab); setSubTab('PENDING'); setSelectedEvidence(null); setSelectedExperience(null); }}
+              onClick={() => { setMainTab(key as MainTab); setSubTab('PENDING'); setSelectedEvidence(null); setSelectedExperience(null); setSignOffTarget(null); }}
               className={`flex items-center gap-2 px-6 py-3 text-sm font-bold border-b-2 transition-colors ${
                 mainTab === key
                   ? 'border-slate-800 text-slate-900'
@@ -803,6 +818,126 @@ export const SupervisorApproval: React.FC<{ currentUser: User }> = ({ currentUse
       )}
 
       {/* ── CERTIFICATES TAB ── */}
+      {/* ── DEVELOPMENT SIGN-OFF TAB ── */}
+      {mainTab === 'DEVELOPMENT' && (
+        <div className="bg-white border border-slate-300">
+          <div className="p-5 border-b border-slate-200 bg-slate-50">
+            <h3 className="text-sm font-black uppercase tracking-tight text-slate-900 flex items-center gap-2">
+              <Target size={16} /> Development Items Awaiting Sign-Off
+            </h3>
+            <p className="text-[11px] text-slate-500 mt-1">
+              An employee has marked these complete. Signing one off records the level measured today against the
+              level frozen when the plan was written — that pair is the only honest evidence the training worked.
+            </p>
+          </div>
+
+          {pendingSignOffs.length === 0 ? (
+            <div className="p-10 text-center text-slate-500 flex flex-col items-center">
+              <CheckCircle size={32} className="mb-3 text-emerald-400" />
+              <p className="text-sm">Nothing waiting on you.</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {pendingSignOffs.map(({ plan, item, employee }) => {
+                const current = dataService.getUserSkillScore(plan.userId, item.skillId);
+                const moved = current - item.levelAtPlanning;
+                const isTarget = signOffTarget?.planId === plan.id && signOffTarget?.itemId === item.id;
+                return (
+                  <div key={`${plan.id}:${item.id}`} className="p-5">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-bold text-slate-900">{employee?.name || plan.userId}</span>
+                          <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{plan.title}</span>
+                        </div>
+                        <h5 className="text-sm font-black uppercase tracking-tight text-slate-800 mt-1">{item.skillName}</h5>
+                        <div className="flex flex-wrap items-center gap-2 mt-2 text-[11px]">
+                          <span className="px-2 py-0.5 bg-slate-100 text-slate-600 font-bold">
+                            At planning: L{item.levelAtPlanning}
+                          </span>
+                          <span className="text-slate-400">→</span>
+                          <span className={`px-2 py-0.5 font-bold ${moved > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                            Now: L{current}{moved !== 0 && ` (${moved > 0 ? '+' : ''}${moved})`}
+                          </span>
+                          <span className="text-slate-400">of</span>
+                          <span className="px-2 py-0.5 bg-slate-900 text-white font-bold">Required L{item.requiredLevel}</span>
+                          {moved <= 0 && (
+                            <span className="text-[10px] font-bold uppercase text-amber-600 flex items-center gap-1">
+                              <AlertTriangle size={11} /> No measured change yet
+                            </span>
+                          )}
+                          {moved > 0 && (
+                            <span className="text-[10px] font-bold uppercase text-emerald-600 flex items-center gap-1">
+                              <TrendingUp size={11} /> Improved
+                            </span>
+                          )}
+                        </div>
+                        {item.completionNote && (
+                          <p className="text-[11px] text-slate-600 mt-2 p-2 bg-slate-50 border border-slate-100">
+                            <span className="font-bold uppercase text-[9px] text-slate-400">Employee note: </span>
+                            {item.completionNote}
+                          </p>
+                        )}
+                        <p className="text-[10px] text-slate-400 mt-2">
+                          Completed {item.completedAt ? new Date(item.completedAt).toLocaleDateString() : '—'}
+                          {item.courseTitle && ` · ${item.courseTitle}`}
+                        </p>
+                      </div>
+
+                      {!isTarget && (
+                        <button
+                          onClick={() => { setSignOffTarget({ planId: plan.id, itemId: item.id }); setSignOffComment(''); }}
+                          className="flex items-center gap-1 text-[10px] font-black uppercase px-3 py-2 bg-blue-600 text-white hover:bg-blue-700"
+                        >
+                          <ShieldCheck size={12} /> Sign Off
+                        </button>
+                      )}
+                    </div>
+
+                    {isTarget && (
+                      <div className="mt-3 p-3 bg-blue-50/60 border border-blue-200">
+                        <label className="text-[10px] font-black uppercase text-blue-700">Supervisor comment (optional)</label>
+                        <textarea
+                          rows={2}
+                          value={signOffComment}
+                          onChange={e => setSignOffComment(e.target.value)}
+                          className="w-full mt-1 text-xs border border-blue-200 p-2"
+                          placeholder="What you verified, and anything still outstanding."
+                        />
+                        <div className="flex justify-end gap-2 mt-2">
+                          <button
+                            onClick={() => setSignOffTarget(null)}
+                            className="text-[10px] font-black uppercase px-3 py-1.5 border border-slate-300 text-slate-600 bg-white"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            disabled={isProcessing}
+                            onClick={async () => {
+                              setIsProcessing(true);
+                              try {
+                                await dataService.signOffDevelopmentPlanItem(plan.id, item.id, currentUser.id, signOffComment);
+                                setSignOffTarget(null);
+                                setRefreshKey(k => k + 1);
+                              } finally {
+                                setIsProcessing(false);
+                              }
+                            }}
+                            className="text-[10px] font-black uppercase px-3 py-1.5 bg-blue-600 text-white disabled:opacity-50"
+                          >
+                            {isProcessing ? 'Saving…' : 'Confirm Sign-Off'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {mainTab === 'CERTIFICATES' && (
         <div>
           {/* sub tabs */}

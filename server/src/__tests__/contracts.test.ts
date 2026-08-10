@@ -15,6 +15,7 @@ import {
   ORG_LEVEL,
   ORG_MANAGER_LEVELS,
   WORK_EXPERIENCE_STATUS,
+  DEVELOPMENT_PLAN_STATUS,
 } from '../domain/enums.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -59,6 +60,10 @@ describe('enum ↔ migration CHECK parity', () => {
 
   it('work-experience statuses match (005)', () => {
     expect(sorted(inValuesFor('chk_workexperiences_status'))).toEqual(sorted(WORK_EXPERIENCE_STATUS));
+  });
+
+  it('development-plan statuses match (006)', () => {
+    expect(sorted(inValuesFor('chk_developmentplans_status'))).toEqual(sorted(DEVELOPMENT_PLAN_STATUS));
   });
 });
 

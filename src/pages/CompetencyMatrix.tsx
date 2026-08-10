@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { dataService } from '../services/store';
 import { useStoreData } from '../hooks/useStoreData';
 import { User, Role } from '../types';
-import { CheckCircle, AlertTriangle, Clock, Briefcase } from 'lucide-react';
+import { CheckCircle, AlertTriangle, Clock, Briefcase, HelpCircle } from 'lucide-react';
 
 export const CompetencyMatrix: React.FC<{ currentUser: User }> = ({ currentUser }) => {
   const [selectedDeptId, setSelectedDeptId] = useState<string>('ALL');
@@ -84,9 +84,25 @@ export const CompetencyMatrix: React.FC<{ currentUser: User }> = ({ currentUser 
     return keys;
   }, [storeVersion]); // recomputed whenever a Firestore snapshot lands
 
+  // ── Never-assessed set: "userId::skillId" with no score of any kind. Kept
+  //    apart from GAP so the matrix never paints an unmeasured skill red — an
+  //    unknown is not a failure (see dataService.getUserCoverage).
+  const unknownKeys = useMemo(() => {
+    const keys = new Set<string>();
+    relevantUsers.forEach((user: User) => {
+      relevantSkills.forEach(skill => {
+        if (dataService.getSkillScoreSource(user.id, skill.id) === 'NONE') {
+          keys.add(`${user.id}::${skill.id}`);
+        }
+      });
+    });
+    return keys;
+  }, [relevantUsers, relevantSkills, storeVersion]);
+
   // ── Cell status (O(1) using pre-computed maps) ───────────────────────────
-  const getCellStatus = (userId: string, skillId: string, requiredLevel: number): 'VERIFIED' | 'PENDING' | 'GAP' | 'PROVISIONAL' => {
+  const getCellStatus = (userId: string, skillId: string, requiredLevel: number): 'VERIFIED' | 'PENDING' | 'GAP' | 'PROVISIONAL' | 'UNKNOWN' => {
     if (pendingEvidenceKeys.has(`${userId}::${skillId}`)) return 'PENDING';
+    if (unknownKeys.has(`${userId}::${skillId}`)) return 'UNKNOWN';
     const score = scoreMap[userId]?.[skillId] ?? 0;
     if (score < requiredLevel) return 'GAP';
     // Meets the requirement — but on unverified experience alone, so it is not
@@ -115,16 +131,21 @@ export const CompetencyMatrix: React.FC<{ currentUser: User }> = ({ currentUser 
     let hasGap         = false;
     let hasPending     = false;
     let hasProvisional = false;
+    let unknownCount   = 0;
 
     for (const req of relevantReqs) {
       const status = getCellStatus(user.id, req.skillId, req.requiredLevel);
       if (status === 'GAP')         hasGap         = true;
       if (status === 'PENDING')     hasPending     = true;
       if (status === 'PROVISIONAL') hasProvisional = true;
+      if (status === 'UNKNOWN')     unknownCount++;
     }
 
     if (hasGap)         return 'GAP';
     if (hasPending)     return 'PENDING';
+    // Anything never assessed keeps the column honest: it is not verified, and
+    // it is not a gap either — the measurement simply hasn't happened.
+    if (unknownCount > 0) return 'UNKNOWN';
     // One unmeasured skill is enough to stop the column claiming full assurance.
     if (hasProvisional) return 'PROVISIONAL';
     return 'VERIFIED';
@@ -213,6 +234,10 @@ export const CompetencyMatrix: React.FC<{ currentUser: User }> = ({ currentUser 
                         bgColor = 'bg-slate-100 text-slate-800 border-slate-200';
                         icon    = <Clock size={14} />;
                         label   = 'Pending Review';
+                      } else if (status === 'UNKNOWN') {
+                        bgColor = 'bg-white text-slate-500 border-dashed border-slate-300';
+                        icon    = <HelpCircle size={14} />;
+                        label   = 'Not measured';
                       } else {
                         bgColor = 'bg-rose-100 text-rose-800 border-rose-200';
                         icon    = <AlertTriangle size={14} />;

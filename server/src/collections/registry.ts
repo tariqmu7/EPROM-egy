@@ -22,6 +22,7 @@ export const COLLECTIONS = {
   // registry entry without a listScope case is readable org-wide by any
   // authenticated user — see authz.ts and __tests__/api.test.ts.
   workExperiences: '"workExperiences"',
+  developmentPlans: '"developmentPlans"',
   appSettings: '"appSettings"',
 } as const;
 

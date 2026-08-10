@@ -13,6 +13,8 @@ const EvaluationsHub = lazy(() => import('./pages/EvaluationsHub').then(m => ({ 
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
 const MethodologyStandards = lazy(() => import('./pages/MethodologyStandards').then(m => ({ default: m.MethodologyStandards })));
 const WorkExperienceAdmin = lazy(() => import('./pages/WorkExperienceAdmin').then(m => ({ default: m.WorkExperienceAdmin })));
+const TrainingNeedsAnalysis = lazy(() => import('./pages/TrainingNeedsAnalysis').then(m => ({ default: m.TrainingNeedsAnalysis })));
+const TrainingCatalogue = lazy(() => import('./pages/TrainingCatalogue').then(m => ({ default: m.TrainingCatalogue })));
 import { Logo } from './components/Logo';
 import loginBg from './assets/login-bg.jpg';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -608,7 +610,7 @@ const App: React.FC = () => {
                     >
                         <ArrowLeft size={14} /> Back to Dashboard
                     </button>
-                    <EmployeeDashboard user={targetUser} readOnly />
+                    <EmployeeDashboard user={targetUser} readOnly viewer={user} />
                 </div>
             );
         }
@@ -632,6 +634,10 @@ const App: React.FC = () => {
         case 'admin-skills': return <AdminPanel view="SKILLS" onNavigate={setActiveTab} />;
         case 'admin-depts': return <AdminPanel view="DEPTS" onNavigate={setActiveTab} />;
         case 'admin-experience': return <WorkExperienceAdmin />;
+        // Training catalogue — the courses a gap can actually be answered with.
+        case 'admin-courses': return <TrainingCatalogue user={user} />;
+        // Training Needs Analysis — admins/CEO analyse any unit, managers their team.
+        case 'training-needs': return <TrainingNeedsAnalysis user={user} />;
         case 'settings': return <SettingsPage user={user} />;
         case 'methodology': return <MethodologyStandards />;
         default: return <div className="p-8 text-center text-slate-600">Section Under Construction</div>;

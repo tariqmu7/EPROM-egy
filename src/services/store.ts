@@ -1,4 +1,4 @@
-import { User, Role, JobProfile, Skill, Project, Department, Assessment, ActivityLog, ORG_HIERARCHY_ORDER, ORG_LEVEL_NUMBERS, Notification, AssessmentCycle, Nomination, IndividualTrainingPlan, TrainingRecommendation, OrgLevel, Evidence, PromotionRequirement, CareerProgressionPlan, CareerLevelProgress, TrainingCourse, ScheduledAssessment, AssessmentMethod, UserStatus, Certificate, CareerHistoryEntry, SkillLevel, EvaluationQuestion, AssessmentPlan, AssessmentInstruction, SkillAssessmentMethod, AssessmentFrequency, AssessmentAudience, JobProfileSkill, DepartmentType, DEPT_TYPE_TO_ORG_LEVEL, RaterWeights, DEFAULT_RATER_WEIGHTS, WorkExperience, WorkExperienceSkill, WorkExperienceStatus, WorkExperiencePolicy, SkillScoreSource } from '../types';
+import { User, Role, JobProfile, Skill, Project, Department, Assessment, ActivityLog, ORG_HIERARCHY_ORDER, ORG_LEVEL_NUMBERS, Notification, AssessmentCycle, Nomination, IndividualTrainingPlan, TrainingRecommendation, OrgLevel, Evidence, PromotionRequirement, CareerProgressionPlan, CareerLevelProgress, TrainingCourse, ScheduledAssessment, AssessmentMethod, UserStatus, Certificate, CareerHistoryEntry, SkillLevel, EvaluationQuestion, AssessmentPlan, AssessmentInstruction, SkillAssessmentMethod, AssessmentFrequency, AssessmentAudience, JobProfileSkill, DepartmentType, DEPT_TYPE_TO_ORG_LEVEL, RaterWeights, DEFAULT_RATER_WEIGHTS, WorkExperience, WorkExperienceSkill, WorkExperienceStatus, WorkExperiencePolicy, SkillScoreSource, CompetencyCoverage, CompetencySnapshot, OrgOverview, TrainingNeedsAnalysis, DevelopmentPlan, DevelopmentPlanItem, DevelopmentPlanStatus, DevelopmentItemStatus, DevelopmentPlanItemProgress, DevelopmentPlanProgress, SKILL_CRITICALITY_WEIGHTS, skillCriticalityOf, skillCriticalityWeight } from '../types';
 import { DEFAULT_WORK_EXPERIENCE_POLICY, suggestLevelFromYears } from '../constants/experiencePolicy';
 import {
   collection,
@@ -34,7 +34,9 @@ import {
   isPasswordResetRequired,
   compatAuth as auth,
 } from './auth-compat';
+import { api } from './api-client';
 import { localAvatar } from '../utils/localAvatar';
+import { newId } from '../utils/uuid';
 
 // Temporary password an admin hands to a locked-out user. Cryptographically
 // random; the alphabet drops look-alike characters (0/O, 1/l/I) because these
@@ -158,6 +160,43 @@ export interface FirestoreErrorInfo {
   }
 }
 
+/**
+ * Running totals behind getUserCoverage / getGroupCoverage. Kept separate from
+ * the finished CompetencyCoverage so a group total is just repeated addition.
+ */
+interface CoverageAccumulator {
+  required: number;
+  measured: number;
+  provisional: number;
+  unknown: number;
+  compliantKnown: number;
+  gapsKnown: number;
+  totalGap: number;
+}
+
+function newCoverageAccumulator(): CoverageAccumulator {
+  return { required: 0, measured: 0, provisional: 0, unknown: 0, compliantKnown: 0, gapsKnown: 0, totalGap: 0 };
+}
+
+function finalizeCoverage(acc: CoverageAccumulator): CompetencyCoverage {
+  const known = acc.measured + acc.provisional;
+  return {
+    required: acc.required,
+    measured: acc.measured,
+    provisional: acc.provisional,
+    unknown: acc.unknown,
+    known,
+    measuredPct: acc.required > 0 ? Math.round((acc.measured / acc.required) * 100) : 0,
+    knownPct: acc.required > 0 ? Math.round((known / acc.required) * 100) : 0,
+    compliantKnown: acc.compliantKnown,
+    gapsKnown: acc.gapsKnown,
+    totalGap: acc.totalGap,
+    // null, never 0 — "nothing measured" is not "0% compliant".
+    compliancePct: known > 0 ? Math.round((acc.compliantKnown / known) * 100) : null,
+    avgGap: known > 0 ? acc.totalGap / known : null,
+  };
+}
+
 export class DataService {
   private users: User[] = [];
   private jobs: JobProfile[] = [];
@@ -175,6 +214,7 @@ export class DataService {
   private assessmentInstructions: AssessmentInstruction[] = [];
   private projects: Project[] = [];
   private workExperiences: WorkExperience[] = [];
+  private developmentPlans: DevelopmentPlan[] = [];
   // Company-wide admin config, keyed by document id (e.g. 'work-experience').
   private appSettings: Record<string, any> = {};
 
@@ -193,7 +233,6 @@ export class DataService {
   
   public isInitialized = false;
   private unsubscribers: Unsubscribe[] = [];
-  private _certExpiriesChecked = false;
 
   // True for the brief window of a non-bootstrap sign-up.
   // `createUserWithEmailAndPassword` auto-signs the new user in, which would
@@ -397,6 +436,7 @@ export class DataService {
     this.assessmentInstructions = [];
     this.projects = [];
     this.workExperiences = [];
+    this.developmentPlans = [];
     this.appSettings = {};
     this.usersLoaded = false;
     this._permissionError = null;
@@ -414,7 +454,6 @@ export class DataService {
       try { unsub(); } catch { /* ignore */ } finally { clearTimeout(t); }
     });
     this.unsubscribers = [];
-    this._certExpiriesChecked = false;
   }
 
   // Resolves once the `users` listener has delivered its first snapshot for
@@ -505,14 +544,11 @@ export class DataService {
     for (const u of this.usersScopedDocs) byId.set(u.id, u);
     this.users = Array.from(byId.values());
     this.flushUserDocPathCache();
-    // A2.5: Run cert-expiry check once per login session only — running on
-    // every roster fan-in caused notification storms and redundant writes.
-    if (!this._certExpiriesChecked) {
-      this._certExpiriesChecked = true;
-      void this.checkCertificationExpiries().catch(err =>
-        console.error('rebuildUsers: certification expiry check failed', err)
-      );
-    }
+    // Certificate expiry is NO LONGER checked here. It ran in the browser, for
+    // the signed-in user only, whenever somebody happened to log in — so a
+    // certificate could expire unannounced for as long as its owner stayed away.
+    // It is now part of the server's nightly sweep (server/src/jobs/nightly.ts),
+    // which covers every employee whether they log in or not.
     this.scheduleNotify();
   }
 
@@ -902,6 +938,38 @@ export class DataService {
       );
     }
 
+    // Development Plans — identical scoping tiers to evidences / work experience
+    // above (own / subtree / full), because the server applies the same
+    // owner+manager listScope to this collection.
+    {
+      let developmentPlanQuery;
+      if (scopeToSelf && selfId) {
+        developmentPlanQuery = query(collection(db, 'developmentPlans'), where('userId', '==', selfId), limit(MAX_LISTENER_DOCS));
+      } else if (!isPrivileged && selfId && directReportIds.length > 0) {
+        const subtreeIds = [...new Set([selfId, ...directReportIds])];
+        developmentPlanQuery = query(collection(db, 'developmentPlans'), where('userId', 'in', subtreeIds), limit(MAX_LISTENER_DOCS));
+      } else {
+        developmentPlanQuery = query(collection(db, 'developmentPlans'), limit(MAX_LISTENER_DOCS));
+      }
+      this.unsubscribers.push(
+        onSnapshot(developmentPlanQuery, (snapshot) => {
+          this.developmentPlans = snapshot.docs.map(doc => {
+            const data = doc.data();
+            // `items` is written as a real JSON array (preparePayload has no
+            // stringify rule for this collection), but an ETL/legacy row could
+            // still carry it as a string and every reader maps over it.
+            const items = safeJsonField<DevelopmentPlanItem[]>(data.items, [], `developmentPlans.items (${doc.id})`);
+            return {
+              id: doc.id,
+              ...data,
+              items: Array.isArray(items) ? items : [],
+            } as DevelopmentPlan;
+          });
+          this.scheduleNotify();
+        }, this.handleError('developmentPlans'))
+      );
+    }
+
     // App Settings — company-wide admin config. Read-open, admin-write.
     // Changing the work-experience cap or bands re-values every provisional
     // score, so this clears the score cache too.
@@ -918,7 +986,18 @@ export class DataService {
     // Training Courses
     this.unsubscribers.push(
       onSnapshot(query(collection(db, 'trainingCourses'), limit(MAX_LISTENER_DOCS)), (snapshot) => {
-        this.trainingCourses = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TrainingCourse));
+        this.trainingCourses = snapshot.docs.map(doc => {
+          const data = doc.data();
+          // Legacy/ETL rows can carry this as a JSON string or be missing it
+          // entirely; every reader calls .includes() on it, so normalise once
+          // here rather than defending in each caller.
+          const linked = safeJsonField<string[]>(data.linkedSkillIds, [], `trainingCourses.linkedSkillIds (${doc.id})`);
+          return {
+            id: doc.id,
+            ...data,
+            linkedSkillIds: Array.isArray(linked) ? linked.map(String) : [],
+          } as TrainingCourse;
+        });
         this.scheduleNotify();
       }, this.handleError('trainingCourses'))
     );
@@ -1881,100 +1960,116 @@ export class DataService {
     return [...byId.values()];
   }
 
-  // Objective 1: Certification Expiry & Compliance Workflows
-  // Scoped to the signed-in user's OWN certificates only. A non-privileged
-  // viewer can only write their own `users` doc (Firestore rules), and this
-  // runs on every rebuildUsers() roster fan-in — iterating the whole roster
-  // produced permission-denied write storms and clobbered other users' docs.
-  async checkCertificationExpiries() {
-    const authUser = auth.currentUser;
-    if (!authUser) return;
+  // Certification expiry moved OFF the browser (task 5 of the analytical-engine
+  // workstream). `checkCertificationExpiries` used to live here: it re-banded
+  // ONLY the signed-in user's certificates, ONLY when they logged in, so an
+  // expiry could pass unannounced for anyone who stayed away — and it notified
+  // solely on the exact 90/60/30-day tick, which a quiet week simply skipped.
+  // The sweep in server/src/jobs/nightly.ts now re-bands every employee's
+  // certificates nightly and warns by WINDOW rather than exact day, with a
+  // per-window dedupe key so nothing is said twice.
 
-    // Resolve the viewer's own roster entry the same way getCurrentUser does:
-    // canonical `id` field first, e-mail fallback for post-migration UID drift.
-    const email = authUser.email?.toLowerCase();
-    const self = this.users.find(
-      u => u.id === authUser.uid || (!!email && u.email?.toLowerCase() === email)
-    );
-    if (!self || !self.certificates || self.certificates.length === 0) return;
+  // ─── TRAINING NEEDS ANALYSIS ─────────────────────────────────────────────
+  //
+  // Group-level answer to "what training does this unit need". Two rules make
+  // it trustworthy:
+  //   1. It rolls UP. An org unit's needs include everybody in its sub-units —
+  //      matching departmentId exactly returned nothing for a GM or a general
+  //      department, whose people all sit in sections below it.
+  //   2. It obeys "no percentage without its base". A never-assessed
+  //      requirement is an UNKNOWN (an assessment need), never a training gap.
+  //      Counting it as a full gap — as the old ITP-driven version did — turns
+  //      an unmeasured department into a fictitious training budget.
 
-    const today = new Date();
-    let userUpdated = false;
-    const updatedCerts = [...self.certificates];
-
-    for (let i = 0; i < updatedCerts.length; i++) {
-      const cert = updatedCerts[i];
-      if (!cert.expiryDate) continue;
-
-      const expiry = new Date(cert.expiryDate);
-      const diffDays = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-
-      let newStatus: 'VALID' | 'EXPIRING_SOON' | 'EXPIRED' = 'VALID';
-      if (diffDays <= 0) newStatus = 'EXPIRED';
-      else if (diffDays <= 90) newStatus = 'EXPIRING_SOON';
-
-      if (cert.renewalStatus !== newStatus) {
-        updatedCerts[i] = { ...cert, renewalStatus: newStatus };
-        userUpdated = true;
-
-        if ([90, 60, 30].includes(diffDays) || diffDays <= 0) {
-          const message = diffDays <= 0
-            ? `CRITICAL: Your certification "${cert.name}" has EXPIRED.`
-            : `Warning: Your certification "${cert.name}" expires in ${diffDays} days.`;
-
-          await this.addNotification({
-            userId: self.id,
-            title: 'Certification Renewal Alert',
-            message,
-            type: diffDays <= 0 ? 'ERROR' : 'WARNING',
-            actionLink: 'evidence-portal'
-          });
-
-          if (self.managerId) {
-            await this.addNotification({
-              userId: self.managerId,
-              title: `Compliance Alert: ${self.name}`,
-              message: `Subordinate ${self.name} has a certification requirement: ${message}`,
-              type: 'INFO',
-              actionLink: 'manager-approvals'
-            });
-          }
+  /** A department id plus every unit nested beneath it. Cycle-safe. */
+  getDepartmentSubtreeIds(departmentId: string): string[] {
+    const seen = new Set<string>([departmentId]);
+    const queue = [departmentId];
+    while (queue.length) {
+      const parent = queue.shift() as string;
+      for (const d of this.departments) {
+        if (d.parentId === parent && !seen.has(d.id)) {
+          seen.add(d.id);
+          queue.push(d.id);
         }
       }
     }
-
-    if (userUpdated) {
-      // Route through updateItem so the write resolves the real Firestore
-      // doc-path id via resolveUserDocPath() (canonical `id` != doc id
-      // post-migration) and certificates get serialized by preparePayload.
-      await this.updateItem('users', { ...self, certificates: updatedCerts });
-    }
+    return [...seen];
   }
 
-  generateDepartmentalTNA(departmentId: string) {
-    const deptUsers = this.users.filter(u => u.departmentId === departmentId);
-    const skillGaps: Record<string, { skillId: string, skillName: string, gapCount: number, totalGap: number }> = {};
-    
-    deptUsers.forEach(user => {
-      const itp = this.generateIndividualTrainingPlan(user.id);
-      if (itp) {
-        itp.recommendations.forEach(rec => {
-          if (!skillGaps[rec.skillId]) {
-            skillGaps[rec.skillId] = { skillId: rec.skillId, skillName: rec.skillName, gapCount: 0, totalGap: 0 };
-          }
-          skillGaps[rec.skillId].gapCount++;
-          skillGaps[rec.skillId].totalGap += rec.gap;
-        });
-      }
-    });
-    
-    return Object.values(skillGaps)
-      .map(gap => ({
-        ...gap,
-        averageGap: gap.totalGap / gap.gapCount,
-        priority: gap.gapCount > (deptUsers.length * 0.5) ? 'HIGH' : (gap.gapCount > (deptUsers.length * 0.2) ? 'MEDIUM' : 'LOW')
-      }))
-      .sort((a, b) => b.gapCount - a.gapCount);
+  /** Active employees sitting in a unit (and, by default, its sub-units). */
+  getDepartmentMembers(departmentId: string, includeSubUnits = true): User[] {
+    const scope = new Set(
+      includeSubUnits ? this.getDepartmentSubtreeIds(departmentId) : [departmentId]
+    );
+    return this.getAllUsers().filter(u => !!u.departmentId && scope.has(u.departmentId));
+  }
+
+  /**
+   * The TNA is now computed on the SERVER (`GET /analytics/training-needs`).
+   *
+   * It used to run here, which meant a page that wanted one department's
+   * training needs first downloaded every user, assessment, evidence and work
+   * experience in the company. The engine moved to
+   * `server/src/analytics/aggregate.ts`, on the same scoring port the monthly
+   * snapshot uses, and the browser now receives the finished rows.
+   *
+   * The two rules travelled with it and are asserted there
+   * (`server/src/__tests__/analytics.test.ts`): a never-assessed requirement is
+   * an ASSESSMENT need and never a training gap, and there is no percentage
+   * without its base.
+   *
+   * @param scope 'company', 'team' (the caller's own reporting tree), or a
+   *              department id. The server refuses a scope the caller does not
+   *              own, so this is a boundary as well as a filter.
+   */
+  async getTrainingNeeds(
+    scope: string,
+    options: { includeSubUnits?: boolean } = {},
+  ): Promise<TrainingNeedsAnalysis> {
+    const params = new URLSearchParams({ scope });
+    if (options.includeSubUnits === false) params.set('includeSubUnits', 'false');
+    return api.get<TrainingNeedsAnalysis>(`/analytics/training-needs?${params.toString()}`);
+  }
+
+  /**
+   * The live executive picture for a scope (`GET /analytics/overview`): pooled
+   * coverage, a department roll-up and one row per person.
+   *
+   * Same reason as above — the CEO dashboard called `getGroupCoverage` over the
+   * whole company and `getUserCoverage` once per employee, in the browser.
+   *
+   * @param scopeId a department id, or undefined for the whole company.
+   */
+  async getOrgOverview(scopeId?: string): Promise<OrgOverview> {
+    const scope = !scopeId || scopeId === 'ALL' ? 'company' : scopeId;
+    return api.get<OrgOverview>(`/analytics/overview?scope=${encodeURIComponent(scope)}`);
+  }
+
+
+  // ─── STORED HISTORY (monthly snapshots) ──────────────────────────────────
+  //
+  // Everything else on this class is computed live from the documents in
+  // memory. This is the one reader that asks the SERVER what the numbers were,
+  // because the past cannot be recomputed: an employee assessed today would
+  // make last June look better than it was.
+  //
+  // The rows are written by the nightly job (server/src/jobs/snapshots.ts) with
+  // a port of this class's own scoring, so a point on the trend and the live
+  // figure beside it are the same measure. It is a plain REST read, not a /col
+  // collection — snapshots are server-owned derived data with no delta sync.
+
+  /**
+   * Stored monthly readings for a scope, oldest month first.
+   * @param scopeId a department id, or undefined/'ALL' for the whole company.
+   *                A department's figures are ROLLED UP through its sub-units.
+   */
+  async getCompetencySnapshots(scopeId?: string, months = 24): Promise<CompetencySnapshot[]> {
+    const scope = !scopeId || scopeId === 'ALL' ? '' : scopeId;
+    const res = await api.get<{ snapshots: CompetencySnapshot[] }>(
+      `/analytics/snapshots?months=${months}${scope ? `&scopeId=${encodeURIComponent(scope)}` : ''}`,
+    );
+    return res.snapshots || [];
   }
 
   generateIndividualTrainingPlan(userId: string): IndividualTrainingPlan | null {
@@ -1994,24 +2089,29 @@ export class DataService {
       if (gap > 0) {
         const skill = this.getSkill(req.skillId);
         const skillName = skill?.name || 'Unknown Skill';
-        
-        const matchingCourse = this.trainingCourses.find(c => c.linkedSkillIds.includes(req.skillId));
-        
+        const criticality = skillCriticalityOf(skill?.criticality);
+        const weight = SKILL_CRITICALITY_WEIGHTS[criticality];
+
+        const matchingCourse = this.getCoursesForSkill(req.skillId)[0];
+
         const recommendationText = matchingCourse
           ? `Enroll in "${matchingCourse.title}" (${matchingCourse.provider}) to bridge the gap.`
           : gap >= 2
           ? `Intensive training and external certification required for ${skillName}.`
           : `On-the-job training and mentorship recommended to reach proficiency level ${req.requiredLevel}.`;
 
+        // A safety-critical shortfall is chased sooner than a deep gap on
+        // something optional — the same weighting the TNA ranks a unit by,
+        // applied to one person's plan.
         const targetDate = new Date();
-        targetDate.setMonth(targetDate.getMonth() + (gap >= 2 ? 6 : 3));
+        targetDate.setMonth(targetDate.getMonth() + (criticality === 'SAFETY_CRITICAL' ? 3 : gap >= 2 ? 6 : 3));
 
         recommendations.push({
           skillId: req.skillId,
           skillName,
           gap,
           recommendation: recommendationText,
-          priority: gap >= 2 ? 'HIGH' : 'MEDIUM',
+          priority: (gap * weight >= 2 ? 'HIGH' : gap * weight >= 1 ? 'MEDIUM' : 'LOW'),
           status: 'NOT_STARTED',
           targetDate: targetDate.toISOString(),
           supervisorSignOff: false,
@@ -2023,10 +2123,435 @@ export class DataService {
     return {
       id: `itp_${userId}_${Date.now()}`,
       userId,
-      recommendations: recommendations.sort((a, b) => b.gap - a.gap),
+      // Worst first by WEIGHTED gap: how deep the shortfall is × how much the
+      // skill matters. A 1-level safety gap outranks a 2-level nice-to-have.
+      recommendations: recommendations.sort((a, b) =>
+        b.gap * skillCriticalityWeight(this.getSkill(b.skillId)?.criticality)
+        - a.gap * skillCriticalityWeight(this.getSkill(a.skillId)?.criticality)
+        || b.gap - a.gap),
       generatedAt: new Date().toISOString(),
       status: 'ACTIVE'
     };
+  }
+
+  // ─── DEVELOPMENT PLANS (the SAVED training plan) ─────────────────────────
+  //
+  // `generateIndividualTrainingPlan` above is a PROPOSAL: recomputed on every
+  // render, never stored. These methods turn a proposal into a record — agreed,
+  // owned, tracked to completion, signed off by a manager, and re-measured so
+  // the effect on the score is visible. Everything below writes the whole plan
+  // document (one row per plan, items nested), which is why the server's
+  // developmentPlansPolicy lets both the owner and their management chain PATCH
+  // the same doc.
+
+  /** Newest first. `userId` omitted ⇒ every plan the session can see. */
+  getDevelopmentPlans(
+    userId?: string,
+    filters?: { status?: DevelopmentPlanStatus | DevelopmentPlanStatus[] },
+  ): DevelopmentPlan[] {
+    const wanted = filters?.status
+      ? new Set(Array.isArray(filters.status) ? filters.status : [filters.status])
+      : null;
+    return this.developmentPlans
+      .filter(p => (userId ? p.userId === userId : true))
+      .filter(p => (wanted ? wanted.has(p.status) : true))
+      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  }
+
+  getDevelopmentPlan(id: string): DevelopmentPlan | undefined {
+    return this.developmentPlans.find(p => p.id === id);
+  }
+
+  /**
+   * The plan a page should show: the live ACTIVE one, else the newest DRAFT.
+   * A COMPLETED/ARCHIVED plan is history and is reached through the list.
+   */
+  getCurrentDevelopmentPlan(userId: string): DevelopmentPlan | null {
+    const plans = this.getDevelopmentPlans(userId);
+    return plans.find(p => p.status === 'ACTIVE') || plans.find(p => p.status === 'DRAFT') || null;
+  }
+
+  /**
+   * Turn today's live gap analysis into plan items WITHOUT saving anything —
+   * the "propose" step of propose → save → assign → track. Each item freezes
+   * the level and its source at planning time, which is what later makes
+   * "did the training work" answerable.
+   *
+   * A never-assessed skill is deliberately EXCLUDED: it is an assessment need,
+   * not a training gap (see the TNA engine and CLAUDE.md's coverage rule).
+   */
+  proposeDevelopmentPlanItems(userId: string): DevelopmentPlanItem[] {
+    const proposal = this.generateIndividualTrainingPlan(userId);
+    if (!proposal) return [];
+
+    return proposal.recommendations
+      .map(rec => {
+        const detail = this.getUserSkillScoreDetail(userId, rec.skillId);
+        if (detail.source === 'NONE') return null; // unknown ≠ gap
+        const course = rec.courseId ? this.getTrainingCourse(rec.courseId) : undefined;
+        const item: DevelopmentPlanItem = {
+          id: newId(),
+          skillId: rec.skillId,
+          skillName: rec.skillName,
+          requiredLevel: detail.score + rec.gap,
+          levelAtPlanning: detail.score,
+          gapAtPlanning: rec.gap,
+          sourceAtPlanning: detail.source,
+          recommendation: rec.recommendation,
+          priority: rec.priority,
+          status: 'NOT_STARTED',
+          targetDate: rec.targetDate,
+          supervisorSignOff: false,
+        };
+        if (course) {
+          item.courseId = course.id;
+          item.courseTitle = course.title;
+        }
+        return item;
+      })
+      .filter((i): i is DevelopmentPlanItem => i !== null);
+  }
+
+  /**
+   * Save a plan. `createdBy` is the acting user — an employee writing their own
+   * plan (DRAFT by default) or a manager/admin assigning one, which starts
+   * ACTIVE and notifies the employee that work has been assigned to them.
+   */
+  async createDevelopmentPlan(
+    userId: string,
+    options: {
+      createdBy: string;
+      items?: DevelopmentPlanItem[];
+      title?: string;
+      status?: Extract<DevelopmentPlanStatus, 'DRAFT' | 'ACTIVE'>;
+      notes?: string;
+    },
+  ): Promise<DevelopmentPlan> {
+    const user = this.getUserById(userId);
+    const now = new Date().toISOString();
+    const items = options.items ?? this.proposeDevelopmentPlanItems(userId);
+    const coverage = this.getUserCoverage(userId);
+    const status: DevelopmentPlanStatus = options.status ?? 'DRAFT';
+
+    const plan: DevelopmentPlan = {
+      id: doc(collection(db, 'developmentPlans')).id,
+      userId,
+      title: options.title?.trim() || `Development Plan ${new Date().getFullYear()}`,
+      status,
+      items,
+      createdAt: now,
+      createdBy: options.createdBy,
+      updatedAt: now,
+      // The base behind every figure this plan will later be read against.
+      coverageAtPlanning: {
+        required: coverage.required,
+        measured: coverage.measured,
+        provisional: coverage.provisional,
+        unknown: coverage.unknown,
+      },
+    };
+    if (user?.jobProfileId) plan.jobProfileId = user.jobProfileId;
+    if (status === 'ACTIVE') plan.activatedAt = now;
+    if (options.notes?.trim()) plan.notes = options.notes.trim();
+
+    await this.persistItem('developmentPlans', plan);
+
+    // Only tell the employee when somebody ELSE assigned it — a draft you wrote
+    // yourself does not need an alert about itself.
+    if (options.createdBy !== userId && status === 'ACTIVE') {
+      await this.addNotification({
+        userId,
+        title: 'Development Plan Assigned',
+        message: `A development plan with ${items.length} item${items.length === 1 ? '' : 's'} has been assigned to you.`,
+        type: 'INFO',
+        actionLink: 'emp-dashboard',
+      });
+    }
+    await this.logActivity('Created Development Plan', `${user?.name || userId} — ${items.length} items`, {
+      entity: 'developmentPlan',
+      entityId: plan.id,
+    });
+    return plan;
+  }
+
+  private async saveDevelopmentPlan(plan: DevelopmentPlan): Promise<DevelopmentPlan> {
+    const updated = { ...plan, updatedAt: new Date().toISOString() };
+    await this.updateItem('developmentPlans', updated);
+    return updated;
+  }
+
+  /** Move the whole plan through its lifecycle (draft → active → completed/archived). */
+  async setDevelopmentPlanStatus(planId: string, status: DevelopmentPlanStatus): Promise<void> {
+    const plan = this.getDevelopmentPlan(planId);
+    if (!plan || plan.status === status) return;
+    const now = new Date().toISOString();
+
+    const updated: DevelopmentPlan = { ...plan, status };
+    if (status === 'ACTIVE' && !plan.activatedAt) updated.activatedAt = now;
+    if (status === 'COMPLETED') updated.completedAt = now;
+    if (status === 'ARCHIVED') updated.archivedAt = now;
+    await this.saveDevelopmentPlan(updated);
+
+    if (status === 'ACTIVE') {
+      await this.addNotification({
+        userId: plan.userId,
+        title: 'Development Plan Activated',
+        message: `Your development plan "${plan.title}" is now active.`,
+        type: 'INFO',
+        actionLink: 'emp-dashboard',
+      });
+    }
+    await this.logActivity(`Development Plan ${status}`, plan.title, {
+      entity: 'developmentPlan',
+      entityId: plan.id,
+      before: plan.status,
+      after: status,
+    });
+  }
+
+  /** Delete — only ever a DRAFT; an agreed plan is archived, not erased. */
+  async deleteDevelopmentPlan(planId: string): Promise<void> {
+    const plan = this.getDevelopmentPlan(planId);
+    if (!plan) return;
+    if (plan.status !== 'DRAFT') {
+      throw new Error('Only a draft plan can be deleted. Archive the plan instead.');
+    }
+    await this.deleteItem('developmentPlans', planId);
+    await this.logActivity('Deleted Development Plan', plan.title, {
+      entity: 'developmentPlan',
+      entityId: planId,
+    });
+  }
+
+  private replaceItem(
+    plan: DevelopmentPlan,
+    itemId: string,
+    change: (item: DevelopmentPlanItem) => DevelopmentPlanItem,
+  ): DevelopmentPlan | null {
+    const idx = plan.items.findIndex(i => i.id === itemId);
+    if (idx === -1) return null;
+    const items = [...plan.items];
+    items[idx] = change(items[idx]);
+    return { ...plan, items };
+  }
+
+  /** Edit an item's plan-side fields (target date, course, recommendation, priority). */
+  async updateDevelopmentPlanItem(
+    planId: string,
+    itemId: string,
+    updates: Partial<Pick<DevelopmentPlanItem, 'targetDate' | 'recommendation' | 'priority' | 'courseId' | 'courseTitle'>>,
+  ): Promise<void> {
+    const plan = this.getDevelopmentPlan(planId);
+    if (!plan) return;
+    const next = this.replaceItem(plan, itemId, item => ({ ...item, ...updates }));
+    if (!next) return;
+    await this.saveDevelopmentPlan(next);
+  }
+
+  /**
+   * Progress an item. Completing it notifies the employee's manager that a
+   * sign-off is waiting — the plan is what makes that chase possible at all.
+   */
+  async setDevelopmentPlanItemStatus(
+    planId: string,
+    itemId: string,
+    status: DevelopmentItemStatus,
+    note?: string,
+  ): Promise<void> {
+    const plan = this.getDevelopmentPlan(planId);
+    if (!plan) return;
+    const now = new Date().toISOString();
+
+    const next = this.replaceItem(plan, itemId, item => {
+      const updated: DevelopmentPlanItem = { ...item, status };
+      if (status === 'IN_PROGRESS' && !item.startedAt) updated.startedAt = now;
+      if (status === 'COMPLETED') {
+        updated.completedAt = now;
+        if (!updated.startedAt) updated.startedAt = now;
+      } else {
+        // Re-opening drops the completion stamp and any sign-off with it: a
+        // sign-off must always refer to work that is actually finished.
+        updated.completedAt = undefined;
+        updated.supervisorSignOff = false;
+        updated.signedOffBy = undefined;
+        updated.signedOffAt = undefined;
+        updated.levelAtSignOff = undefined;
+      }
+      if (note !== undefined) updated.completionNote = note.trim() || undefined;
+      return updated;
+    });
+    if (!next) return;
+    await this.saveDevelopmentPlan(next);
+
+    const item = next.items.find(i => i.id === itemId)!;
+    const employee = this.getUserById(plan.userId);
+    if (status === 'COMPLETED' && employee?.managerId) {
+      await this.addNotification({
+        userId: employee.managerId,
+        title: 'Development Item Awaiting Sign-Off',
+        message: `${employee.name} marked "${item.skillName}" complete on their development plan.`,
+        type: 'INFO',
+        actionLink: 'manager-approvals',
+      });
+    }
+  }
+
+  /**
+   * Manager sign-off. This is where the loop closes: the current score is read
+   * again and STORED as `levelAtSignOff`, so the plan itself carries the
+   * before/after evidence instead of the UI having to guess later. When every
+   * item that is still in play is signed off, the plan completes itself.
+   */
+  async signOffDevelopmentPlanItem(
+    planId: string,
+    itemId: string,
+    reviewerId: string,
+    comment?: string,
+  ): Promise<void> {
+    const plan = this.getDevelopmentPlan(planId);
+    if (!plan) return;
+    const now = new Date().toISOString();
+
+    const next = this.replaceItem(plan, itemId, item => {
+      const level = this.getUserSkillScore(plan.userId, item.skillId);
+      return {
+        ...item,
+        status: 'COMPLETED',
+        completedAt: item.completedAt || now,
+        supervisorSignOff: true,
+        signedOffBy: reviewerId,
+        signedOffAt: now,
+        signOffComment: comment?.trim() || undefined,
+        levelAtSignOff: level,
+      };
+    });
+    if (!next) return;
+
+    // A plan whose remaining items are all signed off is finished — recording
+    // that here means "was it delivered" is answerable without re-deriving it.
+    const live = next.items.filter(i => i.status !== 'CANCELLED');
+    const allDone = live.length > 0 && live.every(i => i.supervisorSignOff);
+    if (allDone) {
+      next.status = 'COMPLETED';
+      next.completedAt = now;
+    }
+    const saved = await this.saveDevelopmentPlan(next);
+
+    const item = saved.items.find(i => i.id === itemId)!;
+    const gained = (item.levelAtSignOff ?? 0) - item.levelAtPlanning;
+    await this.addNotification({
+      userId: plan.userId,
+      title: 'Development Item Signed Off',
+      message: `"${item.skillName}" was signed off${gained > 0 ? ` — your level moved from ${item.levelAtPlanning} to ${item.levelAtSignOff}.` : '.'}`,
+      type: 'SUCCESS',
+      actionLink: 'emp-dashboard',
+    });
+    await this.logActivity('Signed Off Development Item', `${item.skillName} — ${this.getUserById(plan.userId)?.name || plan.userId}`, {
+      entity: 'developmentPlan',
+      entityId: plan.id,
+      before: `L${item.levelAtPlanning}`,
+      after: `L${item.levelAtSignOff}`,
+    });
+  }
+
+  /**
+   * Today's scores joined back onto a saved plan. The stored levels are the
+   * "before"; these are the "after". Never mutates the plan.
+   */
+  getDevelopmentPlanProgress(plan: DevelopmentPlan): DevelopmentPlanProgress {
+    const today = new Date();
+
+    const items: DevelopmentPlanItemProgress[] = plan.items.map(item => {
+      const { score, source } = this.getUserSkillScoreDetail(plan.userId, item.skillId);
+      const open = item.status !== 'COMPLETED' && item.status !== 'CANCELLED';
+      return {
+        ...item,
+        currentLevel: score,
+        currentSource: source,
+        improvement: score - item.levelAtPlanning,
+        metRequirement: score >= item.requiredLevel,
+        isOverdue: open && !!item.targetDate && new Date(item.targetDate) < today,
+      };
+    });
+
+    const count = (s: DevelopmentItemStatus) => items.filter(i => i.status === s).length;
+    const inPlay = items.filter(i => i.status !== 'CANCELLED');
+    const completed = count('COMPLETED');
+
+    return {
+      plan,
+      items,
+      total: items.length,
+      notStarted: count('NOT_STARTED'),
+      inProgress: count('IN_PROGRESS'),
+      completed,
+      cancelled: count('CANCELLED'),
+      signedOff: items.filter(i => i.supervisorSignOff).length,
+      overdue: items.filter(i => i.isOverdue).length,
+      // Same rule as everywhere else: no percentage without a base.
+      completedPct: inPlay.length > 0 ? Math.round((completed / inPlay.length) * 100) : null,
+      improved: items.filter(i => i.improvement > 0).length,
+      levelsGained: items.reduce((sum, i) => sum + Math.max(0, i.improvement), 0),
+      requirementsMet: items.filter(i => i.metRequirement).length,
+    };
+  }
+
+  /**
+   * Completed development items waiting on this reviewer. Admin/CEO see every
+   * one; a manager sees their visible subtree. Own items are excluded — nobody
+   * signs off their own training.
+   */
+  getPendingDevelopmentSignOffs(managerId: string): { plan: DevelopmentPlan; item: DevelopmentPlanItem; employee?: User }[] {
+    const reviewer = this.getUserById(managerId);
+    const seesAll = reviewer?.role === Role.ADMIN || reviewer?.role === Role.CEO;
+    const visibleIds = seesAll ? null : new Set(this.getSubordinatesRecursive(managerId).map(u => u.id));
+
+    const rows: { plan: DevelopmentPlan; item: DevelopmentPlanItem; employee?: User }[] = [];
+    for (const plan of this.getDevelopmentPlans(undefined, { status: ['ACTIVE', 'COMPLETED'] })) {
+      if (plan.userId === managerId) continue;
+      if (visibleIds && !visibleIds.has(plan.userId)) continue;
+      for (const item of plan.items) {
+        if (item.status === 'COMPLETED' && !item.supervisorSignOff) {
+          rows.push({ plan, item, employee: this.getUserById(plan.userId) });
+        }
+      }
+    }
+    return rows.sort((a, b) => (a.item.completedAt || '').localeCompare(b.item.completedAt || ''));
+  }
+
+  /**
+   * May `managerId` act on `userId`'s plan (activate it, sign items off)?
+   * Admin/CEO always; otherwise anywhere up the management chain. Never
+   * yourself — nobody signs off their own training.
+   */
+  canSupervise(managerId: string, userId: string): boolean {
+    if (!managerId || managerId === userId) return false;
+    const reviewer = this.getUserById(managerId);
+    if (!reviewer) return false;
+    if (reviewer.role === Role.ADMIN || reviewer.role === Role.CEO) return true;
+    return this.getSubordinatesRecursive(managerId).some(u => u.id === userId);
+  }
+
+  /**
+   * Append newly-appeared gaps to a live plan. The requirements or the scores
+   * can move after a plan is agreed; without this the plan silently goes stale
+   * and people re-generate instead of tracking. Items already on the plan (by
+   * skill) are never duplicated.
+   */
+  async addDevelopmentPlanItems(planId: string, items: DevelopmentPlanItem[]): Promise<number> {
+    const plan = this.getDevelopmentPlan(planId);
+    if (!plan || items.length === 0) return 0;
+    const present = new Set(plan.items.map(i => i.skillId));
+    const additions = items.filter(i => !present.has(i.skillId));
+    if (additions.length === 0) return 0;
+    await this.saveDevelopmentPlan({ ...plan, items: [...plan.items, ...additions] });
+    return additions.length;
+  }
+
+  /** Gap items that are NOT yet on the given plan — what "add current gaps" would add. */
+  getUnplannedDevelopmentItems(plan: DevelopmentPlan): DevelopmentPlanItem[] {
+    const present = new Set(plan.items.map(i => i.skillId));
+    return this.proposeDevelopmentPlanItems(plan.userId).filter(i => !present.has(i.skillId));
   }
 
   getEmployeeAssessmentQueue(userId: string) {
@@ -2273,31 +2798,48 @@ export class DataService {
       let totalGapPoints = 0;
       
       requirements.forEach(req => {
-        const currentScore = this.getUserSkillScore(userId, req.skillId);
+        const { score: currentScore, source } = this.getUserSkillScoreDetail(userId, req.skillId);
         const gap = Math.max(0, req.requiredLevel - currentScore);
         const skill = this.getSkill(req.skillId);
-        
+        // A skill that was never assessed is an unknown, not a shortfall — the
+        // readiness bar must show it as "not measured" rather than a failure.
+        const isMeasured = source !== 'NONE';
+
         promReqs.push({
           skillId: req.skillId,
           skillName: skill?.name || 'Unknown Skill',
           currentScore,
           requiredScore: req.requiredLevel,
-          gap
+          gap,
+          isMeasured
         });
 
-        totalGapPoints += gap;
+        // Gap points drive readiness, so only MEASURED skills contribute: an
+        // unassessed skill would otherwise add a full-size phantom gap.
+        if (isMeasured) totalGapPoints += gap;
       });
 
+      const unmeasuredCount = promReqs.filter(r => !r.isMeasured).length;
+      const measuredCount = promReqs.length - unmeasuredCount;
+
       let readinessStatus: 'READY_NOW' | 'READY_1_2_YEARS' | 'READY_3_5_YEARS' | 'DEVELOPMENT_NEEDED' = 'DEVELOPMENT_NEEDED';
-      if (totalGapPoints === 0 && requirements.length > 0) readinessStatus = 'READY_NOW';
-      else if (totalGapPoints <= 2) readinessStatus = 'READY_1_2_YEARS';
+      if (measuredCount === 0) {
+        // Nothing measured against this level: no readiness claim is possible,
+        // so stay on the most conservative bucket rather than invent progress.
+        readinessStatus = 'DEVELOPMENT_NEEDED';
+      } else if (totalGapPoints === 0 && unmeasuredCount === 0) {
+        // READY_NOW is a claim about the whole position — it needs every
+        // requirement measured, not just no gaps among those that were.
+        readinessStatus = 'READY_NOW';
+      } else if (totalGapPoints <= 2) readinessStatus = 'READY_1_2_YEARS';
       else if (totalGapPoints <= 5) readinessStatus = 'READY_3_5_YEARS';
 
       roadmap.push({
         level,
         requirements: promReqs,
         readinessStatus,
-        isDefined: requirements.length > 0
+        isDefined: requirements.length > 0,
+        unmeasuredCount
       });
     }
 
@@ -2364,8 +2906,15 @@ export class DataService {
   }
   getAllDepartments() { return this.departments; }
   getSkill(id: string) { return this.skills.find(s => s.id === id && !s.isArchived); }
-  getAllTrainingCourses() { return this.trainingCourses; }
-  getCoursesForSkill(skillId: string) { return this.trainingCourses.filter(c => c.linkedSkillIds.includes(skillId)); }
+  // Training catalogue. Archived courses stay in the store for history but are
+  // never recommended, so the default excludes them (same shape as skills/jobs).
+  getAllTrainingCourses(includeArchived = false) {
+    return includeArchived ? this.trainingCourses : this.trainingCourses.filter(c => !c.isArchived);
+  }
+  getTrainingCourse(id: string) { return this.trainingCourses.find(c => c.id === id); }
+  getCoursesForSkill(skillId: string) {
+    return this.trainingCourses.filter(c => !c.isArchived && c.linkedSkillIds.includes(skillId));
+  }
   getSystemLogs() { return this.logs; }
 
   // On-demand fetch of the full audit trail (ISO.1). The live listener keeps
@@ -2634,6 +3183,65 @@ export class DataService {
     const computed = this.computeSkillScore(userId, skillId, false);
     this.skillScoreCache.set(key, computed);
     return computed;
+  }
+
+  // ─── MEASURED vs UNKNOWN (coverage) ──────────────────────────────────────
+  //
+  // Every gap/compliance number in the app divides by "required skills", which
+  // silently counts a never-assessed skill as a failed one (score 0). These
+  // helpers are the single place that splits a requirement list into
+  // measured / provisional / unknown, so a page can say "X of Y measured"
+  // beside any percentage — and show "—" instead of 0% when nothing is known.
+  //
+  // Compliance is deliberately computed over the KNOWN skills only. A
+  // provisional (work-experience) score counts as known because it counts as a
+  // score everywhere else, but it is NOT counted as measured.
+
+  /** Coverage of one employee against their own job profile's requirements. */
+  getUserCoverage(userId: string): CompetencyCoverage {
+    const acc = newCoverageAccumulator();
+    this.accumulateUserCoverage(acc, userId);
+    return finalizeCoverage(acc);
+  }
+
+  /**
+   * Coverage summed across a set of employees (a team, a department, the whole
+   * company). Percentages are over the pooled requirement count, so a person
+   * with no job profile contributes nothing rather than a misleading 0%.
+   */
+  getGroupCoverage(userIds: string[]): CompetencyCoverage {
+    const acc = newCoverageAccumulator();
+    for (const id of userIds) this.accumulateUserCoverage(acc, id);
+    return finalizeCoverage(acc);
+  }
+
+  private accumulateUserCoverage(acc: CoverageAccumulator, userId: string): void {
+    const user = this.getUserById(userId);
+    const job = user?.jobProfileId ? this.getJobProfile(user.jobProfileId) : null;
+    if (!job) return;
+
+    for (const req of this.getEffectiveRequirements(job)) {
+      const { score, source } = this.getUserSkillScoreDetail(userId, req.skillId);
+      acc.required++;
+
+      if (source === 'NONE') {
+        // The 0 here means "we never looked", not "they scored nothing" — it
+        // must not reach any gap or compliance figure.
+        acc.unknown++;
+        continue;
+      }
+
+      if (source === 'EXPERIENCE') acc.provisional++;
+      else acc.measured++;
+
+      const gap = Math.max(0, req.requiredLevel - score);
+      if (gap > 0) {
+        acc.gapsKnown++;
+        acc.totalGap += gap;
+      } else {
+        acc.compliantKnown++;
+      }
+    }
   }
 
   getAssessments(filters: { raterId?: string, subjectId?: string, cycleId?: string, skillId?: string, includeArchived?: boolean }) {
@@ -3214,6 +3822,70 @@ export class DataService {
   async updateProject(project: Project) {
     await this.updateItem('projects', project);
     await this.logActivity('Update Project', project.name);
+  }
+
+  // --- TRAINING CATALOGUE ---------------------------------------------------
+  // The cure side of the engine: a course linked to a skill is what turns a gap
+  // into a named recommendation (see generateIndividualTrainingPlan / TNA).
+
+  /** Sequential reference like TRN-WELD-01, unique across the catalogue. */
+  generateTrainingCourseCode(course: Pick<TrainingCourse, 'title'>): string {
+    const base = (course.title || 'COURSE')
+      .replace(/[^A-Za-z0-9\s]/g, '')
+      .trim()
+      .split(/\s+/)
+      .map(w => w.toUpperCase())
+      .join('')
+      .substring(0, 5) || 'CRS';
+    const used = new Set(this.trainingCourses.map(c => c.code).filter(Boolean));
+    let n = 1;
+    let code = `TRN-${base}-01`;
+    while (used.has(code)) code = `TRN-${base}-${String(++n).padStart(2, '0')}`;
+    return code;
+  }
+
+  async addTrainingCourse(course: Omit<TrainingCourse, 'id'> & { id?: string }) {
+    const id = course.id || newId();
+    const newCourse: TrainingCourse = {
+      ...course,
+      id,
+      linkedSkillIds: course.linkedSkillIds || [],
+      code: course.code || this.generateTrainingCourseCode(course),
+      createdAt: course.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    await this.persistItem('trainingCourses', newCourse);
+    await this.logActivity('Added Training Course', newCourse.title);
+    return newCourse;
+  }
+
+  async updateTrainingCourse(course: TrainingCourse) {
+    const updated: TrainingCourse = {
+      ...course,
+      linkedSkillIds: course.linkedSkillIds || [],
+      updatedAt: new Date().toISOString(),
+    };
+    await this.updateItem('trainingCourses', updated);
+    await this.logActivity('Updated Training Course', updated.title);
+    return updated;
+  }
+
+  /**
+   * Soft-delete, like skills: an ITP generated last year may still reference the
+   * course by id, so the record stays and is only hidden from recommendations.
+   */
+  async removeTrainingCourse(id: string) {
+    const course = this.trainingCourses.find(c => c.id === id);
+    if (!course) return;
+    await this.updateItem('trainingCourses', { ...course, isArchived: true, updatedAt: new Date().toISOString() });
+    await this.logActivity('Archived Training Course', course.title);
+  }
+
+  async restoreTrainingCourse(id: string) {
+    const course = this.trainingCourses.find(c => c.id === id);
+    if (!course) return;
+    await this.updateItem('trainingCourses', { ...course, isArchived: false, updatedAt: new Date().toISOString() });
+    await this.logActivity('Restored Training Course', course.title);
   }
 
 

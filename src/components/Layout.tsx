@@ -2,7 +2,7 @@ import React, { memo, useState, useRef, useEffect } from 'react';
 import { User, Role, ORG_LEVEL_LABELS } from '../types';
 import { Logo } from './Logo';
 import { dataService } from '../services/store';
-import { LogOut, LayoutDashboard, ShieldCheck, BadgeCheck, UserCircle, Users, Building2, Briefcase, Activity, Grid, UploadCloud, CheckSquare, Star, Monitor, MessageSquare, Menu, X, Settings, Languages, ChevronDown, LucideIcon } from 'lucide-react';
+import { LogOut, LayoutDashboard, ShieldCheck, BadgeCheck, UserCircle, Users, Building2, Briefcase, Activity, Grid, UploadCloud, CheckSquare, Star, Monitor, MessageSquare, Menu, X, Settings, Languages, ChevronDown, GraduationCap, BookOpen, LucideIcon } from 'lucide-react';
 import { NotificationBell } from './NotificationBell';
 import { useI18n } from '../i18n/I18nContext';
 import { LOCALES } from '../i18n/translations';
@@ -118,6 +118,7 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
       ? [
           { id: 'admin-dashboard', label: t('nav.overview'), icon: LayoutDashboard },
           { id: 'admin-analytics', label: t('nav.analytics'), icon: Activity },
+          { id: 'training-needs', label: t('nav.trainingNeeds'), icon: GraduationCap },
           { id: 'admin-appraisal', label: t('nav.appraisal'), icon: CheckSquare },
         ]
       : user.role === Role.CEO
@@ -138,9 +139,14 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
   const dropdownTabs: { id: string; label: string; icon: LucideIcon }[] = [
     ...(user.role === Role.ADMIN
       ? [
+          { id: 'admin-courses', label: t('nav.trainingCatalogue'), icon: BookOpen },
           { id: 'admin-experience', label: t('nav.workExperience'), icon: Briefcase },
           { id: 'admin-audit', label: t('nav.auditTrail'), icon: ShieldCheck },
         ]
+      : []),
+    // TNA is in the main nav for ADMIN; the CEO and managers reach it here.
+    ...(user.role === Role.CEO || (user.role === Role.EMPLOYEE && dataService.isManager(user))
+      ? [{ id: 'training-needs', label: t('nav.trainingNeeds'), icon: GraduationCap }]
       : []),
     { id: 'methodology', label: t('nav.methodology'), icon: BadgeCheck },
     { id: 'settings', label: t('nav.settings'), icon: Settings },

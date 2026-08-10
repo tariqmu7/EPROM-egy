@@ -55,8 +55,9 @@ beforeAll(async () => {
     await query(`CREATE TABLE ${t} ${cols}`);
   }
   // Quoted camelCase tables (case-sensitive), matching what registry.tableFor()
-  // emits. workExperiences/appSettings come from migration 005.
-  for (const t of ['activityLogs', 'workExperiences', 'appSettings']) {
+  // emits. workExperiences/appSettings come from migration 005, developmentPlans
+  // from 006. A registry entry missing from THIS list 500s every write to it.
+  for (const t of ['activityLogs', 'workExperiences', 'appSettings', 'trainingCourses', 'developmentPlans']) {
     await query(`CREATE TABLE "${t}" ${cols}`);
   }
   await query(
@@ -98,6 +99,12 @@ beforeAll(async () => {
   await seedDoc('workExperiences', 'we-other', { userId: OTHER.id, employer: 'Initech', jobTitle: 'Analyst', startDate: '2016-01-01', status: 'PENDING' });
   await seedDoc('workExperiences', 'we-sub1', { userId: 'sub-1', employer: 'Stark', jobTitle: 'Lead', startDate: '2017-01-01', status: 'PENDING' }); // MGR's DIRECT report
   await seedDoc('workExperiences', 'we-sub2', { userId: 'sub-2', employer: 'Umbrella', jobTitle: 'Operator', startDate: '2018-01-01', status: 'PENDING' }); // transitive
+
+  // Development plans (migration 006) — same owner + management-chain scoping.
+  await seedDoc('developmentPlans', 'dp-emp', { userId: EMP.id, title: 'Plan A', status: 'ACTIVE', createdBy: EMP.id, items: [] });
+  await seedDoc('developmentPlans', 'dp-emp-draft', { userId: EMP.id, title: 'Draft', status: 'DRAFT', createdBy: EMP.id, items: [] });
+  await seedDoc('developmentPlans', 'dp-other', { userId: OTHER.id, title: 'Plan B', status: 'ACTIVE', createdBy: OTHER.id, items: [] });
+  await seedDoc('developmentPlans', 'dp-sub2', { userId: 'sub-2', title: 'Plan C', status: 'ACTIVE', createdBy: 'sub-2', items: [] });
 
   const { createApp } = await import('../app.js');
   app = createApp();
@@ -375,6 +382,89 @@ describe('workExperiences authorization (owner submits, manager verifies)', () =
     expect((await request(app).delete('/col/workExperiences/we-own-new').set('Authorization', `Bearer ${empTok}`)).status).toBe(204);
   });
 
+  it('development plans are list-scoped to own + subtree, never company-wide', async () => {
+    // Same trap as workExperiences: runList only applies listScope, so a missing
+    // case would publish every employee's gaps and training record.
+    const empTok = await login(EMP.email, 'emp-pass');
+    const ids = idsOf(
+      await request(app).post('/col/developmentPlans/query').set('Authorization', `Bearer ${empTok}`).send({}),
+    );
+    expect(ids.sort()).toEqual(['dp-emp', 'dp-emp-draft']);
+    expect(ids).not.toContain('dp-other');
+
+    const mgrTok = await login(MGR.email, 'mgr-pass');
+    const mgrIds = idsOf(
+      await request(app).post('/col/developmentPlans/query').set('Authorization', `Bearer ${mgrTok}`).send({}),
+    );
+    expect(mgrIds).toContain('dp-sub2'); // transitive report
+    expect(mgrIds).not.toContain('dp-other');
+  });
+
+  it('a stranger can neither read, create for, nor write another employee’s plan', async () => {
+    const otherTok = await login(OTHER.email, 'other-pass');
+    expect((await request(app).get('/col/developmentPlans/dp-emp').set('Authorization', `Bearer ${otherTok}`)).status).toBe(403);
+
+    const forged = await request(app)
+      .put('/col/developmentPlans/dp-forged')
+      .set('Authorization', `Bearer ${otherTok}`)
+      .send({ data: { userId: EMP.id, title: 'Not yours', status: 'ACTIVE', createdBy: OTHER.id, items: [] } });
+    expect(forged.status).toBe(403);
+
+    const patch = await request(app)
+      .patch('/col/developmentPlans/dp-emp')
+      .set('Authorization', `Bearer ${otherTok}`)
+      .send({ data: { status: 'ARCHIVED' } });
+    expect(patch.status).toBe(403);
+  });
+
+  it('the owner writes their own plan and a manager may sign a report’s off', async () => {
+    const empTok = await login(EMP.email, 'emp-pass');
+    const own = await request(app)
+      .put('/col/developmentPlans/dp-emp-new')
+      .set('Authorization', `Bearer ${empTok}`)
+      .send({
+        data: {
+          userId: EMP.id,
+          title: 'My plan',
+          status: 'DRAFT',
+          createdBy: EMP.id,
+          items: [{ id: 'i1', skillId: 's1', status: 'NOT_STARTED', supervisorSignOff: false }],
+        },
+      });
+    expect(own.status).toBe(200);
+
+    // A skip-level manager MAY act here (unlike work-experience verification):
+    // sign-off follows the whole management chain so an absent direct
+    // supervisor cannot strand a plan.
+    const mgrTok = await login(MGR.email, 'mgr-pass');
+    const signOff = await request(app)
+      .patch('/col/developmentPlans/dp-sub2')
+      .set('Authorization', `Bearer ${mgrTok}`)
+      .send({ data: { items: [{ id: 'i1', skillId: 's1', status: 'COMPLETED', supervisorSignOff: true }] } });
+    expect(signOff.status).toBe(200);
+  });
+
+  it('rejects a bad plan status and a non-array items field (422)', async () => {
+    const empTok = await login(EMP.email, 'emp-pass');
+    const badStatus = await request(app)
+      .put('/col/developmentPlans/dp-bad')
+      .set('Authorization', `Bearer ${empTok}`)
+      .send({ data: { userId: EMP.id, title: 'x', status: 'IN_PROGRESS', createdBy: EMP.id, items: [] } });
+    expect(badStatus.status).toBe(422);
+
+    const badItems = await request(app)
+      .put('/col/developmentPlans/dp-bad2')
+      .set('Authorization', `Bearer ${empTok}`)
+      .send({ data: { userId: EMP.id, title: 'x', status: 'DRAFT', createdBy: EMP.id, items: 'oops' } });
+    expect(badItems.status).toBe(422);
+  });
+
+  it('a draft may be deleted but an active plan is archived, never erased', async () => {
+    const empTok = await login(EMP.email, 'emp-pass');
+    expect((await request(app).delete('/col/developmentPlans/dp-emp').set('Authorization', `Bearer ${empTok}`)).status).toBe(403);
+    expect((await request(app).delete('/col/developmentPlans/dp-emp-draft').set('Authorization', `Bearer ${empTok}`)).status).toBe(204);
+  });
+
   it('appSettings is read-open and admin-write', async () => {
     const empTok = await login(EMP.email, 'emp-pass');
     const adminTok = await login(ADMIN.email, 'admin-pass');
@@ -506,6 +596,55 @@ describe('write-side validation (data contract)', () => {
       .send({ data: { name: 'X', email: 'x@eprom.local', role: 'SUPERADMIN', status: 'ACTIVE' } });
     expect(res.status).toBe(422);
     expect(res.body.error).toBe('validation_failed');
+  });
+
+  it('rejects a training course whose skill links are not an array of ids (422)', async () => {
+    const adminTok = await login(ADMIN.email, 'admin-pass');
+    const res = await request(app)
+      .put('/col/trainingCourses/bad-links')
+      .set('Authorization', `Bearer ${adminTok}`)
+      .send({ data: { title: 'BOSIET', provider: 'OPITO', type: 'EXTERNAL', linkedSkillIds: 'skill1' } });
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('validation_failed');
+  });
+
+  it('accepts a well-formed training course', async () => {
+    const adminTok = await login(ADMIN.email, 'admin-pass');
+    const res = await request(app)
+      .put('/col/trainingCourses/good-course')
+      .set('Authorization', `Bearer ${adminTok}`)
+      .send({
+        data: {
+          title: 'BOSIET', provider: 'OPITO', type: 'EXTERNAL',
+          linkedSkillIds: ['skill1', 'skill2'], targetLevel: 3, durationHours: 24, costPerSeat: 18000,
+        },
+      });
+    expect(res.status).toBeLessThan(300);
+  });
+
+  it('rejects a skill with an invented criticality, and accepts a valid one (422)', async () => {
+    const adminTok = await login(ADMIN.email, 'admin-pass');
+    // Criticality multiplies every gap this skill produces in the training-needs
+    // ranking, so a typo here would quietly mis-rank a training budget.
+    const bad = await request(app)
+      .put('/col/skills/bad-criticality')
+      .set('Authorization', `Bearer ${adminTok}`)
+      .send({ data: { name: 'Permit to Work', criticality: 'VERY_IMPORTANT' } });
+    expect(bad.status).toBe(422);
+    expect(bad.body.error).toBe('validation_failed');
+
+    const good = await request(app)
+      .put('/col/skills/good-criticality')
+      .set('Authorization', `Bearer ${adminTok}`)
+      .send({ data: { name: 'Permit to Work', criticality: 'SAFETY_CRITICAL' } });
+    expect(good.status).toBeLessThan(300);
+
+    // A skill written before criticality existed must still save.
+    const legacy = await request(app)
+      .put('/col/skills/legacy-skill')
+      .set('Authorization', `Bearer ${adminTok}`)
+      .send({ data: { name: 'Old skill', category: 'Technical' } });
+    expect(legacy.status).toBeLessThan(300);
   });
 
   it('rejects a non-object document (422)', async () => {

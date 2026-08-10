@@ -29,6 +29,12 @@ vi.mock('../../services/store', () => {
         source: 'ASSESSMENT',
       }),
       getSkillScoreSource: () => 'ASSESSMENT',
+      // s1 met (5/3), s2 short (2/4); both measured, nothing unknown.
+      getUserCoverage: () => ({
+        required: 2, measured: 2, provisional: 0, unknown: 0, known: 2,
+        measuredPct: 100, knownPct: 100, compliantKnown: 1, gapsKnown: 1,
+        compliancePct: 50, totalGap: 2, avgGap: 1,
+      }),
       getWorkExperiences: () => [],
       getWorkExperiencePolicy: () => ({ enabled: true, maxProvisionalLevel: 3, bands: [] }),
       suggestExperienceLevel: () => 0,

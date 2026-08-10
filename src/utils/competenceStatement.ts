@@ -11,6 +11,13 @@ export interface CompetenceRow {
   name: string;
   required: number;
   current: number;
+  /**
+   * false ⇒ the competency has never been assessed. `current` is then a
+   * placeholder 0 and must NOT be printed as a failed status: an official
+   * statement may not present silence as evidence of incompetence.
+   * Defaults to true so existing callers are unaffected.
+   */
+  measured?: boolean;
 }
 
 export interface CompetenceStatementInput {
@@ -42,19 +49,26 @@ export function buildCompetenceStatementHtml(input: CompetenceStatementInput): s
   validUntilDate.setMonth(validUntilDate.getMonth() + validity);
   const validUntil = new Intl.DateTimeFormat('en-GB', { year: 'numeric', month: 'long', day: 'numeric' }).format(validUntilDate);
 
-  const metCount = input.rows.filter(r => r.current >= r.required).length;
+  // Measured vs unknown: every figure below is stated over the competencies
+  // that were actually assessed, with the unassessed count reported separately.
   const total = input.rows.length;
-  const coverage = total > 0 ? Math.round((metCount / total) * 100) : 0;
+  const measuredRows = input.rows.filter(r => r.measured !== false);
+  const unmeasuredCount = total - measuredRows.length;
+  const metCount = measuredRows.filter(r => r.current >= r.required).length;
+  const coverage = total > 0 ? Math.round((measuredRows.length / total) * 100) : 0;
 
   const rowsHtml = input.rows.map(r => {
-    const met = r.current >= r.required;
+    const isMeasured = r.measured !== false;
+    const met = isMeasured && r.current >= r.required;
+    const statusClass = !isMeasured ? 'unknown' : met ? 'met' : 'gap';
+    const statusText = !isMeasured ? '— Not assessed' : met ? '✓ Met' : '✕ Gap';
     return `
       <tr>
         <td class="code">${esc(r.code || '')}</td>
         <td>${esc(r.name)}</td>
         <td class="lvl">${esc(levelLabel(r.required))}</td>
-        <td class="lvl">${esc(levelLabel(r.current))}</td>
-        <td class="status ${met ? 'met' : 'gap'}">${met ? '✓ Met' : '✕ Gap'}</td>
+        <td class="lvl">${isMeasured ? esc(levelLabel(r.current)) : '—'}</td>
+        <td class="status ${statusClass}">${statusText}</td>
       </tr>`;
   }).join('');
 
@@ -81,6 +95,7 @@ export function buildCompetenceStatementHtml(input: CompetenceStatementInput): s
   td.status { font-weight:700; white-space:nowrap; }
   td.status.met { color:#047857; }
   td.status.gap { color:#be123c; }
+  td.status.unknown { color:#64748b; font-weight:600; }
   .foot { margin-top:32px; font-size:11px; color:#64748b; border-top:1px solid #e2e8f0; padding-top:16px; }
   .sign { margin-top:40px; display:grid; grid-template-columns:1fr 1fr; gap:48px; }
   .sign div { border-top:1px solid #94a3b8; padding-top:6px; font-size:12px; color:#475569; }
@@ -109,8 +124,9 @@ export function buildCompetenceStatementHtml(input: CompetenceStatementInput): s
   </div>
 
   <div class="summary">
-    <div>Profile coverage<b>${coverage}%</b></div>
-    <div>Competencies met<b>${metCount} / ${total}</b></div>
+    <div>Assessment coverage<b>${measuredRows.length} / ${total} (${coverage}%)</b></div>
+    <div>Competencies met<b>${metCount} / ${measuredRows.length || 0}</b></div>
+    ${unmeasuredCount > 0 ? `<div>Not yet assessed<b>${unmeasuredCount}</b></div>` : ''}
     ${input.appraisalScore != null ? `<div>Latest annual appraisal<b>${esc(input.appraisalScore)}%</b></div>` : ''}
   </div>
 
@@ -127,7 +143,8 @@ export function buildCompetenceStatementHtml(input: CompetenceStatementInput): s
   <div class="foot">
     Proficiency scale: 1 Awareness · 2 Knowledge · 3 Skill · 4 Advanced · 5 Expert. This statement reflects
     assessed competence as of the issue date and is valid for ${validity} months, subject to the assessment
-    re-evaluation cadence. Generated automatically by EPROM CMS.
+    re-evaluation cadence. Competencies marked "Not assessed" carry no measurement and are excluded from the
+    figures above — they are neither met nor failed. Generated automatically by EPROM CMS.
   </div>
 
   <script>window.onload = function(){ setTimeout(function(){ window.print(); }, 300); };</script>

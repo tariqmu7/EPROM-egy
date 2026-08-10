@@ -28,6 +28,22 @@ export const config = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '12h',
   bcryptRounds: Number(process.env.BCRYPT_ROUNDS ?? 12),
 
+  // Scheduled work (src/jobs/). The nightly sweep re-bands certificates, chases
+  // due assessments and overdue development items, and sends managers a weekly
+  // digest. Off under test so the suite never starts a background timer.
+  jobs: {
+    enabled: process.env.NODE_ENV === 'test' ? false : (process.env.JOBS_ENABLED ?? 'true') === 'true',
+    // Local server time. 02:00 by default — after the nightly pg_dump backup
+    // window in docker-compose.yml, and long before anyone logs in.
+    hour: Math.min(23, Math.max(0, Number(process.env.JOBS_HOUR ?? 2))),
+    minute: Math.min(59, Math.max(0, Number(process.env.JOBS_MINUTE ?? 0))),
+    // Run once shortly after boot if the last successful sweep is older than
+    // this — so a night lost to a reboot is caught up, not skipped.
+    catchUpOnBoot: (process.env.JOBS_CATCH_UP_ON_BOOT ?? 'true') === 'true',
+    catchUpAfterHours: Number(process.env.JOBS_CATCH_UP_AFTER_HOURS ?? 20),
+    bootDelayMs: Number(process.env.JOBS_BOOT_DELAY_MS ?? 30_000),
+  },
+
   bootstrapAdminEmail: (process.env.BOOTSTRAP_ADMIN_EMAIL ?? '').trim().toLowerCase(),
   // Self-registration is OFF unless explicitly enabled. Accounts are created by
   // an admin (Admin → Employees), who issues a temporary password. The bootstrap

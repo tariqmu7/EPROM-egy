@@ -45,6 +45,10 @@ const TAB_PATHS: Record<string, string> = {
   'admin-skills': '/admin/skills',
   'admin-depts': '/admin/departments',
   'admin-experience': '/admin/experience',
+  'admin-courses': '/admin/courses',
+  // Shared admin + manager page (a manager analyses their own team), so it sits
+  // at the top level rather than under /admin.
+  'training-needs': '/training-needs',
   'settings': '/settings',
   'methodology': '/methodology',
 };

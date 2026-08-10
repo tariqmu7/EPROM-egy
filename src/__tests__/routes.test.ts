@@ -68,7 +68,8 @@ describe('routes: round-trip', () => {
     'emp-assessment', 'emp-appraisal', 'evidence-portal', 'manager-dashboard',
     'manager-approvals', 'ceo-dashboard', 'admin-dashboard', 'admin-analytics',
     'admin-appraisal', 'admin-audit', 'admin-users', 'admin-jobs', 'admin-skills',
-    'admin-depts', 'admin-experience', 'settings', 'methodology',
+    'admin-depts', 'admin-experience', 'admin-courses', 'training-needs', 'settings',
+    'methodology',
   ];
 
   it.each(tabs)('tab %s -> path -> same tab', (tab) => {

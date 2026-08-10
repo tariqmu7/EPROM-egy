@@ -37,10 +37,19 @@ vi.mock('../auth-compat', () => ({
   sendPasswordResetEmail: vi.fn(),
   compatAuth: { currentUser: null },
 }));
+// Stored monthly snapshots are the ONE thing the store reads over plain REST
+// rather than through the compat shims — see getCompetencySnapshots.
+const apiGet = vi.fn();
+vi.mock('../api-client', () => ({
+  api: { get: (path: string) => apiGet(path), post: vi.fn(), put: vi.fn(), patch: vi.fn(), del: vi.fn() },
+  ApiError: class ApiError extends Error {},
+  ApiNetworkError: class ApiNetworkError extends Error {},
+  getToken: vi.fn(), setToken: vi.fn(), clearToken: vi.fn(),
+}));
 // ────────────────────────────────────────────────────────────────────────────
 
 import { DataService } from '../store';
-import type { User, Skill, Assessment, Evidence, SkillAssessmentMethod, JobProfile, TrainingCourse, Department, WorkExperience } from '../../types';
+import type { User, Skill, Assessment, Evidence, SkillAssessmentMethod, JobProfile, TrainingCourse, Department, WorkExperience, DevelopmentPlan } from '../../types';
 import { Role } from '../../types';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -620,6 +629,230 @@ describe('generateIndividualTrainingPlan', () => {
     const itp = svc.generateIndividualTrainingPlan('u1')!;
     expect(itp.recommendations[0].gap).toBeGreaterThanOrEqual(itp.recommendations[1].gap);
   });
+
+  // Task 8: a gap is ranked by how much the skill matters, not only how deep it
+  // is — the same weighting the training-needs analysis applies to a unit.
+  it('puts a shallow safety-critical gap above a deeper nice-to-have one', () => {
+    const SAFETY = makeSkill({ id: 'safety1', assessmentMethod: 'WRITTEN_EXAM', criticality: 'SAFETY_CRITICAL' });
+    const NICE = makeSkill({ id: 'nice1', assessmentMethod: 'WRITTEN_EXAM', criticality: 'LOW' });
+    inject(svc, {
+      skills: [SAFETY, NICE],
+      jobs: [{
+        ...JOB,
+        requiredSkills: [
+          { skillId: 'safety1', requiredLevel: 1 },  // gap 1 × 3 = 3
+          { skillId: 'nice1', requiredLevel: 4 },    // gap 4 × 0.5 = 2
+        ],
+      }],
+      assessments: [],
+    });
+    const itp = svc.generateIndividualTrainingPlan('u1')!;
+    expect(itp.recommendations.map(r => r.skillId)).toEqual(['safety1', 'nice1']);
+    expect(itp.recommendations[0].priority).toBe('HIGH');
+  });
+
+  it('leaves a legacy skill with no criticality ranking exactly as before', () => {
+    // Nothing set ⇒ STANDARD ⇒ weight 1 ⇒ gap 4 is still a HIGH priority.
+    const itp = svc.generateIndividualTrainingPlan('u1')!;
+    expect(itp.recommendations[0].priority).toBe('HIGH');
+  });
+});
+
+// ─── Development plans (the SAVED training plan) ────────────────────────────
+
+describe('development plans', () => {
+  let svc: DataService;
+  let updateDocMock: ReturnType<typeof vi.fn>;
+  let setDocMock: ReturnType<typeof vi.fn>;
+
+  const SKILL1 = makeSkill({ id: 'skill1', name: 'Pumps', assessmentMethod: 'WRITTEN_EXAM' });
+  const SKILL2 = makeSkill({ id: 'skill2', name: 'Valves', assessmentMethod: 'WRITTEN_EXAM' });
+  const EMPLOYEE = makeUser({ id: 'u1', managerId: 'mgr1' });
+  const MANAGER = makeUser({ id: 'mgr1', orgLevel: 'SH', managerId: undefined });
+  const STRANGER = makeUser({ id: 'u9', managerId: undefined });
+
+  const JOB: JobProfile = {
+    id: 'job1',
+    title: 'Test Job',
+    description: '',
+    departmentId: 'dept1',
+    orgLevel: 'SP',
+    requiredSkills: [
+      { skillId: 'skill1', requiredLevel: 4 },
+      { skillId: 'skill2', requiredLevel: 3 },
+    ],
+  } as unknown as JobProfile;
+
+  /** A plan already "in the store", as the listener would have delivered it. */
+  const makePlan = (overrides: Partial<DevelopmentPlan> = {}): DevelopmentPlan => ({
+    id: 'plan1',
+    userId: 'u1',
+    title: 'Plan',
+    status: 'ACTIVE',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    createdBy: 'mgr1',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    items: [
+      {
+        id: 'item1',
+        skillId: 'skill1',
+        skillName: 'Pumps',
+        requiredLevel: 4,
+        levelAtPlanning: 2,
+        gapAtPlanning: 2,
+        recommendation: 'Course',
+        priority: 'HIGH',
+        status: 'NOT_STARTED',
+        targetDate: '2026-06-01T00:00:00.000Z',
+        supervisorSignOff: false,
+      },
+    ],
+    ...overrides,
+  });
+
+  /** The document body handed to the backend by the last write. */
+  const lastWrite = (): any => {
+    const calls = updateDocMock.mock.calls;
+    return calls.length > 0 ? calls[calls.length - 1][1] : undefined;
+  };
+
+  beforeEach(async () => {
+    const compat = await import('../firestore-compat');
+    updateDocMock = compat.updateDoc as ReturnType<typeof vi.fn>;
+    setDocMock = compat.setDoc as ReturnType<typeof vi.fn>;
+    updateDocMock.mockClear();
+    setDocMock.mockClear();
+
+    svc = makeSvc();
+    inject(svc, {
+      skills: [SKILL1, SKILL2],
+      users: [EMPLOYEE, MANAGER, STRANGER],
+      jobs: [JOB],
+      // skill1 measured at 2 (gap of 2); skill2 never assessed.
+      assessments: [makeAssessment({ id: 'a1', type: 'WRITTEN_EXAM', skillId: 'skill1', score: 2 })],
+      evidences: [],
+      trainingCourses: [],
+      assessmentInstructions: [],
+      workExperiences: [],
+      developmentPlans: [],
+      notifications: [],
+    });
+  });
+
+  it('proposes items for measured gaps only — a never-assessed skill is not a training need', () => {
+    const items = svc.proposeDevelopmentPlanItems('u1');
+    expect(items.map(i => i.skillId)).toEqual(['skill1']);
+    // The level is FROZEN on the item — this is what makes before/after provable.
+    expect(items[0].levelAtPlanning).toBe(2);
+    expect(items[0].gapAtPlanning).toBe(2);
+    expect(items[0].requiredLevel).toBe(4);
+    expect(items[0].sourceAtPlanning).toBe('ASSESSMENT');
+    expect(items[0].status).toBe('NOT_STARTED');
+    expect(items[0].supervisorSignOff).toBe(false);
+  });
+
+  it('creates a DRAFT by default and records the coverage it was written from', async () => {
+    const plan = await svc.createDevelopmentPlan('u1', { createdBy: 'u1' });
+    expect(plan.status).toBe('DRAFT');
+    expect(plan.activatedAt).toBeUndefined();
+    expect(plan.items).toHaveLength(1);
+    // 2 required skills, 1 measured, 1 never assessed — the base the plan covers.
+    expect(plan.coverageAtPlanning).toEqual({ required: 2, measured: 1, provisional: 0, unknown: 1 });
+    expect(setDocMock).toHaveBeenCalled();
+  });
+
+  it('a manager assigning a plan starts it ACTIVE and stamps activation', async () => {
+    const plan = await svc.createDevelopmentPlan('u1', { createdBy: 'mgr1', status: 'ACTIVE' });
+    expect(plan.status).toBe('ACTIVE');
+    expect(plan.activatedAt).toBeTruthy();
+  });
+
+  it('completing an item stamps it; re-opening drops the completion and any sign-off', async () => {
+    inject(svc, {
+      developmentPlans: [makePlan({
+        items: [{ ...makePlan().items[0], status: 'COMPLETED', completedAt: '2026-02-01T00:00:00.000Z', supervisorSignOff: true, signedOffBy: 'mgr1', levelAtSignOff: 4 }],
+      })],
+    });
+
+    await svc.setDevelopmentPlanItemStatus('plan1', 'item1', 'IN_PROGRESS');
+    const item = lastWrite().items[0];
+    expect(item.status).toBe('IN_PROGRESS');
+    expect(item.completedAt).toBeUndefined();
+    expect(item.supervisorSignOff).toBe(false);
+    expect(item.levelAtSignOff).toBeUndefined();
+    expect(item.startedAt).toBeTruthy();
+  });
+
+  it('sign-off stores the level measured TODAY against the frozen planning level', async () => {
+    inject(svc, {
+      developmentPlans: [makePlan({ items: [{ ...makePlan().items[0], status: 'COMPLETED', completedAt: '2026-02-01T00:00:00.000Z' }] })],
+      // The employee has since been re-assessed at 4 — the plan worked.
+      assessments: [makeAssessment({ id: 'a2', type: 'WRITTEN_EXAM', skillId: 'skill1', score: 4, date: '2026-03-01' })],
+    });
+
+    await svc.signOffDevelopmentPlanItem('plan1', 'item1', 'mgr1', 'Verified on the unit');
+    const written = lastWrite();
+    expect(written.items[0].supervisorSignOff).toBe(true);
+    expect(written.items[0].signedOffBy).toBe('mgr1');
+    expect(written.items[0].levelAtSignOff).toBe(4);
+    expect(written.items[0].levelAtPlanning).toBe(2);
+    // Every live item is signed off, so the plan closes itself.
+    expect(written.status).toBe('COMPLETED');
+    expect(written.completedAt).toBeTruthy();
+  });
+
+  it('progress joins today\'s score back on and never divides by a cancelled item', () => {
+    const plan = makePlan({
+      items: [
+        { ...makePlan().items[0], id: 'i1', status: 'COMPLETED', supervisorSignOff: true, levelAtSignOff: 4 },
+        { ...makePlan().items[0], id: 'i2', skillId: 'skill2', skillName: 'Valves', requiredLevel: 3, levelAtPlanning: 1, gapAtPlanning: 2, status: 'CANCELLED' },
+      ],
+    });
+    inject(svc, { developmentPlans: [plan] });
+
+    const p = svc.getDevelopmentPlanProgress(plan);
+    expect(p.total).toBe(2);
+    expect(p.cancelled).toBe(1);
+    // 1 completed of 1 still in play — the cancelled item is not a denominator.
+    expect(p.completedPct).toBe(100);
+    expect(p.signedOff).toBe(1);
+    // skill1 currently measures 2 against a planning level of 2 ⇒ no gain yet.
+    expect(p.items[0].currentLevel).toBe(2);
+    expect(p.items[0].improvement).toBe(0);
+    expect(p.levelsGained).toBe(0);
+    expect(p.items[0].metRequirement).toBe(false);
+  });
+
+  it('an empty plan reports null completion rather than 0%', () => {
+    const plan = makePlan({ items: [] });
+    expect(svc.getDevelopmentPlanProgress(plan).completedPct).toBeNull();
+  });
+
+  it('the sign-off queue shows a report\'s completed items, never the reviewer\'s own', () => {
+    inject(svc, {
+      developmentPlans: [
+        makePlan({ id: 'p-emp', userId: 'u1', items: [{ ...makePlan().items[0], status: 'COMPLETED' }] }),
+        makePlan({ id: 'p-mgr', userId: 'mgr1', items: [{ ...makePlan().items[0], status: 'COMPLETED' }] }),
+        makePlan({ id: 'p-stranger', userId: 'u9', items: [{ ...makePlan().items[0], status: 'COMPLETED' }] }),
+        // Already verified — nothing left to do.
+        makePlan({ id: 'p-done', userId: 'u1', items: [{ ...makePlan().items[0], status: 'COMPLETED', supervisorSignOff: true }] }),
+      ],
+    });
+
+    const queue = svc.getPendingDevelopmentSignOffs('mgr1');
+    expect(queue.map(r => r.plan.id)).toEqual(['p-emp']);
+  });
+
+  it('refuses to delete a plan that is no longer a draft', async () => {
+    inject(svc, { developmentPlans: [makePlan({ status: 'ACTIVE' })] });
+    await expect(svc.deleteDevelopmentPlan('plan1')).rejects.toThrow(/draft/i);
+  });
+
+  it('canSupervise follows the management chain and never yourself', () => {
+    expect(svc.canSupervise('mgr1', 'u1')).toBe(true);
+    expect(svc.canSupervise('u1', 'u1')).toBe(false);
+    expect(svc.canSupervise('u9', 'u1')).toBe(false);
+  });
 });
 
 // ─── A4.7: Evidence flow integration (submit → approve → score update) ────────
@@ -921,51 +1154,39 @@ describe('orgLevel reconciliation', () => {
   });
 });
 
-// ─── generateDepartmentalTNA ─────────────────────────────────────────────────
+// ─── Department scoping (what the TNA screen picks its scope from) ──────────
+//
+// The TNA engine itself has MOVED TO THE SERVER (`GET /analytics/training-needs`,
+// server/src/analytics/aggregate.ts, covered by server/src/__tests__/analytics.test.ts).
+// It used to run here, which meant downloading the whole company to answer a
+// question about one section. What stays in the browser is the resolution of a
+// unit to its people, which the pickers and the analytics filter still use.
 
-describe('generateDepartmentalTNA', () => {
+describe('getDepartmentSubtreeIds / getDepartmentMembers', () => {
   let svc: DataService;
-
-  const JOB: JobProfile = {
-    id: 'job1', title: 'Test Job', description: '', departmentId: 'dept1', orgLevel: 'SP',
-    requiredSkills: [{ skillId: 'skill1', requiredLevel: 4 }],
-  } as unknown as JobProfile;
 
   beforeEach(() => {
     svc = makeSvc();
     inject(svc, {
-      skills: [makeSkill({ id: 'skill1', name: 'Test Skill', assessmentMethod: 'WRITTEN_EXAM' })],
-      jobs: [JOB],
-      assessments: [],
-      evidences: [],
-      trainingCourses: [],
-      assessmentInstructions: [],
-    });
-  });
-
-  it('returns [] when no department members have gaps', () => {
-    inject(svc, {
-      users: [makeUser({ id: 'u1', departmentId: 'dept1', jobProfileId: 'job1', orgLevel: 'SP' })],
-      assessments: [makeAssessment({ subjectId: 'u1', type: 'WRITTEN_EXAM', score: 4 })],
-    });
-    expect(svc.generateDepartmentalTNA('dept1')).toEqual([]);
-  });
-
-  it('aggregates gap counts and totals across department members', () => {
-    inject(svc, {
+      departments: [
+        { id: 'dept1', name: 'General Ops', type: 'GENERAL' },
+        { id: 'sec1', name: 'Section A', type: 'SECTION', parentId: 'dept1' },
+        { id: 'sec2', name: 'Section B', type: 'SECTION', parentId: 'sec1' },
+      ] as unknown as Department[],
       users: [
-        makeUser({ id: 'u1', departmentId: 'dept1', jobProfileId: 'job1', orgLevel: 'SP' }),
-        makeUser({ id: 'u2', departmentId: 'dept1', jobProfileId: 'job1', orgLevel: 'SP' }),
+        makeUser({ id: 'u1', departmentId: 'sec1' }),
+        makeUser({ id: 'u2', departmentId: 'sec2' }),
       ],
-      assessments: [], // both score 0 vs required 4 → gap 4 each
     });
-    const tna = svc.generateDepartmentalTNA('dept1');
-    expect(tna).toHaveLength(1);
-    expect(tna[0].skillId).toBe('skill1');
-    expect(tna[0].gapCount).toBe(2);
-    expect(tna[0].totalGap).toBe(8);
-    expect(tna[0].averageGap).toBe(4);
-    expect(tna[0].priority).toBe('HIGH');
+  });
+
+  it('walks the whole subtree, not just direct children', () => {
+    expect(svc.getDepartmentSubtreeIds('dept1').sort()).toEqual(['dept1', 'sec1', 'sec2']);
+  });
+
+  it('rolls members up — a general department has nobody sitting in it directly', () => {
+    expect(svc.getDepartmentMembers('dept1').map(u => u.id).sort()).toEqual(['u1', 'u2']);
+    expect(svc.getDepartmentMembers('dept1', false)).toEqual([]);
   });
 });
 
@@ -1314,5 +1535,283 @@ describe('getPendingWorkExperienceVerifications', () => {
   it('an admin sees every pending entry', () => {
     const ids = svcWith().getPendingWorkExperienceVerifications('adm1').map(w => w.id);
     expect(ids).toEqual(expect.arrayContaining(['we-report', 'we-stranger', 'we-own']));
+  });
+});
+
+// ─── Coverage: measured vs unknown ───────────────────────────────────────────
+
+describe('getUserCoverage / getGroupCoverage', () => {
+  const EXAM_SKILL = (id: string) => makeSkill({ id, assessmentMethod: 'WRITTEN_EXAM' });
+
+  const job = (requiredSkills: { skillId: string; requiredLevel: number }[]): JobProfile => ({
+    id: 'job1',
+    title: 'Test Job',
+    description: '',
+    departmentId: 'dept1',
+    orgLevel: 'SP',
+    requiredSkills,
+  } as unknown as JobProfile);
+
+  function svcWith(fields: Record<string, unknown>): DataService {
+    const svc = makeSvc();
+    inject(svc, {
+      skills: [EXAM_SKILL('skill1'), EXAM_SKILL('skill2'), EXAM_SKILL('skill3')],
+      users: [makeUser({ jobProfileId: 'job1' })],
+      jobs: [job([
+        { skillId: 'skill1', requiredLevel: 3 },
+        { skillId: 'skill2', requiredLevel: 3 },
+        { skillId: 'skill3', requiredLevel: 3 },
+      ])],
+      assessments: [],
+      evidences: [],
+      workExperiences: [],
+      assessmentInstructions: [],
+      departments: [{ id: 'dept1', name: 'General', type: 'GENERAL', managerId: '' }],
+      ...fields,
+    });
+    return svc;
+  }
+
+  it('nothing assessed ⇒ everything unknown and compliance is null, not 0%', () => {
+    const c = svcWith({}).getUserCoverage('u1');
+    expect(c.required).toBe(3);
+    expect(c.measured).toBe(0);
+    expect(c.unknown).toBe(3);
+    expect(c.known).toBe(0);
+    expect(c.compliancePct).toBeNull();
+    expect(c.gapsKnown).toBe(0);
+    expect(c.totalGap).toBe(0);
+  });
+
+  it('counts only real records as measured, and states compliance over them', () => {
+    const svc = svcWith({
+      assessments: [
+        makeAssessment({ id: 'a1', skillId: 'skill1', type: 'WRITTEN_EXAM', score: 4 }),
+        makeAssessment({ id: 'a2', skillId: 'skill2', type: 'WRITTEN_EXAM', score: 1 }),
+      ],
+    });
+    const c = svc.getUserCoverage('u1');
+    expect(c.measured).toBe(2);
+    expect(c.unknown).toBe(1);
+    expect(c.measuredPct).toBe(67);
+    expect(c.compliantKnown).toBe(1);
+    expect(c.gapsKnown).toBe(1);
+    expect(c.compliancePct).toBe(50); // 1 of the 2 measured — the unknown is excluded
+    expect(c.totalGap).toBe(2);       // required 3 − score 1, unknown adds nothing
+  });
+
+  it('approved evidence counts as measured', () => {
+    const svc = svcWith({
+      evidences: [makeEvidence({ id: 'e1', skillId: 'skill1', status: 'APPROVED', assignedScore: 3 })],
+    });
+    const c = svc.getUserCoverage('u1');
+    expect(c.measured).toBe(1);
+    expect(c.provisional).toBe(0);
+    expect(c.compliancePct).toBe(100);
+  });
+
+  it('a provisional (work-experience) score is known but NOT measured', () => {
+    const svc = svcWith({
+      workExperiences: [
+        makeWorkExperience({
+          id: 'we1',
+          status: 'VERIFIED',
+          skills: [{ skillId: 'skill1', claimedLevel: 3, yearsApplied: 10, suggestedLevel: 3, verifiedLevel: 3 }],
+        }),
+      ],
+      appSettings: [{ id: 'work-experience', enabled: true, maxProvisionalLevel: 3, bands: [] }],
+    });
+    const c = svc.getUserCoverage('u1');
+    expect(c.measured).toBe(0);
+    expect(c.provisional).toBe(1);
+    expect(c.known).toBe(1);
+    expect(c.unknown).toBe(2);
+    expect(c.measuredPct).toBe(0);
+    expect(c.compliancePct).toBe(100); // met, but on a provisional basis only
+  });
+
+  it('a user with no job profile contributes nothing', () => {
+    const svc = svcWith({ users: [makeUser({ jobProfileId: undefined })] });
+    const c = svc.getUserCoverage('u1');
+    expect(c.required).toBe(0);
+    expect(c.compliancePct).toBeNull();
+    expect(c.measuredPct).toBe(0);
+  });
+
+  it('group coverage pools the requirement counts across people', () => {
+    const svc = svcWith({
+      users: [makeUser({ id: 'u1', jobProfileId: 'job1' }), makeUser({ id: 'u2', jobProfileId: 'job1' })],
+      assessments: [makeAssessment({ id: 'a1', subjectId: 'u1', skillId: 'skill1', type: 'WRITTEN_EXAM', score: 4 })],
+    });
+    const c = svc.getGroupCoverage(['u1', 'u2']);
+    expect(c.required).toBe(6);
+    expect(c.measured).toBe(1);
+    expect(c.unknown).toBe(5);
+    expect(c.compliancePct).toBe(100); // the single measured skill meets its level
+  });
+});
+
+// ─── Training catalogue (courses linked to skills) ───────────────────────────
+
+describe('training catalogue', () => {
+  let svc: DataService;
+
+  const course = (overrides: Partial<TrainingCourse> = {}): TrainingCourse => ({
+    id: 'c1',
+    title: 'Pump Alignment',
+    provider: 'EPROM Training Centre',
+    type: 'INTERNAL',
+    linkedSkillIds: ['skill1'],
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    svc = makeSvc();
+    inject(svc, { skills: [makeSkill()], trainingCourses: [], users: [], jobs: [], assessments: [], evidences: [] });
+  });
+
+  afterEach(() => { vi.clearAllMocks(); });
+
+  it('getCoursesForSkill returns every course linked to the skill', () => {
+    inject(svc, {
+      trainingCourses: [
+        course({ id: 'c1', linkedSkillIds: ['skill1', 'skill2'] }),
+        course({ id: 'c2', linkedSkillIds: ['skill2'] }),
+      ],
+    });
+    expect(svc.getCoursesForSkill('skill1').map(c => c.id)).toEqual(['c1']);
+    expect(svc.getCoursesForSkill('skill2').map(c => c.id)).toEqual(['c1', 'c2']);
+  });
+
+  it('an archived course is hidden from lists and from recommendations', () => {
+    inject(svc, { trainingCourses: [course({ id: 'c1', isArchived: true }), course({ id: 'c2' })] });
+    expect(svc.getAllTrainingCourses().map(c => c.id)).toEqual(['c2']);
+    expect(svc.getAllTrainingCourses(true)).toHaveLength(2);
+    expect(svc.getCoursesForSkill('skill1').map(c => c.id)).toEqual(['c2']);
+  });
+
+  it('generateTrainingCourseCode is derived from the title and never collides', () => {
+    const first = svc.generateTrainingCourseCode({ title: 'Pump Alignment' });
+    expect(first).toBe('TRN-PUMPA-01');
+    inject(svc, { trainingCourses: [course({ code: first })] });
+    expect(svc.generateTrainingCourseCode({ title: 'Pump Alignment' })).toBe('TRN-PUMPA-02');
+  });
+
+  it('addTrainingCourse fills in id, code and timestamps', async () => {
+    const saved = await svc.addTrainingCourse({
+      title: 'Confined Space Entry',
+      provider: 'OPITO',
+      type: 'EXTERNAL',
+      linkedSkillIds: ['skill1'],
+    });
+    expect(saved.id).toBeTruthy();
+    expect(saved.code).toMatch(/^TRN-/);
+    expect(saved.createdAt).toBeTruthy();
+    expect(saved.isArchived).toBeUndefined();
+  });
+
+  it('removeTrainingCourse archives rather than deletes (old plans still resolve it)', async () => {
+    const existing = course({ id: 'c1' });
+    inject(svc, { trainingCourses: [existing] });
+    const { updateDoc } = await import('../firestore-compat');
+    await svc.removeTrainingCourse('c1');
+    const written = (updateDoc as ReturnType<typeof vi.fn>).mock.calls[0][1] as Record<string, unknown>;
+    expect(written.isArchived).toBe(true);
+    expect(written.title).toBe('Pump Alignment');
+  });
+
+  it('the ITP names a live course but ignores an archived one', () => {
+    const USER = makeUser({ orgLevel: 'SP', jobProfileId: 'job1' });
+    const JOB = {
+      id: 'job1', title: 'Test Job', description: '', departmentId: 'dept1',
+      orgLevel: 'SP', requiredSkills: [{ skillId: 'skill1', requiredLevel: 4 }],
+    } as unknown as JobProfile;
+    inject(svc, {
+      users: [USER], jobs: [JOB], skills: [makeSkill({ assessmentMethod: 'WRITTEN_EXAM' })],
+      trainingCourses: [course({ id: 'c1', title: 'Pump Alignment', isArchived: true })],
+    });
+    const archivedPlan = svc.generateIndividualTrainingPlan('u1')!;
+    expect(archivedPlan.recommendations[0].courseId).toBeUndefined();
+    expect(archivedPlan.recommendations[0].recommendation).not.toContain('Pump Alignment');
+
+    inject(svc, { trainingCourses: [course({ id: 'c1', title: 'Pump Alignment' })] });
+    const livePlan = svc.generateIndividualTrainingPlan('u1')!;
+    expect(livePlan.recommendations[0].courseId).toBe('c1');
+    expect(livePlan.recommendations[0].recommendation).toContain('Pump Alignment');
+  });
+});
+
+describe('stored monthly snapshots', () => {
+  let svc: DataService;
+
+  beforeEach(() => {
+    svc = new DataService();
+    apiGet.mockReset();
+    apiGet.mockResolvedValue({ snapshots: [] });
+  });
+
+  it('asks for the whole company when no department is selected', async () => {
+    await svc.getCompetencySnapshots();
+    await svc.getCompetencySnapshots('ALL');
+    // No scopeId at all ⇒ the server answers with the COMPANY scope.
+    expect(apiGet.mock.calls.every(([p]) => !p.includes('scopeId'))).toBe(true);
+  });
+
+  it('scopes to a department and encodes the id', async () => {
+    await svc.getCompetencySnapshots('dept 1/a', 6);
+    expect(apiGet).toHaveBeenCalledWith('/analytics/snapshots?months=6&scopeId=dept%201%2Fa');
+  });
+
+  it('passes the stored rows through untouched, nulls included', async () => {
+    // compliancePct/avgGap are null when nothing was measured that month — the
+    // store must not helpfully turn them into 0.
+    apiGet.mockResolvedValue({
+      snapshots: [{ period: '2026-07', compliancePct: null, avgGap: null, measured: 0, required: 4 }],
+    });
+    const rows = await svc.getCompetencySnapshots();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].compliancePct).toBeNull();
+    expect(rows[0].avgGap).toBeNull();
+  });
+
+  it('survives an empty response body', async () => {
+    apiGet.mockResolvedValue({});
+    expect(await svc.getCompetencySnapshots()).toEqual([]);
+  });
+});
+
+// ─── Live server-side aggregates ────────────────────────────────────────────
+//
+// The maths lives on the server (covered by server/src/__tests__/analytics.test.ts).
+// What matters here is that the store asks for the RIGHT SCOPE — the endpoint
+// treats the scope as a permission boundary, and a wrong string is either a 403
+// or, worse, somebody else's numbers.
+
+describe('server-side aggregates (overview / training needs)', () => {
+  let svc: DataService;
+
+  beforeEach(() => {
+    svc = makeSvc();
+    apiGet.mockReset();
+    apiGet.mockResolvedValue({});
+  });
+
+  it('asks for the company when no scope is given', async () => {
+    await svc.getOrgOverview();
+    await svc.getOrgOverview('ALL');
+    expect(apiGet.mock.calls.every(([p]) => p === '/analytics/overview?scope=company')).toBe(true);
+  });
+
+  it('encodes a department id', async () => {
+    await svc.getOrgOverview('dept 1/a');
+    expect(apiGet).toHaveBeenCalledWith('/analytics/overview?scope=dept%201%2Fa');
+  });
+
+  it('passes the training-needs scope through, sub-units included by default', async () => {
+    await svc.getTrainingNeeds('team');
+    expect(apiGet).toHaveBeenCalledWith('/analytics/training-needs?scope=team');
+
+    await svc.getTrainingNeeds('dept1', { includeSubUnits: false });
+    expect(apiGet).toHaveBeenCalledWith('/analytics/training-needs?scope=dept1&includeSubUnits=false');
   });
 });

@@ -42,3 +42,37 @@ export const ORG_MANAGER_LEVELS: readonly OrgLevel[] = ORG_LEVEL.filter(
 // getUserSkillScore in src/services/store.ts.
 export const WORK_EXPERIENCE_STATUS = ['PENDING', 'VERIFIED', 'REJECTED'] as const;
 export type WorkExperienceStatus = (typeof WORK_EXPERIENCE_STATUS)[number];
+
+// Lifecycle of a saved development plan (migration 006). DRAFT is being written,
+// ACTIVE is agreed and in progress, COMPLETED/ARCHIVED are closed. Per-ITEM
+// status (NOT_STARTED/IN_PROGRESS/COMPLETED/CANCELLED) lives inside the JSON
+// items array and is not projected to a column, so it carries no CHECK.
+export const DEVELOPMENT_PLAN_STATUS = ['DRAFT', 'ACTIVE', 'COMPLETED', 'ARCHIVED'] as const;
+export type DevelopmentPlanStatus = (typeof DEVELOPMENT_PLAN_STATUS)[number];
+
+// How much a gap on a skill matters — the business judgement no amount of
+// scoring can derive (finding 9: every gap weighed the same). Stored inside the
+// skills JSON, so there is no column and no CHECK to keep in step; the zod
+// schema is the only gate. The WEIGHT is a multiplier on the gap, applied by
+// analytics/aggregate.ts when it ranks training needs.
+//
+// Keep in lockstep with SKILL_CRITICALITIES / SKILL_CRITICALITY_WEIGHTS in
+// src/types.ts — the browser ranks an individual's plan with the same numbers.
+export const SKILL_CRITICALITY = ['SAFETY_CRITICAL', 'HIGH', 'STANDARD', 'LOW'] as const;
+export type SkillCriticality = (typeof SKILL_CRITICALITY)[number];
+
+export const SKILL_CRITICALITY_WEIGHTS: Record<SkillCriticality, number> = {
+  SAFETY_CRITICAL: 3,
+  HIGH: 2,
+  STANDARD: 1,
+  LOW: 0.5,
+};
+
+/** Skills written before criticality existed rank as STANDARD. */
+export const DEFAULT_SKILL_CRITICALITY: SkillCriticality = 'STANDARD';
+
+export function skillCriticalityOf(value?: unknown): SkillCriticality {
+  return (SKILL_CRITICALITY as readonly string[]).includes(String(value))
+    ? (value as SkillCriticality)
+    : DEFAULT_SKILL_CRITICALITY;
+}

@@ -22,7 +22,14 @@ import { z } from 'zod';
 import type { CollectionName } from './registry.js';
 // Canonical enums — the single source of truth shared with authz.ts (and
 // asserted against the migration CHECK constraints in contracts.test.ts).
-import { ROLE, USER_STATUS, ORG_LEVEL, WORK_EXPERIENCE_STATUS } from '../domain/enums.js';
+import {
+  ROLE,
+  USER_STATUS,
+  ORG_LEVEL,
+  WORK_EXPERIENCE_STATUS,
+  DEVELOPMENT_PLAN_STATUS,
+  SKILL_CRITICALITY,
+} from '../domain/enums.js';
 
 // A reference id, when the field is present. Must be a string; the EMPTY STRING
 // is accepted and means "not set" — the frontend forms write `''` for cleared
@@ -69,6 +76,16 @@ const jobProfilesSchema = baseDoc.extend({
   orgLevel: z.enum(ORG_LEVEL).optional(),
 });
 
+// Competency standards. Only `criticality` is really policed: it multiplies
+// every gap this skill produces in the training-needs ranking, so a typo'd
+// value would quietly mis-rank a training budget. `levels` and
+// `assessmentMethods` stay undeclared — preparePayload stringifies neither
+// consistently and their shape still moves with the frontend.
+const skillsSchema = baseDoc.extend({
+  name: z.string().min(1).optional(),
+  criticality: z.enum(SKILL_CRITICALITY).optional(),
+});
+
 const departmentsSchema = baseDoc.extend({
   parentId: id.optional(),
   managerId: id.optional(),
@@ -90,6 +107,47 @@ const workExperiencesSchema = baseDoc.extend({
   // untouched. Declaring it as z.array() here would 422 every write.
 });
 
+// Training catalogue. `linkedSkillIds` IS declared (unlike workExperiences.skills)
+// because preparePayload does not stringify it — it goes over the wire as a real
+// JSON array, and a course whose links are the wrong shape can never be matched
+// to a gap. Everything else stays optional so a partial update is unaffected.
+const trainingCoursesSchema = baseDoc.extend({
+  title: z.string().min(1).optional(),
+  provider: z.string().optional(),
+  type: z.enum(['INTERNAL', 'EXTERNAL', 'OJT']).optional(),
+  linkedSkillIds: z.array(z.string()).optional(),
+  targetLevel: z.number().int().min(1).max(5).optional(),
+  durationHours: z.number().nonnegative().optional(),
+  costPerSeat: z.number().nonnegative().optional(),
+});
+
+// Saved development plans (migration 006). `items` IS declared as a real array
+// — store.ts's preparePayload has no stringify rule for this collection, so it
+// arrives as JSON, and an items field of the wrong shape would break every
+// progress/sign-off reader. The per-item contract is deliberately thin (id +
+// skillId + status) so the UI can keep adding fields without a server bump,
+// but a plan can never be written with items that are not objects.
+const developmentPlanItemSchema = z
+  .object({
+    id: z.string().min(1).optional(),
+    skillId: id.optional(),
+    status: z.enum(['NOT_STARTED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED']).optional(),
+    requiredLevel: z.number().finite().optional(),
+    levelAtPlanning: z.number().finite().optional(),
+    levelAtSignOff: z.number().finite().optional(),
+    supervisorSignOff: z.boolean().optional(),
+  })
+  .passthrough();
+
+const developmentPlansSchema = baseDoc.extend({
+  userId: id.optional(),
+  title: z.string().optional(),
+  status: z.enum(DEVELOPMENT_PLAN_STATUS).optional(),
+  jobProfileId: id.optional(),
+  createdBy: id.optional(),
+  items: z.array(developmentPlanItemSchema).optional(),
+});
+
 // Collections without a specific contract still must be JSON objects.
 // (`appSettings` is intentionally absent — it holds free-form admin config and
 // is already admin-write-only via ADMIN_WRITE_COLLECTIONS in authz.ts.)
@@ -98,9 +156,12 @@ const SCHEMAS: Partial<Record<CollectionName, z.ZodTypeAny>> = {
   assessments: assessmentsSchema,
   evidences: evidencesSchema,
   jobProfiles: jobProfilesSchema,
+  skills: skillsSchema,
   departments: departmentsSchema,
   notifications: notificationsSchema,
   workExperiences: workExperiencesSchema,
+  trainingCourses: trainingCoursesSchema,
+  developmentPlans: developmentPlansSchema,
 };
 
 export interface ValidationResult {

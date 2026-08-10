@@ -2,6 +2,8 @@
 // and attaches it as a Bearer token. Everything else (firestore-compat,
 // auth-compat) is built on top of this.
 
+import { newId } from '../utils/uuid';
+
 const API_BASE: string =
   (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') || '/api';
 
@@ -69,13 +71,7 @@ export class ApiNetworkError extends Error {
 
 // A short correlation id per request. The server echoes it back and stamps it on
 // every log line for that request, so a failure reported by a user can be traced.
-function newRequestId(): string {
-  try {
-    return crypto.randomUUID();
-  } catch {
-    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-  }
-}
+const newRequestId = newId;
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = { 'X-Request-Id': newRequestId() };

@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import ExcelJS from 'exceljs';
 import { Download, Upload, X, AlertCircle, CheckCircle, FileSpreadsheet, Loader2, Lock } from 'lucide-react';
 import { dataService } from '../services/store';
-import { User, Role, JobProfile, Skill, Department, OrgLevel, normalizeSkillCategory } from '../types';
+import { User, Role, JobProfile, Skill, Department, OrgLevel, TrainingCourse, normalizeSkillCategory, skillCriticalityOf } from '../types';
 
 interface BulkUploadProps {
-  type: 'USER' | 'JOB' | 'SKILL' | 'DEPT' | 'PROJECT';
+  type: 'USER' | 'JOB' | 'SKILL' | 'DEPT' | 'PROJECT' | 'COURSE';
   user: User | null;
   onComplete: () => void;
   onCancel: () => void;
@@ -59,8 +59,8 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, user, onComplete, 
         ];
       case 'SKILL':
         return [
-          ['Name', 'Category (Technical/Safety/Management/Soft Skills/Behavioral)', 'Assessment Question', 'Assessment Method (OJT_OBSERVATION/WORK_RECORD_REVIEW/WRITTEN_EXAM/PRACTICAL_DEMO/INTERVIEW)', 'Assessment Link', 'Code', 'Description', 'Level 1 Desc', 'Level 2 Desc', 'Level 3 Desc', 'Level 4 Desc', 'Level 5 Desc', 'Level 1 Certs', 'Level 2 Certs', 'Level 3 Certs', 'Level 4 Certs', 'Level 5 Certs'],
-          ['React.js', 'Technical', 'How proficient is the employee in React?', 'OJT_OBSERVATION', '', 'TECH-REA-01', 'Proficiency in React.js library', 'Basic knowledge', 'Can build simple components', 'Can build complex apps', 'Expert level', 'Master level', 'React Basic Cert', '', '', '', '']
+          ['Name', 'Category (Technical/Safety/Management/Soft Skills/Behavioral)', 'Criticality (SAFETY_CRITICAL/HIGH/STANDARD/LOW)', 'Assessment Question', 'Assessment Method (OJT_OBSERVATION/WORK_RECORD_REVIEW/WRITTEN_EXAM/PRACTICAL_DEMO/INTERVIEW)', 'Assessment Link', 'Code', 'Description', 'Level 1 Desc', 'Level 2 Desc', 'Level 3 Desc', 'Level 4 Desc', 'Level 5 Desc', 'Level 1 Certs', 'Level 2 Certs', 'Level 3 Certs', 'Level 4 Certs', 'Level 5 Certs'],
+          ['React.js', 'Technical', 'STANDARD', 'How proficient is the employee in React?', 'OJT_OBSERVATION', '', 'TECH-REA-01', 'Proficiency in React.js library', 'Basic knowledge', 'Can build simple components', 'Can build complex apps', 'Expert level', 'Master level', 'React Basic Cert', '', '', '', '']
         ];
       case 'DEPT':
         return [
@@ -73,6 +73,12 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, user, onComplete, 
         return [
           ['Name', 'Description', 'Location'],
           ['Project Alpha', 'Main expansion project', 'Alexandria']
+        ];
+      case 'COURSE':
+        return [
+          ['Title', 'Provider', 'Delivery (INTERNAL/EXTERNAL/OJT)', 'Skill Names (comma separated)', 'Code', 'Target Level (1-5)', 'Duration Hours', 'Cost Per Seat (EGP)', 'Link', 'Description'],
+          ['Basic Offshore Safety Induction (BOSIET)', 'EPROM Training Centre', 'EXTERNAL', 'Fire Fighting, Sea Survival', 'TRN-BOSIE-01', '3', '24', '18000', 'https://example.com/bosiet', 'OPITO-approved offshore safety induction.'],
+          ['Pump Alignment Workshop', 'Maintenance General Department', 'INTERNAL', 'Rotating Equipment Alignment', '', '4', '16', '0', '', 'Hands-on laser alignment practice.']
         ];
 
       default:
@@ -153,6 +159,11 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, user, onComplete, 
         const users = dataService.getAllUsers();
         const skills = dataService.getAllSkills();
         const projects = dataService.getAllProjects();
+        const courses = dataService.getAllTrainingCourses(true);
+        // Skill names a COURSE row referenced that we could not match. Reported
+        // back to the admin — silently dropping them would leave a course that
+        // looks imported but can never be recommended.
+        const unmatchedSkillNames = new Set<string>();
 
 
         // For JOB type, we need to group rows by Title and Department
@@ -319,10 +330,19 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, user, onComplete, 
                 
                 const existingSkill = skills.find(s => s.name.toLowerCase() === name.toLowerCase());
                 
+                // A blank cell keeps whatever the skill already had — a
+                // re-import of an old sheet must not silently reset every
+                // criticality an admin has judged back to STANDARD.
+                const criticalityCell = row['Criticality (SAFETY_CRITICAL/HIGH/STANDARD/LOW)']?.toString().trim().toUpperCase();
+                const criticality = criticalityCell
+                  ? skillCriticalityOf(criticalityCell)
+                  : skillCriticalityOf(existingSkill?.criticality);
+
                 const newSkill: Skill = {
                   id: existingSkill ? existingSkill.id : Math.random().toString(36).substr(2, 9),
                   name: name,
                   category: normalizeSkillCategory(row['Category (Technical/Safety/Management/Soft Skills/Behavioral)']?.toString()),
+                  criticality,
                   assessmentQuestion: row['Assessment Question']?.toString() || '',
                   assessmentMethod: (row['Assessment Method (OJT_OBSERVATION/WORK_RECORD_REVIEW/WRITTEN_EXAM/PRACTICAL_DEMO/INTERVIEW)']?.toString().toUpperCase() as any) || (existingSkill?.assessmentMethod) || 'OJT_OBSERVATION',
                   assessmentLink: row['Assessment Link']?.toString() || '',
@@ -389,6 +409,71 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, user, onComplete, 
                 count++;
                 break;
               }
+              case 'COURSE': {
+                const title = row['Title']?.toString().trim() || '';
+                if (!title) break;
+
+                const provider = row['Provider']?.toString().trim() || '';
+                const rawType = row['Delivery (INTERNAL/EXTERNAL/OJT)']?.toString().trim().toUpperCase()
+                  || row['Type (INTERNAL/EXTERNAL/OJT)']?.toString().trim().toUpperCase();
+                const type: TrainingCourse['type'] =
+                  rawType === 'EXTERNAL' || rawType === 'OJT' ? rawType : 'INTERNAL';
+
+                // Skills are named, not id'd, in a spreadsheet. Match on name
+                // first, then code, both case-insensitively.
+                const linkedSkillIds: string[] = [];
+                const names = (row['Skill Names (comma separated)'] || row['Skill Names'] || row['Skill Name'] || '')
+                  .toString().split(',').map((s: string) => s.trim()).filter(Boolean);
+                for (const name of names) {
+                  const match = skills.find(s =>
+                    s.name.toLowerCase() === name.toLowerCase() ||
+                    (s.code || '').toLowerCase() === name.toLowerCase());
+                  if (match) {
+                    if (!linkedSkillIds.includes(match.id)) linkedSkillIds.push(match.id);
+                  } else {
+                    unmatchedSkillNames.add(name);
+                  }
+                }
+
+                const num = (raw: any) => {
+                  const n = Number(raw?.toString().trim());
+                  return raw !== '' && raw != null && Number.isFinite(n) ? n : undefined;
+                };
+                const targetLevelRaw = num(row['Target Level (1-5)'] ?? row['Target Level']);
+                const targetLevel = targetLevelRaw && targetLevelRaw >= 1 && targetLevelRaw <= 5
+                  ? Math.round(targetLevelRaw) : undefined;
+
+                // Re-import of the same sheet must update, not duplicate: a
+                // course is identified by its code, else by title + provider.
+                const code = row['Code']?.toString().trim() || '';
+                const existing = courses.find(c =>
+                  (code && (c.code || '').toLowerCase() === code.toLowerCase()) ||
+                  (!code && c.title.toLowerCase() === title.toLowerCase()
+                    && (c.provider || '').toLowerCase() === provider.toLowerCase()));
+
+                const payload = {
+                  title,
+                  provider,
+                  type,
+                  linkedSkillIds,
+                  code: code || existing?.code,
+                  description: row['Description']?.toString().trim() || undefined,
+                  link: row['Link']?.toString().trim() || undefined,
+                  durationHours: num(row['Duration Hours']),
+                  costPerSeat: num(row['Cost Per Seat (EGP)'] ?? row['Cost Per Seat']),
+                  targetLevel,
+                };
+
+                if (existing) {
+                  const updated = await dataService.updateTrainingCourse({ ...existing, ...payload, isArchived: false });
+                  const idx = courses.findIndex(c => c.id === existing.id);
+                  if (idx >= 0) courses[idx] = updated;
+                } else {
+                  courses.push(await dataService.addTrainingCourse(payload));
+                }
+                count++;
+                break;
+              }
 
             }
           } catch (err) {
@@ -410,8 +495,16 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, user, onComplete, 
         }
 
         setSuccess(`Successfully imported ${count} ${type.toLowerCase()}s.`);
+        if (unmatchedSkillNames.size > 0) {
+          // Not an error — the courses were imported — but the admin must know
+          // these links were dropped, or the catalogue silently under-covers.
+          setError(
+            `These skill names were not found and were not linked: ${[...unmatchedSkillNames].join(', ')}. ` +
+            `Check the spelling against the Skill Library, then re-import.`,
+          );
+        }
         setLoading(false);
-        setTimeout(() => onComplete(), 2000);
+        setTimeout(() => onComplete(), unmatchedSkillNames.size > 0 ? 6000 : 2000);
       }
     } catch (err) {
       setError('Failed to process file. Please check the format.');
@@ -459,7 +552,7 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, user, onComplete, 
         <div className="p-6 border-b border-slate-300 flex justify-between items-center bg-slate-50">
           <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
             <FileSpreadsheet size={20} className="text-blue-700" />
-            Bulk Upload: {type === 'USER' ? 'Workforce' : type === 'JOB' ? 'Job Profiles' : type === 'SKILL' ? 'Skill Standards' : type === 'PROJECT' ? 'Projects' : 'Departments'}
+            Bulk Upload: {type === 'USER' ? 'Workforce' : type === 'JOB' ? 'Job Profiles' : type === 'SKILL' ? 'Skill Standards' : type === 'PROJECT' ? 'Projects' : type === 'COURSE' ? 'Training Courses' : 'Departments'}
 
           </h3>
           <button onClick={onCancel} className="p-2 hover:bg-slate-200 rounded-none text-slate-600 transition-colors">

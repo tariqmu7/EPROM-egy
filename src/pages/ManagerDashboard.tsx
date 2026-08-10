@@ -7,11 +7,16 @@ import { CompetencyMatrix } from './CompetencyMatrix';
 import { SupervisorApproval } from './SupervisorApproval';
 import { Users, ChevronRight, AlertCircle, CheckCircle, TrendingUp, ArrowLeft, Briefcase, BarChart2, Shield, Search, Award, Mail } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
+import { CompliancePercent, CoverageNote, CoverageMeter } from '../components/CoverageIndicator';
 
 interface ManagerDashboardProps {
   user: User;
   initialView?: 'TEAM' | 'JOBS' | 'TALENT_SEARCH' | 'MATRIX' | 'APPROVALS';
 }
+
+/** Colour for a compliance %; null (nothing measured) stays deliberately grey. */
+const complianceTone = (pct: number | null): string =>
+  pct === null ? 'text-slate-400' : pct >= 80 ? 'text-emerald-700' : pct >= 50 ? 'text-blue-700' : 'text-slate-700';
 
 export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ user, initialView }) => {
   const [selectedMember, setSelectedMember] = useState<User | null>(null);
@@ -32,24 +37,19 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
   // In a real app, we might have a more direct link, but here we use departmentId
   const managedJobs = useMemo(() => dataService.getAllJobs().filter(job => job.departmentId === user.departmentId), [user.departmentId, storeVersion]);
 
+  // Measured vs unknown: compliance is over the skills that were actually
+  // assessed, and `compliance` is null when none were — a team member nobody
+  // has ever assessed must not read as 0% compliant with a full set of gaps.
+  // Pooled coverage across the whole team — the base every team % is read against.
+  const teamCoverage = useMemo(
+    () => dataService.getGroupCoverage(subordinates.map(s => s.id)),
+    [subordinates, storeVersion]
+  );
+
   const getMemberStats = useCallback((member: User) => {
-    const jobProfile = member.jobProfileId ? dataService.getJobProfile(member.jobProfileId) : null;
-    if (!jobProfile || !member.orgLevel) return { compliance: 0, gaps: 0 };
-
-    const requirements = dataService.getEffectiveRequirements(jobProfile);
-    if (requirements.length === 0) return { compliance: 0, gaps: 0 };
-
-    const analysis = requirements.map(req => {
-        const score = dataService.getUserSkillScore(member.id, req.skillId);
-        return { gap: Math.max(0, req.requiredLevel - score) };
-    });
-
-    const gaps = analysis.filter(a => a.gap > 0).length;
-    const compliant = analysis.filter(a => a.gap <= 0).length;
-    const compliance = Math.round((compliant / analysis.length) * 100);
-
-    return { compliance, gaps };
-  }, []);
+    const coverage = dataService.getUserCoverage(member.id);
+    return { coverage, compliance: coverage.compliancePct, gaps: coverage.gapsKnown };
+  }, [storeVersion]);
 
   if (selectedMember) {
     return (
@@ -74,7 +74,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
                 </span>
             </div>
         </div>
-        <EmployeeDashboard user={selectedMember} readOnly />
+        <EmployeeDashboard user={selectedMember} readOnly viewer={user} />
       </div>
     );
   }
@@ -91,8 +91,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
                     const stats = getMemberStats(emp);
                     return {
                         name: emp.name.split(' ')[0], // First name for chart
-                        Compliance: stats.compliance,
-                        Gaps: stats.gaps
+                        Compliance: stats.compliance ?? 0,
+                        Gaps: stats.gaps,
+                        'Not measured': stats.coverage.unknown
                     };
                 });
 
@@ -146,9 +147,16 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
 
                             {/* Team Stats List */}
                             <div>
-                                <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-2 flex items-center gap-2">
                                     <Users size={16} className="text-slate-600" /> Current Team Status
                                 </h4>
+                                {employeesInJob.length > 0 && (
+                                    <CoverageMeter
+                                        coverage={dataService.getGroupCoverage(employeesInJob.map(e => e.id))}
+                                        label="Assessment coverage in this role"
+                                        className="mb-4"
+                                    />
+                                )}
                                 {employeesInJob.length > 0 ? (
                                     <div className="bg-slate-50 rounded-sm border border-slate-100 p-4 space-y-3">
                                         {employeesInJob.map(emp => {
@@ -163,20 +171,22 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
                                                             <div>
                                                                 <div className="text-sm font-bold text-slate-700 leading-none">{emp.name}</div>
                                                                 <div className="text-[10px] text-slate-600 mt-0.5">
-                                                                    {stats.gaps} Gaps • ITP Generated
+                                                                    {stats.gaps} Gaps • {stats.coverage.measured} of {stats.coverage.required} measured
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                        <span className={`text-xs font-bold ${stats.compliance >= 80 ? 'text-emerald-700' : stats.compliance >= 50 ? 'text-blue-700' : 'text-slate-700'}`}>
-                                                            {stats.compliance}%
-                                                        </span>
+                                                        <CompliancePercent
+                                                            coverage={stats.coverage}
+                                                            className={`text-xs font-bold ${complianceTone(stats.compliance)}`}
+                                                        />
                                                     </div>
                                                     <div className="w-full bg-slate-100 rounded-none h-2 overflow-hidden">
-                                                        <div 
-                                                            className={`h-full rounded-none ${stats.compliance >= 80 ? 'bg-emerald-500' : stats.compliance >= 50 ? 'bg-blue-500' : 'bg-slate-500'}`} 
-                                                            style={{ width: `${stats.compliance}%` }}
+                                                        <div
+                                                            className={`h-full rounded-none ${stats.compliance === null ? 'bg-slate-300' : stats.compliance >= 80 ? 'bg-emerald-500' : stats.compliance >= 50 ? 'bg-blue-500' : 'bg-slate-500'}`}
+                                                            style={{ width: `${stats.compliance ?? 0}%` }}
                                                         ></div>
                                                     </div>
+                                                    <CoverageNote coverage={stats.coverage} className="text-[9px] font-bold uppercase tracking-wide mt-1" />
                                                 </div>
                                             );
                                         })}
@@ -358,7 +368,28 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
       </div>
 
       {activeView === 'TEAM' ? (
-        /* Team Grid */
+        <>
+        {/* Team-wide measurement base: how much of what the team is required to
+            know has actually been assessed. Every % below is read against it. */}
+        <div className="bg-slate-900 text-white p-5 flex flex-col md:flex-row md:items-center gap-6 justify-between">
+            <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-1">Team Assessment Coverage</p>
+                <p className="text-2xl font-black">
+                    {teamCoverage.measured} <span className="text-slate-500">of</span> {teamCoverage.required}
+                    <span className="text-sm font-bold text-slate-400 ml-2">required skills measured ({teamCoverage.measuredPct}%)</span>
+                </p>
+                <p className="text-[10px] font-bold uppercase tracking-wide mt-1 text-slate-400">
+                    {teamCoverage.provisional > 0 && `${teamCoverage.provisional} provisional · `}
+                    {teamCoverage.unknown > 0
+                        ? <span className="text-amber-400">{teamCoverage.unknown} never assessed — excluded from every % below</span>
+                        : 'All required skills have been assessed'}
+                </p>
+            </div>
+            <div className="text-right">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-1">Compliance of Measured</p>
+                <CompliancePercent coverage={teamCoverage} className="text-3xl font-black" />
+            </div>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {subordinates.map(member => {
                 const stats = getMemberStats(member);
@@ -395,25 +426,30 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
                             <div className="bg-slate-50 rounded-none p-3 border border-slate-100">
                                 <div className="text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Compliance</div>
                                 <div className="flex items-center gap-2 mb-2">
-                                    <span className={`text-lg font-bold ${stats.compliance >= 80 ? 'text-emerald-700' : stats.compliance >= 50 ? 'text-blue-700' : 'text-slate-700'}`}>
-                                        {stats.compliance}%
-                                    </span>
-                                    {stats.compliance >= 80 ? <CheckCircle size={14} className="text-emerald-500"/> : <TrendingUp size={14} className="text-blue-700"/>}
+                                    <CompliancePercent coverage={stats.coverage} className={`text-lg font-bold ${complianceTone(stats.compliance)}`} />
+                                    {stats.compliance === null
+                                        ? <AlertCircle size={14} className="text-amber-500" />
+                                        : stats.compliance >= 80 ? <CheckCircle size={14} className="text-emerald-500"/> : <TrendingUp size={14} className="text-blue-700"/>}
                                 </div>
                                 <div className="w-full bg-slate-200 rounded-none h-1.5 overflow-hidden">
-                                    <div 
-                                        className={`h-full rounded-none ${stats.compliance >= 80 ? 'bg-emerald-500' : stats.compliance >= 50 ? 'bg-blue-500' : 'bg-slate-500'}`} 
-                                        style={{ width: `${stats.compliance}%` }}
+                                    <div
+                                        className={`h-full rounded-none ${stats.compliance === null ? 'bg-slate-300' : stats.compliance >= 80 ? 'bg-emerald-500' : stats.compliance >= 50 ? 'bg-blue-500' : 'bg-slate-500'}`}
+                                        style={{ width: `${stats.compliance ?? 0}%` }}
                                     ></div>
                                 </div>
+                                <CoverageNote coverage={stats.coverage} className="text-[9px] font-bold uppercase tracking-wide mt-1.5" />
                             </div>
                             <div className="bg-slate-50 rounded-none p-3 border border-slate-100">
                                 <div className="text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">Critical Gaps</div>
                                 <div className="flex items-center gap-2">
-                                    <span className={`text-lg font-bold ${stats.gaps === 0 ? 'text-slate-700' : 'text-slate-700'}`}>
+                                    <span className="text-lg font-bold text-slate-700">
                                         {stats.gaps}
                                     </span>
                                     {stats.gaps > 0 && <AlertCircle size={14} className="text-amber-600"/>}
+                                </div>
+                                {/* Gaps counted over measured skills only — the rest are unknown, not failures. */}
+                                <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400 mt-1">
+                                    of {stats.coverage.known} measured
                                 </div>
                             </div>
                         </div>
@@ -429,6 +465,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
                 </div>
             )}
         </div>
+        </>
       ) : activeView === 'JOBS' ? (
         /* Job Profiles View */
         renderJobProfiles()

@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from 'react';
-import { User, Role, Department, Skill, JobProfile, ORG_LEVEL_LABELS, OrgLevel } from '../types';
+import React, { useState, useMemo, useEffect } from 'react';
+import { User, Role, Department, Skill, JobProfile, ORG_LEVEL_LABELS, OrgLevel, OrgOverview, CompetencyCoverage } from '../types';
 import { dataService } from '../services/store';
 import { useStoreData } from '../hooks/useStoreData';
 import { Search, Users, ShieldCheck, Briefcase, Award, ChevronRight, Activity, Filter, LayoutGrid, List, FileSpreadsheet, UserCircle, MapPin, Building2 } from 'lucide-react';
+import { CompliancePercent, CoverageNote } from '../components/CoverageIndicator';
 
 interface CEOPanelProps {
   currentUser: User;
@@ -15,42 +16,71 @@ export const CEOPanel: React.FC<CEOPanelProps> = ({ currentUser, onViewProfile }
 
   // Re-render when Firestore listeners deliver data; the reads below run
   // every render and return fresh arrays once the snapshots land.
-  useStoreData();
+  const storeVersion = useStoreData();
 
   const users = dataService.getAllUsers();
   const depts = dataService.getAllDepartments();
   const skills = dataService.getAllSkills();
   const jobs = dataService.getAllJobs();
 
+  // Company-wide coverage: what share of the workforce's required skills has
+  // actually been measured. Every compliance figure on this page is stated over
+  // that measured base — a never-assessed skill is unknown, not a failure.
+  //
+  // Computed on the SERVER (`GET /analytics/overview`). It used to be one
+  // getGroupCoverage over every employee plus a getUserCoverage per row of the
+  // directory — i.e. the whole company scored in the browser, on every render,
+  // for every viewer.
+  const [overview, setOverview] = useState<OrgOverview | null>(null);
+  const [overviewError, setOverviewError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    dataService.getOrgOverview()
+      .then(res => { if (!cancelled) { setOverview(res); setOverviewError(null); } })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setOverviewError(err instanceof Error ? err.message : 'Coverage figures unavailable.');
+      });
+    return () => { cancelled = true; };
+  }, [storeVersion]);
+
+  const companyCoverage = overview?.coverage ?? null;
+  // One row per employee, already scored — the directory looks its people up
+  // here instead of re-deriving each one.
+  const coverageByUser = useMemo(
+    () => new Map<string, CompetencyCoverage>((overview?.people ?? []).map(p => [p.userId, p.coverage])),
+    [overview]
+  );
+
   // Metrics
   const metrics = useMemo(() => {
     const activeUsers = users.filter(u => u.status === 'ACTIVE');
-    const totalSkillsIdentified = skills.length;
-    
-    // Average compliance across all active users
-    let totalCompliant = 0;
-    let totalChecked = 0;
-    
-    activeUsers.forEach(u => {
-      const itp = dataService.generateIndividualTrainingPlan(u.id);
-      if (itp) {
-        // Simple heuristic: compliance = (total requirements - total gaps) / total requirements
-        const job = jobs.find(j => j.id === u.jobProfileId);
-        const reqs = dataService.getEffectiveRequirements(job);
-        totalChecked += reqs.length;
-        totalCompliant += (reqs.length - itp.recommendations.length);
-      }
-    });
-
-    const complianceRate = totalChecked > 0 ? Math.round((totalCompliant / totalChecked) * 100) : 0;
 
     return [
       { label: 'Total Workforce', value: activeUsers.length, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50' },
-      { label: 'Avg. Compliance', value: `${complianceRate}%`, icon: ShieldCheck, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-      { label: 'Skill Repository', value: totalSkillsIdentified, icon: Activity, color: 'text-indigo-600', bg: 'bg-indigo-50' },
-      { label: 'General Depts', value: depts.filter(d => d.type === 'GENERAL').length, icon: Building2, color: 'text-amber-600', bg: 'bg-amber-50' }
+      {
+        label: 'Compliance (Measured)',
+        // Until the server answers, this is "—", never a number: a placeholder
+        // 0% on an executive screen is read as a finding.
+        value: !companyCoverage ? '—'
+          : companyCoverage.compliancePct === null ? '—' : `${companyCoverage.compliancePct}%`,
+        note: companyCoverage
+          ? `${companyCoverage.measured} of ${companyCoverage.required} required skills measured`
+          : overviewError ?? 'Loading coverage…',
+        icon: ShieldCheck, color: 'text-emerald-600', bg: 'bg-emerald-50'
+      },
+      {
+        label: 'Assessment Coverage',
+        value: companyCoverage ? `${companyCoverage.measuredPct}%` : '—',
+        note: !companyCoverage ? (overviewError ?? 'Loading coverage…')
+          : companyCoverage.unknown > 0 ? `${companyCoverage.unknown} never assessed`
+          : 'Everything required is measured',
+        icon: Activity, color: 'text-indigo-600', bg: 'bg-indigo-50'
+      },
+      { label: 'Skill Repository', value: skills.length, icon: Award, color: 'text-amber-600', bg: 'bg-amber-50' }
     ];
-  }, [users, skills, depts, jobs]);
+  }, [users, skills, depts, jobs, companyCoverage, overviewError]);
 
   const filteredPersonnel = useMemo(() => {
     if (searchTerm === '') return users.sort((a, b) => a.name.localeCompare(b.name));
@@ -130,17 +160,32 @@ export const CEOPanel: React.FC<CEOPanelProps> = ({ currentUser, onViewProfile }
           </div>
           
           <div className="flex gap-4">
-             <div className="bg-white/5 backdrop-blur-md p-6 border border-white/10 rounded-none shadow-xl min-w-[200px]">
+             {/* The real measurement base, not a decorative figure: how much of
+                 the workforce's required competence has actually been assessed. */}
+             <div className="bg-white/5 backdrop-blur-md p-6 border border-white/10 rounded-none shadow-xl min-w-[240px]">
                 <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-                  <Activity size={14} className="text-blue-500"/> System Health
+                  <Activity size={14} className="text-blue-500"/> Assessment Coverage
                 </p>
                 <div className="flex items-end gap-3">
-                   <span className="text-3xl font-black text-white">98.4%</span>
-                   <span className="text-xs font-bold text-emerald-500 pb-1 mb-1">Live</span>
+                   <span className="text-3xl font-black text-white">
+                     {companyCoverage ? `${companyCoverage.measuredPct}%` : '—'}
+                   </span>
+                   <span className="text-xs font-bold text-slate-400 pb-1 mb-1">
+                     {companyCoverage
+                       ? `${companyCoverage.measured} / ${companyCoverage.required} skills`
+                       : overviewError ? 'unavailable' : 'measuring…'}
+                   </span>
                 </div>
                 <div className="w-full bg-slate-800 h-1 mt-4">
-                   <div className="bg-blue-500 h-full w-[98.4%]"></div>
+                   <div className="bg-blue-500 h-full transition-all duration-1000" style={{ width: `${companyCoverage?.measuredPct ?? 0}%` }}></div>
                 </div>
+                <p className="text-[10px] font-bold uppercase tracking-wide mt-3 text-amber-400">
+                   {!companyCoverage
+                     ? (overviewError ?? 'Loading coverage from the server…')
+                     : companyCoverage.unknown > 0
+                     ? `${companyCoverage.unknown} required skills never assessed`
+                     : <span className="text-emerald-400">Every required skill has been assessed</span>}
+                </p>
              </div>
           </div>
         </div>
@@ -160,9 +205,10 @@ export const CEOPanel: React.FC<CEOPanelProps> = ({ currentUser, onViewProfile }
               <span className="text-xs font-black text-slate-500 uppercase tracking-widest">{m.label}</span>
             </div>
             <div className="text-3xl font-black text-slate-900">{m.value}</div>
-            <div className="mt-4 flex items-center gap-2 text-[10px] font-bold text-emerald-600">
-               <Activity size={12} />
-               <span>Real-time Update</span>
+            {/* The measurement base behind the figure, never hidden from it. */}
+            <div className="mt-4 flex items-center gap-2 text-[10px] font-bold text-slate-500">
+               <Activity size={12} className="text-emerald-600" />
+               <span>{'note' in m && m.note ? m.note : 'Real-time Update'}</span>
             </div>
           </div>
         ))}
@@ -223,7 +269,7 @@ export const CEOPanel: React.FC<CEOPanelProps> = ({ currentUser, onViewProfile }
                 <th className="px-8 py-5">Personnel</th>
                 <th className="px-6 py-5">Placement</th>
                 <th className="px-6 py-5">Hierarchy</th>
-                <th className="px-6 py-5">Core Proficiency</th>
+                <th className="px-6 py-5">Competency Status</th>
                 <th className="px-8 py-5 text-right">Insight</th>
               </tr>
             </thead>
@@ -281,37 +327,33 @@ export const CEOPanel: React.FC<CEOPanelProps> = ({ currentUser, onViewProfile }
                       </div>
                     </td>
                     <td className="px-6 py-6">
-                       <div className="flex flex-col gap-2 w-48">
-                          <div className="flex justify-between text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                             <span>Skill Coverage</span>
-                             <span>
-                                {(() => {
-                                   const job = jobs.find(j => j.id === person.jobProfileId);
-                                   const reqs = dataService.getEffectiveRequirements(job);
-                                   if (reqs.length === 0) return '0%';
-                                   const itp = dataService.generateIndividualTrainingPlan(person.id);
-                                   const gaps = itp?.recommendations.length || 0;
-                                   const coverage = reqs.length > 0 ? Math.round(((reqs.length - gaps) / reqs.length) * 100) : 0;
-                                   return `${coverage}%`;
-                                })()}
+                       {/* Compliance over what was measured, with the measured base
+                           printed beneath it — an unassessed skill is not a gap. */}
+                       {(() => {
+                          const coverage = coverageByUser.get(person.id);
+                          // No row yet (still loading, or the overview failed):
+                          // say nothing rather than draw an empty bar at 0%.
+                          if (!coverage) return (
+                             <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">
+                                {overviewError ? 'Unavailable' : 'Measuring…'}
                              </span>
-                          </div>
-                          <div className="h-1.5 w-full bg-slate-100 rounded-none overflow-hidden">
-                             <div 
-                                className="h-full bg-blue-600 transition-all duration-1000"
-                                style={{
-                                   width: (() => {
-                                      const job = jobs.find(j => j.id === person.jobProfileId);
-                                      const reqs = dataService.getEffectiveRequirements(job);
-                                      if (reqs.length === 0) return '0%';
-                                      const itp = dataService.generateIndividualTrainingPlan(person.id);
-                                      const gaps = itp?.recommendations.length || 0;
-                                      return `${Math.round(((reqs.length - gaps) / reqs.length) * 100)}%`;
-                                   })()
-                                }}
-                             ></div>
-                          </div>
-                       </div>
+                          );
+                          return (
+                             <div className="flex flex-col gap-2 w-52">
+                                <div className="flex justify-between text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                                   <span>Compliance (measured)</span>
+                                   <CompliancePercent coverage={coverage} className="text-slate-700" />
+                                </div>
+                                <div className="h-1.5 w-full bg-slate-100 rounded-none overflow-hidden">
+                                   <div
+                                      className={`h-full transition-all duration-1000 ${coverage.compliancePct === null ? 'bg-slate-300' : 'bg-blue-600'}`}
+                                      style={{ width: `${coverage.compliancePct ?? 0}%` }}
+                                   ></div>
+                                </div>
+                                <CoverageNote coverage={coverage} className="text-[9px] font-bold uppercase tracking-wide" />
+                             </div>
+                          );
+                       })()}
                     </td>
                     <td className="px-8 py-6 text-right">
                       <button 

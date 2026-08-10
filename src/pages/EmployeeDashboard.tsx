@@ -5,6 +5,7 @@ import { dataService } from '../services/store';
 import { useStoreData } from '../hooks/useStoreData';
 import { usePersistentView } from '../hooks/usePersistentView';
 import { AssessmentHistoryLog } from '../components/AssessmentHistoryLog';
+import { CompliancePercent, CoverageNote } from '../components/CoverageIndicator';
 import { 
   AlertCircle, 
   CheckCircle, 
@@ -42,6 +43,7 @@ import {
   ClipboardCheck,
   ChevronRight,
   AlertTriangle,
+  HelpCircle,
   Mail,
   Phone,
   MessageCircle,
@@ -54,7 +56,9 @@ import {
 } from 'lucide-react';
 import { compatAuth as auth } from '../services/auth-compat';
 import { exportCompetenceStatement } from '../utils/competenceStatement';
+import { newId } from '../utils/uuid';
 import { WorkExperienceSection } from '../components/WorkExperienceSection';
+import { DevelopmentPlanPanel } from '../components/DevelopmentPlanPanel';
 
 interface EmployeeDashboardProps {
   user: User;
@@ -72,9 +76,16 @@ interface EmployeeDashboardProps {
    * coincidentally implies "this is my own profile" today.
    */
   readOnly?: boolean;
+  /**
+   * Who is looking at this dashboard. Defaults to the subject (the normal
+   * self-service case). A manager/CEO/admin viewing somebody else's profile
+   * passes themselves, which is what lets the Development Plan panel offer
+   * supervisor actions (activate, sign off) instead of employee ones.
+   */
+  viewer?: User;
 }
 
-export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({ user, routed = false, readOnly = false }) => {
+export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({ user, routed = false, readOnly = false, viewer }) => {
   const [activeTab, setActiveTab] = usePersistentView<'OVERVIEW' | 'IDP' | 'HISTORY' | 'CERTIFICATES' | 'CAREER' | 'EXPERIENCE'>(
     'emp-dashboard',
     ['OVERVIEW', 'IDP', 'HISTORY', 'CERTIFICATES', 'CAREER', 'EXPERIENCE'],
@@ -117,7 +128,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
     const newStatus: Certificate['status'] = existingCert?.status === 'APPROVED' ? 'PENDING' : (existingCert?.status ?? 'PENDING');
 
     const newCert: Certificate = {
-      id: editingCert.id || crypto.randomUUID(),
+      id: editingCert.id || newId(),
       name: editingCert.name || '',
       degree: editingCert.degree || '',
       issuer: editingCert.issuer || '',
@@ -168,6 +179,8 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
           name: s.skill?.name ?? '',
           required: s.required,
           current: s.current,
+          // A never-assessed skill prints as "Not assessed", not as a gap.
+          measured: !s.isUnknown,
         })),
       appraisalScore: weightedAppraisalScore ?? undefined,
     });
@@ -193,13 +206,22 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
         current: currentScore,
         // Provisional == credited from verified work experience, not yet measured.
         isProvisional: source === 'EXPERIENCE',
+        // Never assessed at all: the 0 score means "we haven't looked", so it
+        // must not be shown or counted as a failure. See getUserCoverage.
+        isUnknown: source === 'NONE',
         gap: Math.max(0, req.requiredLevel - currentScore)
       };
     });
   }, [jobProfile, user.id, user.orgLevel, storeVersion]);
 
-  const gaps = useMemo(() => skillAnalysis.filter(s => s.gap > 0), [skillAnalysis]);
-  const compliant = useMemo(() => skillAnalysis.filter(s => s.gap <= 0), [skillAnalysis]);
+  // Measured vs unknown, straight from the store's single coverage resolver.
+  const coverage = useMemo(() => dataService.getUserCoverage(user.id), [user.id, storeVersion]);
+
+  // Gaps are only real where something was actually measured; the untouched
+  // skills get their own list so they read as work to schedule, not failures.
+  const gaps = useMemo(() => skillAnalysis.filter(s => s.gap > 0 && !s.isUnknown), [skillAnalysis]);
+  const unknownSkills = useMemo(() => skillAnalysis.filter(s => s.isUnknown), [skillAnalysis]);
+  const compliant = useMemo(() => skillAnalysis.filter(s => s.gap <= 0 && !s.isUnknown), [skillAnalysis]);
 
   const annualAppraisals = useMemo(() => {
     return dataService.getAssessments({ subjectId: user.id, skillId: 'annual-appraisal' });
@@ -410,13 +432,21 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
     }
 
     if (skillAnalysis.length > 0) {
-      const pct = Math.round((compliant.length / skillAnalysis.length) * 100);
       const advanced = expertise.filter(s => s.level >= 4).length;
-      sentences.push(
-        `Assessed against ${skillAnalysis.length} position competenc${skillAnalysis.length === 1 ? 'y' : 'ies'}, ` +
-        `meeting or exceeding ${compliant.length} (${pct}% compliance)` +
-        `${advanced > 0 ? `, with ${advanced} at Advanced level or above` : ''}.`
-      );
+      if (coverage.known === 0) {
+        // Nothing measured — say so instead of publishing a 0% compliance.
+        sentences.push(
+          `${skillAnalysis.length} position competenc${skillAnalysis.length === 1 ? 'y' : 'ies'} defined; ` +
+          `none assessed yet, so no compliance figure can be stated.`
+        );
+      } else {
+        sentences.push(
+          `Assessed on ${coverage.known} of ${coverage.required} position competenc${coverage.required === 1 ? 'y' : 'ies'}, ` +
+          `meeting or exceeding ${coverage.compliantKnown} of those (${coverage.compliancePct}% of what has been measured)` +
+          `${coverage.unknown > 0 ? `; ${coverage.unknown} not yet assessed` : ''}` +
+          `${advanced > 0 ? `, with ${advanced} at Advanced level or above` : ''}.`
+        );
+      }
     }
 
     const topDegree = education[0];
@@ -433,7 +463,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
     }
 
     return sentences;
-  }, [user.orgLevel, user.location, user.projectName, jobProfile, deptName, serviceRecord, skillAnalysis, compliant, expertise, education, credentials]);
+  }, [user.orgLevel, user.location, user.projectName, jobProfile, deptName, serviceRecord, skillAnalysis, coverage, expertise, education, credentials]);
 
   // Forward-looking promotion ladder: from the employee's current org level up
   // to CEO. The engine pulls each higher rung's required skills from this user's
@@ -1122,12 +1152,24 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                 <div className="grid grid-cols-2 gap-4">
                     <div>
                         <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Skill Compliance</p>
-                        <p className="text-3xl font-black">{skillAnalysis.length > 0 ? Math.round((compliant.length / skillAnalysis.length) * 100) : 0}%</p>
+                        {/* Of what was MEASURED — an unassessed skill is not a failed one. */}
+                        <CompliancePercent coverage={coverage} className="text-3xl font-black" />
                     </div>
                     <div>
                         <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Gap Density</p>
                         <p className="text-3xl font-black text-blue-400">{gaps.length}</p>
                     </div>
+                </div>
+                <div className="-mt-2 flex flex-col gap-1">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                        {coverage.measured} of {coverage.required} skills measured
+                        {coverage.provisional > 0 && ` · ${coverage.provisional} provisional`}
+                    </p>
+                    {coverage.unknown > 0 && (
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-amber-400">
+                            {coverage.unknown} never assessed — not counted as a gap
+                        </p>
+                    )}
                 </div>
                 <div className="pt-4 border-t border-white/10 flex items-center justify-between">
                     <div>
@@ -1249,6 +1291,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                                     </h3>
                                     <button onClick={() => { setHistorySearchTerm(''); setActiveTab('HISTORY'); }} className="text-[10px] font-bold text-blue-600 hover:underline uppercase">View Full History</button>
                                 </div>
+                                <CoverageNote coverage={coverage} className="text-[10px] font-bold uppercase tracking-wide mb-4" />
                                 <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 no-scrollbar">
                                     {skillAnalysis.map((item, idx) => (
                                         <div
@@ -1267,10 +1310,21 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                                                             Provisional
                                                         </span>
                                                     )}
+                                                    {item.isUnknown && (
+                                                        <span
+                                                            title="Never assessed — there is no score for this skill yet, so it is not counted as a gap"
+                                                            className="px-1.5 py-0.5 bg-slate-100 text-slate-500 border border-slate-300 text-[8px] font-black tracking-wider normal-case"
+                                                        >
+                                                            Not measured
+                                                        </span>
+                                                    )}
                                                     <ArrowRight size={10} className="opacity-0 group-hover:opacity-100 transition-opacity text-blue-600" />
                                                 </span>
                                                 <span className="text-[10px] font-black text-slate-600">
-                                                    <span className={item.current >= item.required ? 'text-emerald-600' : 'text-amber-600'}>Score: {item.current}</span> / {item.required} Required
+                                                    {item.isUnknown
+                                                        ? <span className="text-slate-400">No score yet</span>
+                                                        : <span className={item.current >= item.required ? 'text-emerald-600' : 'text-amber-600'}>Score: {item.current}</span>
+                                                    } / {item.required} Required
                                                 </span>
                                             </div>
                                             <div className="h-1.5 bg-slate-200 w-full relative">
@@ -1331,55 +1385,33 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
             )}
 
             {activeTab === 'IDP' && (
-                 <div className="bg-white border border-slate-200 overflow-hidden animate-in slide-in-from-right-4 duration-500">
-                    <div className="p-8 border-b border-slate-100 bg-slate-50/50">
-                        <div className="flex items-center gap-3 mb-2">
-                            <Target size={24} className="text-slate-900" />
-                            <h2 className="text-xl font-black uppercase tracking-tight">Individual Development Plan</h2>
-                        </div>
-                        <p className="text-slate-500 text-xs font-medium">Auto-generated roadmap to bridge competency gaps based on current job requirements.</p>
-                    </div>
-                    <div className="p-8">
-                        {gaps.length > 0 ? (
-                            <div className="space-y-8">
-                                {gaps.map((gap, idx) => (
-                                    <div key={idx} className="flex gap-6 relative">
-                                        {idx !== gaps.length - 1 && <div className="absolute left-[11px] top-6 bottom-0 w-0.5 bg-slate-100"></div>}
-                                        <div className="w-6 h-6 rounded-none bg-slate-900 text-white flex items-center justify-center text-[10px] font-black z-10 shrink-0">
-                                            {idx + 1}
-                                        </div>
-                                        <div className="space-y-3 pb-8">
-                                            <div>
-                                                <h4 className="font-black text-slate-900 uppercase text-sm tracking-tight">{gap.skill?.name}</h4>
-                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{gap.skill?.category}</p>
-                                            </div>
-                                            <div className="p-4 bg-slate-50 border border-slate-100 rounded-none space-y-3">
-                                                <div className="flex items-center gap-2">
-                                                    <BookOpen size={14} className="text-blue-600" />
-                                                    <p className="text-xs font-bold text-slate-700">Recommended Action:</p>
-                                                </div>
-                                                <p className="text-xs text-slate-600 leading-relaxed italic">
-                                                    {gap.gap >= 2 
-                                                        ? "Requires specialized external training module and technical certification." 
-                                                        : "On-the-job mentorship with department lead and internal knowledge transfer."}
-                                                </p>
-                                                <div className="pt-3 border-t border-slate-200 flex items-center justify-between">
-                                                    <span className="text-[10px] font-black uppercase text-slate-400">Status: Pending Verification</span>
-                                                    <button className="text-[10px] font-black uppercase text-blue-600 hover:underline">Request Support</button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
+                 <div className="space-y-6 animate-in slide-in-from-right-4 duration-500">
+                    {/* The plan itself: proposed → saved → tracked → signed off.
+                        Everything about a gap that is actually AGREED lives in
+                        the saved plan; this panel owns that whole lifecycle. */}
+                    <DevelopmentPlanPanel subject={user} viewer={viewer ?? user} coverage={coverage} />
+
+                    {/* Unknowns are not part of any plan — they are an assessment
+                        need, and putting them in a training plan is exactly the
+                        fiction the coverage rule exists to prevent. */}
+                    {unknownSkills.length > 0 && (
+                        <div className="bg-white border border-slate-200 p-6">
+                            <h4 className="text-xs font-black uppercase tracking-widest text-slate-900 flex items-center gap-2 mb-2">
+                                <AlertCircle size={16} className="text-amber-500" /> Not Measured Yet ({unknownSkills.length})
+                            </h4>
+                            <p className="text-[11px] text-slate-500 mb-4">
+                                These skills have never been assessed. They are not gaps — they are unknowns, they cannot be
+                                planned as training, and they are excluded from the compliance figure until they are measured.
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                                {unknownSkills.map((item, idx) => (
+                                    <span key={idx} className="text-[10px] font-bold uppercase bg-slate-50 border border-slate-200 text-slate-600 px-2 py-1">
+                                        {item.skill?.name} <span className="text-slate-400">· L{item.required} required</span>
+                                    </span>
                                 ))}
                             </div>
-                        ) : (
-                            <div className="text-center py-12">
-                                <CheckCircle size={48} className="text-emerald-500 mx-auto mb-4" />
-                                <h4 className="text-lg font-black uppercase tracking-tight">Full Compliance Achieved</h4>
-                                <p className="text-slate-500 text-sm mt-2">You currently meet all required proficiency levels for your Job Profile.</p>
-                            </div>
-                        )}
-                    </div>
+                        </div>
+                    )}
                  </div>
             )}
 
@@ -1712,8 +1744,11 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                                             {[...careerPath.roadmap].reverse().map((rung) => {
                                                 const r = READINESS[rung.readinessStatus] || READINESS.DEVELOPMENT_NEEDED;
                                                 const total = rung.requirements.length;
-                                                const met = rung.requirements.filter(req => req.gap <= 0).length;
-                                                const pct = total > 0 ? Math.round((met / total) * 100) : 0;
+                                                // Readiness is stated over what has been measured; the
+                                                // untouched skills are reported separately as unknowns.
+                                                const measured = rung.requirements.filter(req => req.isMeasured);
+                                                const met = measured.filter(req => req.gap <= 0).length;
+                                                const pct = measured.length > 0 ? Math.round((met / measured.length) * 100) : 0;
                                                 const isNextStep = rung.level === careerPath.roadmap[0].level;
                                                 return (
                                                     <div key={rung.level} className="relative group">
@@ -1735,28 +1770,38 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                                                                 </p>
                                                             ) : (
                                                                 <>
-                                                                    <div className="flex items-center gap-3 mb-4">
+                                                                    <div className="flex items-center gap-3 mb-1">
                                                                         <div className="flex-1 h-2 bg-slate-100 overflow-hidden">
                                                                             <div className={`h-full ${r.bar} transition-all`} style={{ width: `${pct}%` }}></div>
                                                                         </div>
-                                                                        <span className="text-[10px] font-black text-slate-500 uppercase whitespace-nowrap">{met}/{total} Skills Met</span>
+                                                                        <span className="text-[10px] font-black text-slate-500 uppercase whitespace-nowrap">{met}/{measured.length} Measured Skills Met</span>
                                                                     </div>
+                                                                    <p className={`text-[10px] font-bold uppercase tracking-wide mb-4 ${rung.unmeasuredCount > 0 ? 'text-amber-600' : 'text-slate-400'}`}>
+                                                                        {measured.length} of {total} required skills measured
+                                                                        {rung.unmeasuredCount > 0 && ` · ${rung.unmeasuredCount} never assessed`}
+                                                                    </p>
                                                                     <div className="space-y-2">
                                                                         {rung.requirements.map((req) => {
-                                                                            const done = req.gap <= 0;
+                                                                            const done = req.isMeasured && req.gap <= 0;
                                                                             return (
                                                                                 <div key={req.skillId} className="flex items-center justify-between gap-3 p-3 bg-slate-50 border border-slate-100">
                                                                                     <div className="flex items-center gap-2 min-w-0">
-                                                                                        {done
+                                                                                        {!req.isMeasured
+                                                                                            ? <HelpCircle size={14} className="text-slate-400 shrink-0" />
+                                                                                            : done
                                                                                             ? <CheckCircle size={14} className="text-emerald-500 shrink-0" />
                                                                                             : <AlertTriangle size={14} className="text-amber-500 shrink-0" />}
                                                                                         <span className="text-xs font-bold text-slate-700 truncate">{req.skillName}</span>
                                                                                     </div>
                                                                                     <div className="flex items-center gap-2 shrink-0">
-                                                                                        <span className={`text-[11px] font-black ${done ? 'text-emerald-600' : 'text-slate-700'}`}>{req.currentScore}</span>
+                                                                                        {req.isMeasured
+                                                                                            ? <span className={`text-[11px] font-black ${done ? 'text-emerald-600' : 'text-slate-700'}`}>{req.currentScore}</span>
+                                                                                            : <span className="text-[11px] font-black text-slate-400">—</span>}
                                                                                         <ArrowRight size={11} className="text-slate-300" />
                                                                                         <span className="text-[11px] font-black text-blue-700">{req.requiredScore}</span>
-                                                                                        {!done && (
+                                                                                        {!req.isMeasured ? (
+                                                                                            <span className="text-[9px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-1.5 py-0.5 uppercase">Not measured</span>
+                                                                                        ) : !done && (
                                                                                             <span className="text-[9px] font-bold text-amber-600 bg-amber-50 border border-amber-100 px-1.5 py-0.5 uppercase">+{req.gap}</span>
                                                                                         )}
                                                                                     </div>

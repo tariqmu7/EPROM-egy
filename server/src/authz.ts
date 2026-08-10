@@ -122,6 +122,8 @@ export async function can(collection: CollectionName, action: Action, ctx: Polic
       return evidencesPolicy(action, ctx, admin);
     case 'workExperiences':
       return workExperiencesPolicy(action, ctx, admin);
+    case 'developmentPlans':
+      return developmentPlansPolicy(action, ctx, admin);
     case 'notifications':
       return notificationsPolicy(action, ctx);
     case 'nominations':
@@ -245,6 +247,59 @@ async function workExperiencesPolicy(action: Action, ctx: PolicyCtx, admin: bool
   }
 }
 
+// A development plan is the employee's own training agreement. Reads follow the
+// same owner + management-chain shape as evidences/workExperiences.
+//
+// Writes are deliberately WIDER than work experience on one axis and narrower on
+// another. Wider: the whole plan document is one row, so an employee marking an
+// item "in progress" and their manager signing that item off are both PATCHes of
+// the same doc — the owner therefore keeps write access for the plan's whole
+// life, not only while it is PENDING (there is no such state here). Narrower:
+// only the plan's owner, their manager (any ancestor, so a section head can act
+// for an absent direct supervisor) or an admin may write at all — nobody else
+// can create a plan in someone else's name.
+//
+// The sign-off flag itself is NOT policed here: doing so would need a field-level
+// diff of a JSON array, which this layer does not do for any collection. The
+// client sets it only through the manager surfaces; treat it as an integrity
+// control, not a security boundary — an employee editing their own plan can
+// forge their own sign-off. If that ever matters commercially, move sign-off to
+// its own collection rather than trying to diff items here.
+async function developmentPlansPolicy(action: Action, ctx: PolicyCtx, admin: boolean): Promise<boolean> {
+  const { user, existing, incoming } = ctx;
+  const ownerOf = (doc?: Doc | null) => doc?.userId as string | undefined;
+
+  switch (action) {
+    case 'read': {
+      if (canReadAll(user)) return true;
+      if (!existing) return false;
+      if (ownerOf(existing) === canonicalId(user)) return true; // own plan
+      return isAncestorManager(ctx, ownerOf(existing)); // a subordinate's
+    }
+    case 'create': {
+      if (admin) return true;
+      if (!incoming) return false;
+      const target = ownerOf(incoming);
+      if (target === user.id) return true; // writing my own plan
+      return isAncestorManager(ctx, target); // a manager assigning one
+    }
+    case 'update': {
+      if (admin) return true;
+      if (!existing) return false;
+      if (ownerOf(existing) === user.id) return true; // progress updates
+      return isAncestorManager(ctx, ownerOf(existing)); // status / sign-off
+    }
+    case 'delete': {
+      if (admin) return true;
+      // Only a plan nobody has agreed to yet can be thrown away; once ACTIVE it
+      // is part of the competency record and is ARCHIVED, never deleted.
+      if (!existing || existing.status !== 'DRAFT') return false;
+      if (ownerOf(existing) === user.id) return true;
+      return isAncestorManager(ctx, ownerOf(existing));
+    }
+  }
+}
+
 function notificationsPolicy(action: Action, ctx: PolicyCtx): boolean {
   const { user, existing, incoming } = ctx;
   switch (action) {
@@ -340,6 +395,13 @@ export async function listScope(
       // MANDATORY, not an optimization: runList applies listScope and never
       // calls can(), so without this case every authenticated user could list
       // the whole company's employment history. Mirrors evidences.
+      const subtree = await getSubordinateIds(self);
+      return { or: [{ field: 'userId', op: 'in', value: subtree }] }; // own + subordinates
+    }
+    case 'developmentPlans': {
+      // MANDATORY for the same reason as workExperiences above: runList applies
+      // listScope and never calls can(), so without this case any authenticated
+      // user could list the whole company's training plans and gaps.
       const subtree = await getSubordinateIds(self);
       return { or: [{ field: 'userId', op: 'in', value: subtree }] }; // own + subordinates
     }
