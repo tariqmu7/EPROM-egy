@@ -29,7 +29,7 @@ import { randomUUID } from 'node:crypto';
 import { query } from '../db.js';
 import { ancestorChain, loadAnalyticsModel } from '../analytics/model.js';
 import { monthKey } from './scheduling.js';
-import { accumulate, finalizeCoverage, newCoverageAccumulator, skillScore } from './scoring.js';
+import { accumulate, finalizeCoverage, newCoverageAccumulator, skillScore, type ScoringIndex } from './scoring.js';
 
 export interface SnapshotSummary {
   period: string;
@@ -85,13 +85,19 @@ function tally(scope: ScopeAccumulator, skillId: string, skillName: string, gap:
 /** Writes (or refreshes) one scope's row for the period. UPDATE-then-INSERT
  *  rather than ON CONFLICT: pg-mem, the server test harness, does not support
  *  conflict-target inference on a unique index. */
-async function persist(scope: ScopeAccumulator, period: string, takenAt: Date): Promise<void> {
+async function persist(
+  scope: ScopeAccumulator,
+  period: string,
+  takenAt: Date,
+  detailExtra: Record<string, unknown> = {},
+): Promise<void> {
   const c = finalizeCoverage(scope.coverage);
   const detail = {
     topSkillGaps: [...scope.skills.values()]
       .filter((s) => s.totalGap > 0 || s.unknown > 0)
       .sort((a, b) => b.totalGap - a.totalGap || b.unknown - a.unknown)
       .slice(0, 10),
+    ...detailExtra,
   };
 
   const values = [
@@ -140,7 +146,18 @@ async function persist(scope: ScopeAccumulator, period: string, takenAt: Date): 
  * Builds and stores this month's snapshot for the company and every department
  * that has people in it. Called by the nightly sweep; safe to call repeatedly.
  */
-export async function runMonthlySnapshot(opts: { now?: Date } = {}): Promise<SnapshotSummary> {
+export async function runMonthlySnapshot(
+  opts: {
+    now?: Date;
+    /** Scoring inputs to use INSTEAD of the model's live index. The nightly
+     *  sweep never passes this; a back-fill passes an index whose assessments
+     *  and evidence are filtered to a cut-off date, so an old month is scored
+     *  on what was actually known then rather than on today's records. */
+    index?: ScoringIndex;
+    /** Merged into every written row's `detail` (a back-fill marks itself). */
+    detailExtra?: Record<string, unknown>;
+  } = {},
+): Promise<SnapshotSummary> {
   const now = opts.now ?? new Date();
   const startedMs = Date.now();
   const period = monthKey(now);
@@ -149,7 +166,9 @@ export async function runMonthlySnapshot(opts: { now?: Date } = {}): Promise<Sna
   // (analytics/model.ts), so a stored point and the figure on screen can never
   // be computed from differently-shaped inputs.
   const model = await loadAnalyticsModel();
-  const { users, index, jobRequirements, skillNames, deptParents, deptNames } = model;
+  const { users, jobRequirements, skillNames, deptParents, deptNames } = model;
+  const index = opts.index ?? model.index;
+  const detailExtra = opts.detailExtra ?? {};
 
 
   const company = newScope('COMPANY', '*', 'Whole company');
@@ -188,12 +207,12 @@ export async function runMonthlySnapshot(opts: { now?: Date } = {}): Promise<Sna
     }
   }
 
-  await persist(company, period, now);
+  await persist(company, period, now, detailExtra);
   for (const scope of departments.values()) {
     // Empty units are skipped: a row of zeroes is not a measurement, and a
     // company with 129 departments would otherwise bury the real ones.
     if (scope.headcount === 0) continue;
-    await persist(scope, period, now);
+    await persist(scope, period, now, detailExtra);
   }
 
   return {

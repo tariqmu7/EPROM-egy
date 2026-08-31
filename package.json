@@ -34,6 +34,8 @@
     "autoprefixer": "^10.4.27",
     "docx": "^9.6.1",
     "eslint": "^10.4.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.11.0",
     "jsdom": "^29.1.1",
     "postcss": "^8.5.8",
     "puppeteer-core": "^25.3.0",

@@ -34,8 +34,8 @@ export function localAvatar(name: string): string {
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">` +
     `<rect width="128" height="128" fill="${bg}"/>` +
-    `<text x="64" y="64" fill="#ffffff" font-family="Inter, system-ui, sans-serif" ` +
-    `font-size="54" font-weight="600" text-anchor="middle" dominant-baseline="central">${label}</text>` +
+    `<text x="64" y="64" dy="0.35em" fill="#ffffff" font-family="Inter, system-ui, sans-serif" ` +
+    `font-size="52" font-weight="600" text-anchor="middle">${label}</text>` +
     `</svg>`;
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }

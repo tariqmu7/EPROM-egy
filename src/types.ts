@@ -26,6 +26,9 @@ export function normalizeSkillCategory(raw?: string | null): SkillCategory {
   if (v.startsWith('behav')) return 'Behavioral';
   if (v.startsWith('saf') || v.includes('hse')) return 'Safety';
   if (v.startsWith('manage') || v.startsWith('lead')) return 'Management';
+  // 'Software' is a named tool (SAP, P6, CRM) — core-job work, not a soft
+  // skill. It must be tested BEFORE the 'soft' prefix, which it also matches.
+  if (v.startsWith('software')) return 'Technical';
   if (v.startsWith('soft')) return 'Soft Skills';
   return 'Technical';
 }

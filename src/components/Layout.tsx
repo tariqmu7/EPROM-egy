@@ -1,8 +1,9 @@
 import React, { memo, useState, useRef, useEffect } from 'react';
+import { Avatar } from './Avatar';
 import { User, Role, ORG_LEVEL_LABELS } from '../types';
 import { Logo } from './Logo';
 import { dataService } from '../services/store';
-import { LogOut, LayoutDashboard, ShieldCheck, BadgeCheck, UserCircle, Users, Building2, Briefcase, Activity, Grid, UploadCloud, CheckSquare, Star, Monitor, MessageSquare, Menu, X, Settings, Languages, ChevronDown, GraduationCap, BookOpen, LucideIcon } from 'lucide-react';
+import { LogOut, LayoutDashboard, ShieldCheck, BadgeCheck, UserCircle, Users, Building2, Briefcase, Activity, CheckSquare, Star, Menu, X, Settings, Languages, ChevronDown, GraduationCap, BookOpen, LucideIcon } from 'lucide-react';
 import { NotificationBell } from './NotificationBell';
 import { useI18n } from '../i18n/I18nContext';
 import { LOCALES } from '../i18n/translations';
@@ -208,7 +209,7 @@ export const Layout: React.FC<LayoutProps> = ({ user, onLogout, activeTab, onSwi
                     </p>
                 </div>
                 <div className="w-10 h-10 rounded-full bg-slate-100 border border-slate-300 flex items-center justify-center overflow-hidden text-slate-700">
-                    {user.avatarUrl ? <img src={user.avatarUrl} alt={user.name} /> : <UserCircle size={24} />}
+                    <Avatar src={user.avatarUrl} name={user.name} />
                 </div>
                 <button
                   onClick={onLogout}

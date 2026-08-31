@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
+import { Avatar } from '../components/Avatar';
 import { dataService } from '../services/store';
 import { useStoreData } from '../hooks/useStoreData';
-import { User, Role } from '../types';
+import { User } from '../types';
 import { CheckCircle, AlertTriangle, Clock, Briefcase, HelpCircle } from 'lucide-react';
 
 export const CompetencyMatrix: React.FC<{ currentUser: User }> = ({ currentUser }) => {
@@ -11,13 +12,6 @@ export const CompetencyMatrix: React.FC<{ currentUser: User }> = ({ currentUser 
 
   // ── Static reference data ────────────────────────────────────────────────
   const depts = useMemo(() => dataService.getAllDepartments(), [storeVersion]);
-  const users = useMemo(
-    () =>
-      currentUser.role === Role.CEO
-        ? dataService.getAllUsers()
-        : dataService.getPublicUsers(),
-    [currentUser.role, storeVersion]
-  );
   const jobs  = useMemo(() => dataService.getAllJobs(),   [storeVersion]);
   const skills = useMemo(() => dataService.getAllSkills(), [storeVersion]);
 
@@ -204,7 +198,7 @@ export const CompetencyMatrix: React.FC<{ currentUser: User }> = ({ currentUser 
                       style={{ backgroundColor: index % 2 === 0 ? 'white' : '#f8fafc' }}
                     >
                       <div className="flex items-center gap-3">
-                        <img src={user.avatarUrl} alt={user.name} className="w-8 h-8 rounded-none" />
+                        <Avatar src={user.avatarUrl} name={user.name} className="w-8 h-8 rounded-none" />
                         <div>
                           <div className="font-semibold">{user.name} {user.employeeId && <span className="text-slate-400 text-[10px] ml-1">ID: {user.employeeId}</span>}</div>
                           <div className="text-xs text-slate-500">{job?.title || 'No Profile'}</div>

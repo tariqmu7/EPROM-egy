@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Bell, Check, Info, AlertTriangle, CheckCircle, XCircle, Trash2 } from 'lucide-react';
+import { Bell, Check, Info, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 import { dataService } from '../services/store';
 import { useStoreData } from '../hooks/useStoreData';
 import { User, Notification } from '../types';

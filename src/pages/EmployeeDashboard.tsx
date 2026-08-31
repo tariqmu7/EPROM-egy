@@ -1,5 +1,6 @@
-import React, { useMemo, useState, useEffect } from 'react';
-import { User, Role, JobProfile, Skill, IndividualTrainingPlan, ORG_HIERARCHY_ORDER, ORG_LEVEL_LABELS, ScheduledAssessment, Certificate, Assessment } from '../types';
+import React, { useMemo, useState } from 'react';
+import { Avatar } from '../components/Avatar';
+import { User, Role, Skill, ORG_LEVEL_LABELS, Certificate, Assessment } from '../types';
 import { PROFICIENCY_DEFINITIONS } from '../constants';
 import { dataService } from '../services/store';
 import { useStoreData } from '../hooks/useStoreData';
@@ -13,8 +14,6 @@ import {
   BookOpen, 
   Activity, 
   TrendingUp, 
-  Users, 
-  PlayCircle, 
   Calendar, 
   ArrowRight, 
   Download, 
@@ -26,21 +25,16 @@ import {
   GraduationCap, 
   Target, 
   Zap, 
-  MessageSquare, 
   Building, 
   BadgeCheck, 
   Clock, 
-  XCircle, 
   Layers, 
   Shield, 
   LayoutGrid, 
   UserCheck, 
   Building2, 
   History as HistoryIcon, 
-  Monitor,
-  Video,
   FileUp,
-  ClipboardCheck,
   ChevronRight,
   AlertTriangle,
   HelpCircle,
@@ -54,7 +48,6 @@ import {
   X,
   ExternalLink
 } from 'lucide-react';
-import { compatAuth as auth } from '../services/auth-compat';
 import { exportCompetenceStatement } from '../utils/competenceStatement';
 import { newId } from '../utils/uuid';
 import { WorkExperienceSection } from '../components/WorkExperienceSection';
@@ -221,7 +214,6 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
   // skills get their own list so they read as work to schedule, not failures.
   const gaps = useMemo(() => skillAnalysis.filter(s => s.gap > 0 && !s.isUnknown), [skillAnalysis]);
   const unknownSkills = useMemo(() => skillAnalysis.filter(s => s.isUnknown), [skillAnalysis]);
-  const compliant = useMemo(() => skillAnalysis.filter(s => s.gap <= 0 && !s.isUnknown), [skillAnalysis]);
 
   const annualAppraisals = useMemo(() => {
     return dataService.getAssessments({ subjectId: user.id, skillId: 'annual-appraisal' });
@@ -531,9 +523,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
           <div className="flex-1 overflow-y-auto p-5">
             <div className="flex items-center gap-4 pb-5 mb-5 border-b border-slate-100">
               <div className="w-14 h-14 bg-slate-100 ring-1 ring-slate-200 rounded-full overflow-hidden flex items-center justify-center shrink-0">
-                {user.avatarUrl
-                  ? <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
-                  : <UserIcon size={26} className="text-slate-300" />}
+                <Avatar src={user.avatarUrl} name={user.name} />
               </div>
               <div className="min-w-0">
                 <p className="text-lg font-black text-slate-900 tracking-tight truncate">{user.name}</p>
@@ -865,11 +855,7 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
           <div className="flex items-center gap-5 min-w-0">
             <div className="relative shrink-0">
               <div className="w-20 h-20 bg-slate-100 ring-1 ring-slate-200 rounded-full overflow-hidden flex items-center justify-center">
-                {user.avatarUrl ? (
-                  <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover" />
-                ) : (
-                  <UserIcon size={36} className="text-slate-300" />
-                )}
+                <Avatar src={user.avatarUrl} name={user.name} />
               </div>
               <div className="absolute -bottom-1 -right-1 bg-blue-600 text-white p-1 rounded-full ring-2 ring-white" title="Verified profile">
                 <BadgeCheck size={13} />
@@ -1142,56 +1128,62 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
         ))}
       </div>
 
-      {/* ── Main Content Area ─────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        
-        {/* Left Column: Stats & Profile Summary */}
-        <div className="lg:col-span-4 space-y-6">
-            <div className="bg-slate-900 p-6 text-white space-y-6">
-                <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 border-b border-white/10 pb-2">Readiness Metrics</h3>
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Skill Compliance</p>
-                        {/* Of what was MEASURED — an unassessed skill is not a failed one. */}
-                        <CompliancePercent coverage={coverage} className="text-3xl font-black" />
-                    </div>
-                    <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Gap Density</p>
-                        <p className="text-3xl font-black text-blue-400">{gaps.length}</p>
-                    </div>
-                </div>
-                <div className="-mt-2 flex flex-col gap-1">
-                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
-                        {coverage.measured} of {coverage.required} skills measured
-                        {coverage.provisional > 0 && ` · ${coverage.provisional} provisional`}
-                    </p>
-                    {coverage.unknown > 0 && (
-                        <p className="text-[10px] font-bold uppercase tracking-wide text-amber-400">
-                            {coverage.unknown} never assessed — not counted as a gap
-                        </p>
-                    )}
-                </div>
-                <div className="pt-4 border-t border-white/10 flex items-center justify-between">
-                    <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Annual Appraisal</p>
-                        <div className="flex items-baseline gap-1">
-                            <p className="text-3xl font-black text-amber-400">{weightedAppraisalScore ?? '--'}</p>
-                            <span className="text-xs font-bold text-slate-500">/ 100</span>
-                        </div>
-                    </div>
+      {/* ── Readiness Metrics ─────────────────────────────────────────────
+          A full-width band, not a left-hand card: three numbers stacked in a
+          4-of-12 column read as a crowded wall and left the rest of that column
+          empty. Laid out horizontally the same figures get room to breathe and
+          the content below gets the full width. */}
+      <div className="bg-slate-900 text-white px-6 py-5">
+        <div className="flex flex-wrap items-start gap-x-10 gap-y-5">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 w-full lg:w-auto lg:self-center lg:border-r lg:border-white/10 lg:pr-10">
+                Readiness<br className="hidden lg:block" /> Metrics
+            </p>
+
+            <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Skill Compliance</p>
+                {/* Of what was MEASURED — an unassessed skill is not a failed one. */}
+                <CompliancePercent coverage={coverage} className="text-3xl font-black" />
+            </div>
+
+            <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Gap Density</p>
+                <p className="text-3xl font-black text-blue-400">{gaps.length}</p>
+            </div>
+
+            <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Annual Appraisal</p>
+                <div className="flex items-baseline gap-1">
+                    <p className="text-3xl font-black text-amber-400">{weightedAppraisalScore ?? '--'}</p>
+                    <span className="text-xs font-bold text-slate-500">/ 100</span>
                     {latestAppraisal && (
-                        <div className="text-right">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{new Date(latestAppraisal.date).getFullYear()}</p>
-                            <p className="text-[9px] text-slate-500 uppercase">{annualCycle?.name || 'Evaluation'}</p>
-                        </div>
+                        <span className="ml-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                            {new Date(latestAppraisal.date).getFullYear()}{annualCycle?.name ? ` · ${annualCycle.name}` : ''}
+                        </span>
                     )}
                 </div>
             </div>
-        </div>
 
-        {/* Right Column: Dynamic View. `min-w-0` keeps wide children (tables,
-            long titles) inside the grid track instead of blowing the page out. */}
-        <div className="lg:col-span-8 min-w-0">
+            {/* The base every percentage above is read against — never a bare %. */}
+            <div className="flex flex-col gap-1 lg:ml-auto lg:text-right lg:self-center">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                    {coverage.measured} of {coverage.required} skills measured
+                    {coverage.provisional > 0 && ` · ${coverage.provisional} provisional`}
+                </p>
+                {coverage.unknown > 0 && (
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-amber-400">
+                        {coverage.unknown} never assessed — not counted as a gap
+                    </p>
+                )}
+            </div>
+        </div>
+      </div>
+
+      {/* ── Main Content Area ─────────────────────────────────────────── */}
+      <div>
+
+        {/* `min-w-0` keeps wide children (tables, long titles) inside the
+            container instead of blowing the page out. */}
+        <div className="min-w-0">
             
             {activeTab === 'HISTORY' && (
                 <div className="space-y-8 animate-in slide-in-from-right-4 duration-500">

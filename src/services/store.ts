@@ -1,4 +1,4 @@
-import { User, Role, JobProfile, Skill, Project, Department, Assessment, ActivityLog, ORG_HIERARCHY_ORDER, ORG_LEVEL_NUMBERS, Notification, AssessmentCycle, Nomination, IndividualTrainingPlan, TrainingRecommendation, OrgLevel, Evidence, PromotionRequirement, CareerProgressionPlan, CareerLevelProgress, TrainingCourse, ScheduledAssessment, AssessmentMethod, UserStatus, Certificate, CareerHistoryEntry, SkillLevel, EvaluationQuestion, AssessmentPlan, AssessmentInstruction, SkillAssessmentMethod, AssessmentFrequency, AssessmentAudience, JobProfileSkill, DepartmentType, DEPT_TYPE_TO_ORG_LEVEL, RaterWeights, DEFAULT_RATER_WEIGHTS, WorkExperience, WorkExperienceSkill, WorkExperienceStatus, WorkExperiencePolicy, SkillScoreSource, CompetencyCoverage, CompetencySnapshot, OrgOverview, TrainingNeedsAnalysis, DevelopmentPlan, DevelopmentPlanItem, DevelopmentPlanStatus, DevelopmentItemStatus, DevelopmentPlanItemProgress, DevelopmentPlanProgress, SKILL_CRITICALITY_WEIGHTS, skillCriticalityOf, skillCriticalityWeight } from '../types';
+import { User, Role, JobProfile, Skill, Project, Department, Assessment, ActivityLog, ORG_HIERARCHY_ORDER, ORG_LEVEL_NUMBERS, Notification, AssessmentCycle, Nomination, IndividualTrainingPlan, TrainingRecommendation, OrgLevel, Evidence, PromotionRequirement, CareerProgressionPlan, CareerLevelProgress, TrainingCourse, ScheduledAssessment, AssessmentMethod, Certificate, CareerHistoryEntry, SkillLevel, EvaluationQuestion, AssessmentPlan, AssessmentInstruction, SkillAssessmentMethod, AssessmentAudience, JobProfileSkill, DepartmentType, DEPT_TYPE_TO_ORG_LEVEL, RaterWeights, DEFAULT_RATER_WEIGHTS, WorkExperience, WorkExperienceSkill, WorkExperienceStatus, WorkExperiencePolicy, SkillScoreSource, CompetencyCoverage, CompetencySnapshot, OrgOverview, TrainingNeedsAnalysis, DevelopmentPlan, DevelopmentPlanItem, DevelopmentPlanStatus, DevelopmentItemStatus, DevelopmentPlanItemProgress, DevelopmentPlanProgress, SKILL_CRITICALITY_WEIGHTS, skillCriticalityOf, skillCriticalityWeight } from '../types';
 import { DEFAULT_WORK_EXPERIENCE_POLICY, suggestLevelFromYears } from '../constants/experiencePolicy';
 import {
   collection,
@@ -16,8 +16,6 @@ import {
   startAfter,
   onSnapshot,
   Unsubscribe,
-  serverTimestamp,
-  Timestamp,
   writeBatch,
   QueryDocumentSnapshot,
   DocumentData,
@@ -1531,7 +1529,7 @@ export class DataService {
         if (existingProfile && existingProfile.id !== user.uid) {
           await this.deleteItem('users', existingProfile.id);
         }
-      } catch (error) {
+      } catch {
         // Error already handled in persistItem
       }
       
@@ -1572,7 +1570,7 @@ export class DataService {
       for (const dup of duplicates) {
         try {
           await this.deleteItem('users', dup.id);
-        } catch (e) {
+        } catch {
           // Ignore if delete fails
         }
       }
@@ -1597,7 +1595,7 @@ export class DataService {
                 await this.persistItem('users', migratedProfile);
                 await this.deleteItem('users', bulkProfile.id);
                 return { user: migratedProfile };
-              } catch (error) {
+              } catch {
                 // Fallback if migration fails
               }
            }
@@ -1616,7 +1614,7 @@ export class DataService {
               };
               try {
                 await this.persistItem('users', adminProfile);
-              } catch (error) {
+              } catch {
                 // Error already handled in persistItem
               }
               return { user: adminProfile };

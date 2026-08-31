@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { dataService } from '../services/store';
 import { useStoreData } from '../hooks/useStoreData';
-import { User, JobProfile, Skill, Evidence } from '../types';
+import { User, Skill, Evidence } from '../types';
 import { Upload, FileText, CheckCircle, Clock, AlertCircle, ExternalLink, Pencil, Trash2, XCircle, RefreshCw } from 'lucide-react';
 
 const readFileAsDataURL = (file: File): Promise<string> =>

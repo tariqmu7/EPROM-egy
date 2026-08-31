@@ -1,12 +1,12 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { User, Role, JobProfile, OrgLevel } from '../types';
+import { Avatar } from '../components/Avatar';
+import { User, Role, OrgLevel } from '../types';
 import { dataService } from '../services/store';
 import { useStoreData } from '../hooks/useStoreData';
 import { EmployeeDashboard } from './EmployeeDashboard';
 import { CompetencyMatrix } from './CompetencyMatrix';
 import { SupervisorApproval } from './SupervisorApproval';
-import { Users, ChevronRight, AlertCircle, CheckCircle, TrendingUp, ArrowLeft, Briefcase, BarChart2, Shield, Search, Award, Mail } from 'lucide-react';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
+import { Users, ChevronRight, AlertCircle, CheckCircle, TrendingUp, ArrowLeft, Briefcase, Shield, Search, Award, Mail } from 'lucide-react';
 import { CompliancePercent, CoverageNote, CoverageMeter } from '../components/CoverageIndicator';
 
 interface ManagerDashboardProps {
@@ -61,8 +61,8 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
           <ArrowLeft size={16} /> Back to Team Overview
         </button>
         <div className="bg-slate-100 border border-slate-300 rounded-sm p-4 mb-6 flex items-center gap-4">
-            <div className="w-12 h-12 rounded-none bg-white border border-slate-300 overflow-hidden ">
-                <img src={selectedMember.avatarUrl} alt={selectedMember.name} className="w-full h-full object-cover" />
+            <div className="w-12 h-12 rounded-none bg-white border border-slate-300 overflow-hidden shrink-0">
+                <Avatar src={selectedMember.avatarUrl} name={selectedMember.name} />
             </div>
             <div>
                 <h3 className="text-lg font-bold text-slate-900">{selectedMember.name}</h3>
@@ -85,17 +85,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
             {managedJobs.map(job => {
                 // Get employees in this job
                 const employeesInJob = subordinates.filter(sub => sub.jobProfileId === job.id);
-                
-                // Calculate stats for chart
-                const chartData = employeesInJob.map(emp => {
-                    const stats = getMemberStats(emp);
-                    return {
-                        name: emp.name.split(' ')[0], // First name for chart
-                        Compliance: stats.compliance ?? 0,
-                        Gaps: stats.gaps,
-                        'Not measured': stats.coverage.unknown
-                    };
-                });
 
                 return (
                     <div key={job.id} className="bg-white rounded-sm  border border-slate-300 overflow-hidden">
@@ -165,8 +154,8 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
                                                 <div key={emp.id} className="bg-white p-3 rounded-none border border-slate-300  hover:border-slate-300 transition-colors cursor-pointer" onClick={() => setSelectedMember(emp)}>
                                                     <div className="flex justify-between items-center mb-2">
                                                         <div className="flex items-center gap-2">
-                                                            <div className="w-8 h-8 rounded-none bg-slate-100 overflow-hidden border border-slate-300">
-                                                                <img src={emp.avatarUrl} alt={emp.name} className="w-full h-full object-cover" />
+                                                            <div className="w-8 h-8 rounded-none bg-slate-100 overflow-hidden border border-slate-300 shrink-0">
+                                                                <Avatar src={emp.avatarUrl} name={emp.name} />
                                                             </div>
                                                             <div>
                                                                 <div className="text-sm font-bold text-slate-700 leading-none">{emp.name}</div>
@@ -265,7 +254,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
               <div key={u.id} className="bg-white rounded-none  border border-slate-300 p-6 flex flex-col h-full">
                 <div className="flex items-start gap-4 mb-4">
                   <div className="w-12 h-12 rounded-none bg-slate-100 border border-slate-300 overflow-hidden flex-shrink-0">
-                    <img src={u.avatarUrl} alt={u.name} className="w-full h-full object-cover" />
+                    <Avatar src={u.avatarUrl} name={u.name} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <h3 className="font-bold text-slate-900 text-lg truncate">{u.name}</h3>
@@ -405,8 +394,8 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = React.memo(({ u
                         
                         <div className="flex items-start justify-between mb-4 pl-3">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-none bg-slate-100 border border-slate-300 overflow-hidden">
-                                    <img src={member.avatarUrl} alt={member.name} className="w-full h-full object-cover" />
+                                <div className="w-10 h-10 rounded-none bg-slate-100 border border-slate-300 overflow-hidden shrink-0">
+                                    <Avatar src={member.avatarUrl} name={member.name} />
                                 </div>
                                 <div>
                                     <h4 className="font-bold text-slate-900 leading-tight group-hover:text-slate-900 transition-colors">{member.name}</h4>

@@ -24,7 +24,7 @@ import { dataService, isBootstrapAdminEmail } from './services/store';
 // are rendered via EvaluationsHub (lazy-loaded above) — no direct import needed.
 import { compatAuth as auth, onAuthStateChanged, fetchAuthConfig } from './services/auth-compat';
 import { User, Role } from './types';
-import { ShieldCheck, Loader2, Lock, User as UserIcon, CheckCircle, ArrowRight, Activity, X, ArrowLeft, Clock } from 'lucide-react';
+import { ShieldCheck, Loader2, Lock, User as UserIcon, CheckCircle, ArrowRight, ArrowLeft, Clock } from 'lucide-react';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);

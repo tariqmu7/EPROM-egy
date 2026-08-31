@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef, useLayoutEffect } from 'react';
+import { Avatar } from '../components/Avatar';
 import { dataService } from '../services/store';
 import { useStoreData } from '../hooks/useStoreData';
 import { useSessionState } from '../hooks/useSessionState';
-import { User, Role, JobProfile, Skill, JobProfileSkill, OrgLevel, ORG_LEVEL_LABELS, Department, DepartmentType, DEPT_TYPE_TO_ORG_LEVEL, ORG_HIERARCHY_ORDER, PROFICIENCY_LABELS, Project, EvaluationQuestion, SkillAssessmentMethod, DEFAULT_RATER_WEIGHTS, ASSESSMENT_METHOD_LABELS, ASSESSMENT_FREQUENCY_LABELS, SKILL_CRITICALITIES, SKILL_CRITICALITY_LABELS, SKILL_CRITICALITY_DESCRIPTIONS, SKILL_CRITICALITY_WEIGHTS, skillCriticalityOf } from '../types';
+import { User, Role, JobProfile, Skill, OrgLevel, ORG_LEVEL_LABELS, Department, DepartmentType, DEPT_TYPE_TO_ORG_LEVEL, ORG_HIERARCHY_ORDER, PROFICIENCY_LABELS, Project, SkillAssessmentMethod, DEFAULT_RATER_WEIGHTS, ASSESSMENT_METHOD_LABELS, ASSESSMENT_FREQUENCY_LABELS, SKILL_CRITICALITIES, SKILL_CRITICALITY_LABELS, SKILL_CRITICALITY_DESCRIPTIONS, SKILL_CRITICALITY_WEIGHTS, skillCriticalityOf } from '../types';
 import { PROFICIENCY_DEFINITIONS } from '../constants';
-import { Plus, Users, Briefcase, ChevronRight, CheckCircle, Shield, ShieldCheck, X, Save, Trash2, ArrowLeft, UserPlus, Building2, Search, Edit2, UserCheck, AlertCircle, Layers, BookOpen, MoreHorizontal, LayoutGrid, Activity, Eye, AlertTriangle, FileSpreadsheet, MapPin, TrendingUp, Calendar, Link2, Lock } from 'lucide-react';
+import { Plus, Users, Briefcase, ChevronRight, CheckCircle, Shield, ShieldCheck, X, Save, Trash2, ArrowLeft, UserPlus, Building2, Search, Edit2, UserCheck, AlertCircle, Layers, BookOpen, LayoutGrid, Activity, Eye, AlertTriangle, FileSpreadsheet, MapPin, TrendingUp, Calendar, Link2, Lock, ChevronDown } from 'lucide-react';
 import { SearchableSelect, Option } from '../components/SearchableSelect';
 import { BulkUpload } from '../components/BulkUpload';
 import { AdminAnalytics } from './AdminAnalytics';
@@ -587,7 +588,7 @@ const UserForm: React.FC<{ initialData?: User | null, currentUser: User, onSave:
                     <div className="flex items-center gap-4">
                         {formData.avatarUrl ? (
                             <div className="relative w-12 h-12 rounded-none overflow-hidden border border-slate-300 shrink-0">
-                                <img src={formData.avatarUrl} alt="Avatar Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                <Avatar src={formData.avatarUrl} name={formData.name || "User"} />
                             </div>
                         ) : (
                             <div className="w-12 h-12 rounded-none bg-slate-100 border border-slate-300 flex items-center justify-center shrink-0 text-slate-400">
@@ -1095,100 +1096,6 @@ const JobForm: React.FC<{ initialData?: JobProfile | null, onSave: (j: JobProfil
   );
 };
 
-// --- Question Manager Helper ---
-const QuestionManager: React.FC<{
-  title: string;
-  questions: EvaluationQuestion[];
-  onChange: (questions: EvaluationQuestion[]) => void;
-  placeholder?: string;
-}> = ({ title, questions, onChange, placeholder }) => {
-  const addQuestion = () => {
-    const newQuestion: EvaluationQuestion = {
-      id: Math.random().toString(36).substr(2, 9),
-      text: '',
-      expectedCriteria: '',
-      weight: 10,
-    };
-    onChange([...questions, newQuestion]);
-  };
-
-  const removeQuestion = (id: string) => {
-    onChange(questions.filter(q => q.id !== id));
-  };
-
-  const updateQuestion = (id: string, field: keyof EvaluationQuestion, value: any) => {
-    onChange(questions.map(q => q.id === id ? { ...q, [field]: value } : q));
-  };
-
-  const totalWeight = questions.reduce((s, q) => s + (q.weight ?? 0), 0);
-
-  return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h5 className="text-xs font-bold text-slate-700 uppercase tracking-wider">{title}</h5>
-        <div className="flex items-center gap-3">
-          {questions.length > 0 && (
-            <span className={`text-xs font-bold px-2 py-1 rounded-sm border ${totalWeight === 100 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
-              Total weight: {totalWeight}%
-            </span>
-          )}
-          <button type="button" onClick={addQuestion} className="flex items-center gap-1 text-blue-700 hover:text-blue-800 text-xs font-bold uppercase tracking-wide">
-            <Plus size={14} /> Add Question
-          </button>
-        </div>
-      </div>
-      <div className="grid grid-cols-1 gap-3">
-        {questions.length === 0 ? (
-          <div className="text-xs text-slate-500 italic p-4 border border-dashed border-slate-300 rounded-sm bg-slate-50/50 text-center">
-            No questions added yet. Click "Add Question" to start.
-          </div>
-        ) : (
-          questions.map((q, idx) => (
-            <div key={q.id} className="p-4 bg-white border border-slate-300 rounded-sm space-y-3 relative group">
-              <button type="button" onClick={() => removeQuestion(q.id)} className="absolute top-2 right-2 text-slate-400 hover:text-red-600 transition-colors">
-                <Trash2 size={14} />
-              </button>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                <div className="md:col-span-3">
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Question {idx + 1}</label>
-                  <input
-                    type="text"
-                    className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-sm focus:ring-1 focus:ring-slate-900 outline-none transition-all"
-                    value={q.text}
-                    onChange={e => updateQuestion(q.id, 'text', e.target.value)}
-                    placeholder={placeholder || "Enter question text..."}
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Weight (%)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-sm focus:ring-1 focus:ring-slate-900 outline-none transition-all"
-                    value={q.weight ?? 10}
-                    onChange={e => updateQuestion(q.id, 'weight', Number(e.target.value))}
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Expected Criteria / Answer Key</label>
-                <textarea
-                  className="w-full px-3 py-2 bg-slate-50 text-slate-900 border border-slate-200 rounded-sm focus:ring-1 focus:ring-slate-900 outline-none transition-all"
-                  rows={1}
-                  value={q.expectedCriteria}
-                  onChange={e => updateQuestion(q.id, 'expectedCriteria', e.target.value)}
-                  placeholder="What defines a successful answer?"
-                />
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-    </div>
-  );
-};
-
 // --- Skill Form (Competency Standard) ---
 // Two top-level sections: the competency standard (identity + proficiency
 // levels) and the inline assessment methods (how & when the skill is assessed).
@@ -1649,698 +1556,6 @@ const ProjectForm: React.FC<{ initialData?: Project | null, onSave: (p: Project)
     );
 };
 
-const ProjectList: React.FC<{
-    projects: Project[];
-    onSelect: (id: string) => void;
-    onEdit: (p: Project) => void;
-    onDelete: (id: string) => void;
-    onAdd: () => void;
-}> = ({ projects, onSelect, onEdit, onDelete, onAdd }) => {
-    return (
-        <div className="p-8 bg-slate-50 min-h-[500px]">
-             <div className="flex justify-between items-center mb-8 border-b border-slate-200 pb-6">
-                <div>
-                    <h2 className="text-2xl font-black text-slate-900 tracking-tight">Active Projects</h2>
-                    <p className="text-sm text-slate-500">Select a project to manage its organizational structure.</p>
-                </div>
-                <button onClick={onAdd} className="bg-blue-700 hover:bg-blue-800 text-white px-6 py-2.5 rounded-sm text-xs font-bold uppercase tracking-widest flex items-center gap-2 transition-all shadow-md">
-                    <Plus size={18} /> New Project
-                </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {projects.map(project => {
-                    const projectDepts = dataService.getAllDepartments().filter(d =>
-                        d.projectId === project.id || (project.name.toUpperCase() === 'HQ' && !d.projectId)
-                    );
-                    // Count only top-level units (general departments / true roots /
-                    // orphans whose parent isn't in this project) so the figure matches
-                    // what the hierarchy view shows at its first level — not every
-                    // nested sub-department and section.
-                    const projectDeptIds = new Set(projectDepts.map(d => d.id));
-                    const topLevelDeptCount = projectDepts.filter(d =>
-                        d.type === 'GENERAL' || !d.parentId || !projectDeptIds.has(d.parentId)
-                    ).length;
-                    const totalStaff = dataService.getAllUsers().filter(u => {
-                        const dept = dataService.getAllDepartments().find(d => d.id === u.departmentId);
-                        return dept?.projectId === project.id || (project.name.toUpperCase() === 'HQ' && (!dept || !dept.projectId));
-                    }).length;
-
-                    return (
-                        <div 
-                            key={project.id} 
-                            onClick={() => onSelect(project.id)}
-                            className="bg-white rounded-none border border-slate-300 hover: transition-all group cursor-pointer overflow-hidden flex flex-col relative"
-                        >
-                            <div className="p-6 flex-1">
-                                <div className="flex justify-between items-start mb-6">
-                                    <div className="w-14 h-14 bg-emerald-50 text-emerald-700 rounded-sm flex items-center justify-center group-hover:bg-emerald-700 group-hover:text-white transition-all shadow-sm border border-emerald-100 relative">
-                                        <Briefcase size={28} />
-                                        {project.name.toUpperCase() === 'HQ' && (
-                                            <span className="absolute -top-2 -right-2 bg-indigo-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-none uppercase tracking-tighter">Default</span>
-                                        )}
-                                    </div>
-                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={(e) => { e.stopPropagation(); onEdit(project); }} className="p-1.5 text-slate-400 hover:text-slate-900 transition-colors"><Edit2 size={16}/></button>
-                                        <button onClick={(e) => { e.stopPropagation(); onDelete(project.id); }} className="p-1.5 text-slate-400 hover:text-red-700 transition-colors"><Trash2 size={16}/></button>
-                                    </div>
-                                </div>
-                                
-                                <h3 className="text-xl font-bold text-slate-900 mb-1 group-hover:text-emerald-700 transition-colors">{project.name}</h3>
-                                <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-4 flex items-center gap-1.5">
-                                    <MapPin size={12} className="text-slate-400"/> {project.location || 'Remote'}
-                                </p>
-                                
-                                <div className="space-y-3 mt-6">
-                                    <div className="grid grid-cols-2 gap-4 mt-6">
-                                        <div className="bg-slate-50 p-3 rounded-none border border-slate-100">
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Departments</p>
-                                            <p className="text-lg font-bold text-slate-900">{topLevelDeptCount}</p>
-                                        </div>
-                                        <div className="bg-slate-50 p-3 rounded-none border border-slate-100">
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Workforce</p>
-                                            <p className="text-lg font-bold text-slate-900">{totalStaff}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between group-hover:bg-emerald-700/5 transition-colors">
-                                <span className="text-xs font-bold text-emerald-700 uppercase tracking-widest">Select Project</span>
-                                <ChevronRight size={16} className="text-emerald-700 group-hover:translate-x-1 transition-transform" />
-                            </div>
-                            <div className="h-1 w-full bg-emerald-700 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></div>
-                        </div>
-                    );
-                })}
-                {projects.length === 0 && (
-                    <div className="col-span-full py-20 text-center bg-white border border-dashed border-slate-300 rounded-none">
-                        <Briefcase size={48} className="mx-auto text-slate-200 mb-4" />
-                        <h4 className="text-lg font-bold text-slate-400">No Projects Defined</h4>
-                        <p className="text-slate-500 max-w-xs mx-auto text-sm mt-1">Start by creating your first project to organize departments.</p>
-                        <button onClick={onAdd} className="mt-6 inline-flex items-center gap-2 px-6 py-2.5 bg-blue-700 text-white font-bold uppercase text-xs tracking-widest rounded-sm hover:bg-blue-800 transition-all shadow-md">
-                            <Plus size={16} /> Create Project
-                        </button>
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-};
-
-
-// --- Hierarchical Structure Components ---
-const EmployeeNode: React.FC<{
-    user: User;
-    allUsers: User[];
-    allDepts: Department[];
-    allJobs: JobProfile[];
-    currentUser: User | null;
-    onEdit: (d: Department) => void;
-    onDelete: (id: string) => void;
-    onAddChild: (parentId: string) => void;
-    onEditUser: (u: User) => void;
-    onPromoteUser: (u: User) => void;
-    level: number;
-    path: string[];
-}> = ({ user, allUsers, allDepts, allJobs, currentUser, onEdit, onDelete, onAddChild, onEditUser, onPromoteUser, level, path }) => {
-    // Reports logic: ONLY same-department employees should be nested here
-    const reports = allUsers.filter(u => u.managerId === user.id && u.departmentId === user.departmentId);
-    
-    // Departments where this user is the specific manager, but NOT if they are already in the ancestry (synchronization)
-    const managedDepts = allDepts.filter(d => d.managerId === user.id && !path.includes(d.id));
-    
-    // Dept-specific context for this user's internal unit
-    const userDeptId = user.departmentId;
-    const deptJobs = allJobs.filter(j => j.departmentId === userDeptId);
-    const job = deptJobs.find(j => j.id === user.jobProfileId);
-
-    const [isExpanded, setIsExpanded] = useState(true);
-    const hasChildren = reports.length > 0 || managedDepts.length > 0;
-
-    return (
-        <div className={`ml-${level > 0 ? 6 : 0} border-l border-slate-200 pl-4 py-1 mt-1`}>
-            <div className="flex flex-col gap-1">
-                <div className="flex items-center justify-between group/user bg-slate-50/70 p-2.5 border border-slate-200 rounded-sm text-xs transition-colors hover:border-indigo-400 shadow-sm/50">
-                    <div className="flex items-center gap-3">
-                        {hasChildren ? (
-                            <button 
-                                onClick={() => setIsExpanded(!isExpanded)}
-                                className={`p-0.5 hover:bg-white rounded-sm transition-transform ${isExpanded ? 'rotate-90' : ''}`}
-                            >
-                                <ChevronRight size={12} className="text-slate-400" />
-                            </button>
-                        ) : (
-                            <div className="w-4" />
-                        )}
-                        <div className="w-8 h-8 rounded-none bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center text-[10px]">
-                            {user.name[0]}
-                        </div>
-                        <div className="flex flex-col">
-                            <div className="flex items-center gap-2">
-                                <span className="font-bold text-slate-900">
-                                    {user.name} {user.employeeId && <span className="text-slate-400 font-medium text-[10px] ml-1">ID: {user.employeeId}</span>}
-                                </span>
-                                <span className="text-indigo-700 font-bold uppercase text-[8px] bg-indigo-50 px-1.5 py-0.5 rounded-none border border-indigo-100">{user.orgLevel || 'N/A'}</span>
-                            </div>
-                            <div className="flex items-center gap-1.5 text-slate-500 font-medium">
-                                {job ? <span>{job.title}</span> : <span className="italic">No Profile Assigned</span>}
-                                {user.role === 'ADMIN' && <Shield size={10} className="text-slate-400" />}
-                            </div>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-2 opacity-0 group-hover/user:opacity-100 transition-opacity">
-                        <button 
-                            onClick={() => onPromoteUser(user)} 
-                            className="p-1.5 text-blue-600 hover:bg-white rounded-sm border border-transparent hover:border-blue-200 transition-all" 
-                            title="Promote / Transfer"
-                        >
-                            <TrendingUp size={12}/>
-                        </button>
-                        <button 
-                            onClick={() => onEditUser(user)} 
-                            className="p-1.5 text-slate-600 hover:bg-white rounded-sm border border-transparent hover:border-slate-200 transition-all" 
-                            title="Edit Employee Profile"
-                        >
-                            <Edit2 size={12}/>
-                        </button>
-                    </div>
-                </div>
-
-                {isExpanded && hasChildren && (
-                    <div className="space-y-1">
-                        {reports.map(report => (
-                            <EmployeeNode 
-                                key={report.id} 
-                                user={report} 
-                                allUsers={allUsers}
-                                allDepts={allDepts} 
-                                allJobs={allJobs} 
-                                currentUser={currentUser}
-                                onEdit={onEdit}
-                                onDelete={onDelete}
-                                onAddChild={onAddChild}
-                                onEditUser={onEditUser}
-                                onPromoteUser={onPromoteUser}
-                                level={level + 1}
-                                path={path}
-                            />
-                        ))}
-                        {/* Render managed departments next, providing the link the user requested (Synchronization) */}
-                        {managedDepts.map(d => (
-                            <DepartmentNode 
-                                key={d.id}
-                                dept={d}
-                                allDepts={allDepts}
-                                allJobs={allJobs}
-                                allUsers={allUsers}
-                                currentUser={currentUser}
-                                onEdit={onEdit}
-                                onDelete={onDelete}
-                                onAddChild={onAddChild}
-                                onEditUser={onEditUser}
-                                onPromoteUser={onPromoteUser}
-                                level={level + 1}
-                                path={[...path, d.id]}
-                            />
-                        ))}
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-};
-
-const DepartmentNode: React.FC<{ 
-    dept: Department | { id: string; name: string; isRoot: boolean }; 
-    allDepts: Department[]; 
-    allJobs: JobProfile[]; 
-    allUsers: User[];
-    currentUser: User | null;
-    onEdit: (d: Department) => void;
-    onDelete: (id: string) => void;
-    onAddChild: (parentId: string) => void;
-    onEditUser: (u: User) => void;
-    onPromoteUser: (u: User) => void;
-    level: number;
-    path: string[];
-}> = ({ dept, allDepts, allJobs, allUsers, currentUser, onEdit, onDelete, onAddChild, onEditUser, onPromoteUser, level, path }) => {
-    const [isExpanded, setIsExpanded] = useState(true);
-    
-    // Find departments that are children via parentId
-    const childrenByParent = allDepts.filter(d => d.parentId === dept.id || (!d.parentId && (dept as any).isRoot));
-    
-    // Find users directly in this department
-    // SPECIAL CASE: CEO-role users appear at the ROOT of the company tree
-    const deptUsers = (dept as any).isRoot 
-        ? allUsers.filter(u => u.role === Role.CEO || u.orgLevel === 'CEO')
-        : allUsers.filter(u => u.departmentId === dept.id && ((currentUser?.role === Role.CEO || currentUser?.role === Role.ADMIN) ? true : (u.role !== Role.CEO && u.orgLevel !== 'CEO')));
-        
-    const deptJobs = allJobs.filter(j => j.departmentId === dept.id);
-
-    // To prevent duplicate rendering, only show departments here if:
-    // 1. They have no manager assigned.
-    // 2. OR their manager is NOT in this department's personnel structure
-    const unmanagedUnits = childrenByParent.filter(d => 
-        !d.managerId || !deptUsers.some(u => u.id === d.managerId)
-    );
-
-    return (
-        <div className="ml-4 md:ml-8 border-l-2 border-slate-200 pl-4 py-2 my-1 transition-all">
-            <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between group bg-white p-3 border border-slate-200 rounded-sm hover:border-blue-500 transition-colors shadow-sm">
-                    <div className="flex items-center gap-3">
-                        <button 
-                            onClick={() => setIsExpanded(!isExpanded)}
-                            className={`p-1 hover:bg-slate-100 rounded-sm transition-transform ${isExpanded ? 'rotate-90' : ''}`}
-                        >
-                            <ChevronRight size={16} className="text-slate-400" />
-                        </button>
-                        <div className="flex items-center gap-2">
-                            {(dept as any).isRoot ? <Shield className="text-blue-700" size={18} /> : 
-                             (dept as Department).type === 'GENERAL' || (dept as Department).type === 'ASSISTANT_GENERAL' ? <Layers className="text-indigo-700" size={18} /> :
-                             (dept as Department).type === 'SECTION' ? <LayoutGrid className="text-slate-500" size={18} /> :
-                             <Building2 className="text-slate-600" size={18} />}
-                            <div className="flex flex-col">
-                                <span className="font-bold text-slate-900">{(dept as any).name}</span>
-                                {!(dept as any).isRoot && (
-                                    <span className="text-[9px] uppercase tracking-tighter text-slate-500 font-bold">
-                                        {(dept as Department).type?.replace('_', ' ') || 'DEPARTMENT'}
-                                    </span>
-                                )}
-                            </div>
-                        </div>
-                        <div className="flex gap-2 ml-4">
-                            <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-none font-bold uppercase">{deptJobs.length} Jobs</span>
-                            <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-none font-bold uppercase">{deptUsers.length} Employees</span>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => onAddChild(dept.id)} className="p-1.5 text-blue-700 hover:bg-blue-50 rounded-sm" title="Add Sub-department"><Plus size={16}/></button>
-                        {!(dept as any).isRoot && (
-                            <>
-                                <button onClick={() => onEdit(dept as Department)} className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-sm" title="Edit"><Edit2 size={16}/></button>
-                                <button onClick={() => onDelete(dept.id)} className="p-1.5 text-slate-600 hover:bg-red-50 rounded-sm" title="Delete"><Trash2 size={16}/></button>
-                            </>
-                        )}
-                    </div>
-                </div>
-
-                {isExpanded && (
-                    <div className="space-y-2 mt-1">
-                        {/* Recursive Employee Hierarchy in this Dept */}
-                        {deptUsers.length > 0 && (
-                            <div className="ml-8 space-y-1 mb-6 pr-4">
-                                <div className="flex items-center gap-2 mb-2 text-[10px] uppercase font-bold text-slate-500 tracking-wider">
-                                    <Users size={12} /> Personnel Structure
-                                </div>
-                                {deptUsers.filter(u => {
-                                    // Root employees for THIS department are those whose manager is:
-                                    // 1. Not in this department at all (cross-department reporting)
-                                    // 2. Or they have no manager assigned
-                                    const manager = allUsers.find(m => m.id === u.managerId);
-                                    return !manager || manager.departmentId !== dept.id;
-                                }).map(rootUser => (
-                                    <EmployeeNode 
-                                        key={rootUser.id}
-                                        user={rootUser}
-                                        allUsers={allUsers}
-                                        allDepts={allDepts}
-                                        allJobs={allJobs}
-                                        currentUser={currentUser}
-                                        onEdit={onEdit}
-                                        onDelete={onDelete}
-                                        onAddChild={onAddChild}
-                                        onEditUser={onEditUser}
-                                        onPromoteUser={onPromoteUser}
-                                        level={0}
-                                        path={[...path, (dept as any).id || (dept as any).name]}
-                                    />
-                                ))}
-                            </div>
-                        )}
-
-                        {/* Unmanaged units or units managed by someone outside this dept's direct personnel */}
-                        {unmanagedUnits.length > 0 && (
-                            <div className="ml-0 md:ml-4 space-y-1">
-                                {unmanagedUnits.map(child => (
-                                    <DepartmentNode 
-                                        key={child.id} 
-                                        dept={child} 
-                                        allDepts={allDepts} 
-                                        allJobs={allJobs} 
-                                        allUsers={allUsers} 
-                                        currentUser={currentUser}
-                                        onEdit={onEdit} 
-                                        onDelete={onDelete}
-                                        onAddChild={onAddChild}
-                                        onEditUser={onEditUser}
-                                        onPromoteUser={onPromoteUser}
-                                        level={level + 1}
-                                        path={[...path, dept.id]}
-                                    />
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-};
-
-const OrgStructureView: React.FC<{
-    depts: Department[];
-    jobs: JobProfile[];
-    users: User[];
-    currentUser: User | null;
-    onEdit: (d: Department) => void;
-    onDelete: (id: string) => void;
-    onAddChild: (parentId: string) => void;
-    onEditUser: (u: User) => void;
-    onPromoteUser: (u: User) => void;
-}> = ({ depts, jobs, users, currentUser, onEdit, onDelete, onAddChild, onEditUser, onPromoteUser }) => {
-    const rootDept = { id: 'ROOT', name: 'EPROM', isRoot: true };
-
-    return (
-        <div className="p-6 bg-slate-50 min-h-[500px] overflow-x-auto">
-            <div className="inline-block min-w-full">
-                <DepartmentNode 
-                    dept={rootDept} 
-                    allDepts={depts} 
-                    allJobs={jobs} 
-                    allUsers={users} 
-                    currentUser={currentUser}
-                    onEdit={onEdit} 
-                    onDelete={onDelete}
-                    onAddChild={onAddChild}
-                    onEditUser={onEditUser}
-                    onPromoteUser={onPromoteUser}
-                    level={0}
-                    path={[]}
-                />
-            </div>
-        </div>
-    );
-};
-
-
-
-interface DepartmentProfileViewProps {
-  deptId: string;
-  depts: Department[];
-  jobProfiles: JobProfile[];
-  users: User[];
-  currentUser: User | null;
-  onBack: (id: string | null) => void;
-  onEdit: (d: Department) => void;
-  onDelete: (id: string) => void;
-  onAddChild: (id: string) => void;
-  onEditUser: (u: User) => void;
-  onPromoteUser: (u: User) => void;
-  onSelectDept: (id: string) => void;
-}
-
-const DepartmentProfileView: React.FC<DepartmentProfileViewProps> = ({ 
-  deptId, 
-  depts, 
-  jobProfiles, 
-  users, 
-  currentUser,
-  onBack, 
-  onEdit, 
-  onDelete, 
-  onAddChild, 
-  onEditUser,
-  onPromoteUser,
-  onSelectDept
-}) => {
-    // Persist the Personnel/Sub-units tab across a refresh (finer state).
-    const [activeTab, setActiveTab] = useSessionState<'PERSONNEL' | 'SUBUNITS'>('dept-profile-tab', 'PERSONNEL');
-    const dept = depts.find(d => d.id === deptId);
-    if (!dept) return null;
-
-    const deptManager = users.find(u => u.id === dept.managerId);
-    
-    // Direct personnel in THIS specific level
-    const directPersonnel = users.filter(u => u.departmentId === dept.id);
-    
-    // Direct sub-units (children of this unit)
-    const subUnits = depts.filter(d => d.parentId === deptId);
-    
-    // Total workforce in this branch (for stats)
-    const allDescendantIds = depts.filter(d => {
-        let current = d;
-        const visited = new Set();
-        while(current.parentId) {
-            if (visited.has(current.id)) break;
-            visited.add(current.id);
-            if (current.parentId === dept.id) return true;
-            const parent = depts.find(pd => pd.id === current.parentId);
-            if (!parent) break;
-            current = parent;
-        }
-        return false;
-    }).map(d => d.id);
-    const totalWorkforce = users.filter(u => u.departmentId === dept.id || allDescendantIds.includes(u.departmentId));
-
-    // Group direct personnel by hierarchy level
-    const personnelByLevel = useMemo(() => {
-        const groups: Record<string, User[]> = {};
-        directPersonnel.forEach(p => {
-            const level = p.orgLevel || 'FR';
-            if (!groups[level]) groups[level] = [];
-            groups[level].push(p);
-        });
-        return groups;
-    }, [directPersonnel]);
-
-    // Hierarchy sort order (Highest first)
-    const LEVEL_ORDER = ['GM', 'AGM', 'DM', 'SH', 'SP', 'JP', 'FR']; // Define based on company standards
-    const sortedLevelKeys = Object.keys(personnelByLevel).sort((a, b) => {
-        const idxA = LEVEL_ORDER.indexOf(a);
-        const idxB = LEVEL_ORDER.indexOf(b);
-        if (idxA === -1) return 1;
-        if (idxB === -1) return -1;
-        return idxA - idxB;
-    });
-
-    return (
-        <div className="bg-slate-50 min-h-[600px] animate-in fade-in slide-in-from-bottom-2 duration-300">
-            {/* Header / Banner */}
-            <div className="bg-white border-b border-slate-300 p-8 sticky top-0 z-20 shadow-sm">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                    <div className="flex items-center gap-6">
-                        <button 
-                            onClick={() => onBack(dept.parentId || null)} 
-                            className="p-3 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-sm border border-slate-200 transition-all group"
-                            title={dept.parentId ? "Back to Parent" : "Back to Main List"}
-                        >
-                            <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
-                        </button>
-                        <div>
-                            <div className="flex items-center gap-3 mb-1">
-                                <h2 className="text-3xl font-bold text-slate-900 tracking-tight">{dept.name}</h2>
-                                <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-[10px] font-bold uppercase tracking-widest border border-blue-100">
-                                    {dept.type?.replace('_', ' ') || 'DEPARTMENT'}
-                                </span>
-                            </div>
-                            <div className="flex items-center gap-4 text-sm text-slate-600">
-                                <span className="flex items-center gap-1.5 font-medium"><UserCheck size={16} className="text-slate-400" /> {(deptManager && (deptManager.role !== Role.CEO && deptManager.orgLevel !== 'CEO' || currentUser?.role === Role.CEO || currentUser?.role === Role.ADMIN)) ? deptManager.name : 'No Manager Assigned'}</span>
-                                <span className="w-1.5 h-1.5 rounded-none bg-slate-300"></span>
-                                <span className="flex items-center gap-1.5 font-medium"><Users size={16} className="text-slate-400" /> {totalWorkforce.length} Total Workforce</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div className="flex gap-2">
-                        <button onClick={() => onAddChild(dept.id)} className="flex items-center gap-2 px-4 py-2 bg-blue-700 text-white text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-blue-800 transition-all shadow-sm">
-                            <Plus size={16} /> New Sub-Unit
-                        </button>
-                        <button onClick={() => onEdit(dept)} className="p-2 bg-white border border-slate-300 text-slate-600 hover:bg-slate-50 rounded-sm transition-all shadow-sm">
-                            <Edit2 size={18} />
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <div className="p-8 space-y-8">
-                <div className="flex border-b border-slate-200 gap-8">
-                    <button 
-                        onClick={() => setActiveTab('PERSONNEL')} 
-                        className={`pb-4 text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap border-b-2 flex items-center gap-2 ${activeTab === 'PERSONNEL' ? 'border-slate-900 text-slate-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
-                    >
-                        <Users size={16} /> Direct Personnel ({directPersonnel.length})
-                    </button>
-                    <button 
-                        onClick={() => setActiveTab('SUBUNITS')} 
-                        className={`pb-4 text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap border-b-2 flex items-center gap-2 ${activeTab === 'SUBUNITS' ? 'border-slate-900 text-slate-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
-                    >
-                        <Building2 size={16} /> Nested Units ({subUnits.length})
-                    </button>
-                </div>
-
-                {/* 1. DIRECT PERSONNEL GRID (Priority #1) */}
-                {activeTab === 'PERSONNEL' && (
-                <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
-                    <div className="flex items-center gap-3 border-b border-slate-200 pb-4">
-                        <div className="w-8 h-8 bg-blue-700 text-white rounded-sm flex items-center justify-center">
-                            <Users size={18} />
-                        </div>
-                        <h3 className="text-xl font-bold text-slate-900 tracking-tight uppercase tracking-tight">Direct Personnel</h3>
-                        <span className="text-xs font-bold bg-slate-200 text-slate-700 px-2 py-0.5 rounded-none uppercase">{directPersonnel.length} Employees</span>
-                    </div>
-
-                    {sortedLevelKeys.length > 0 ? (
-                        <div className="space-y-12">
-                            {sortedLevelKeys.map(level => (
-                                <div key={level} className="space-y-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className="h-0.5 flex-1 bg-slate-200"></div>
-                                        <div className="px-4 py-1.5 bg-white border border-slate-300 rounded-none shadow-sm flex items-center gap-2">
-                                            <span className="text-[10px] font-black text-blue-700 uppercase tracking-[0.2em]">Hierarchy Level</span>
-                                            <span className="text-sm font-black text-slate-900">{level}</span>
-                                        </div>
-                                        <div className="h-0.5 flex-1 bg-slate-200"></div>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                                        {personnelByLevel[level].map(person => (
-                                            <div 
-                                                key={person.id} 
-                                                onClick={() => onEditUser(person)} 
-                                                className="bg-white p-5 border border-slate-200 rounded-none hover:border-blue-700 hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden"
-                                            >
-                                                <div className="absolute top-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                                                    <button 
-                                                        onClick={(e) => { e.stopPropagation(); onPromoteUser(person); }} 
-                                                        className="p-1 bg-blue-50 text-blue-700 rounded-sm hover:bg-blue-600 hover:text-white transition-all"
-                                                        title="Promote / Transfer"
-                                                    >
-                                                        <TrendingUp size={12}/>
-                                                    </button>
-                                                    <div className="p-1 bg-slate-50 text-slate-600 rounded-sm hover:bg-slate-900 hover:text-white transition-all"><Edit2 size={12}/></div>
-                                                </div>
-                                                <div className="flex items-center gap-4 mb-4">
-                                                    <div className="w-12 h-12 rounded-none bg-slate-100 flex items-center justify-center text-slate-900 font-bold text-lg border border-slate-200 group-hover:bg-blue-700 group-hover:text-white transition-colors flex-shrink-0">
-                                                        {person.avatarUrl ? <img src={person.avatarUrl} alt="" className="w-full h-full object-cover rounded-none"/> : person.name[0]}
-                                                    </div>
-                                                    <div className="min-w-0 flex-1">
-                                                        <h4 className="font-bold text-slate-900 group-hover:text-blue-700 transition-colors uppercase tracking-tight leading-tight break-words">{person.name}</h4>
-                                                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">{person.role}</p>
-                                                    </div>
-                                                </div>
-                                                <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-4">
-                                                    <div className="flex flex-col min-w-0 flex-1">
-                                                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Unit Role</span>
-                                                        <span className="font-bold text-slate-700 uppercase tracking-widest text-[10px] leading-relaxed break-words">
-                                                            {jobProfiles.find(j => j.id === person.jobProfileId)?.title || person.role}
-                                                        </span>
-                                                    </div>
-                                                    <ChevronRight size={16} className="text-slate-300 group-hover:text-blue-700 group-hover:translate-x-1 transition-all flex-shrink-0" />
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="p-12 bg-white border border-dashed border-slate-300 text-center rounded-none group hover:border-blue-300 transition-colors">
-                            <Users size={32} className="mx-auto text-slate-200 mb-3 group-hover:text-blue-200 transition-colors" />
-                            <p className="text-sm text-slate-500 font-medium">No personnel assigned directly to this level.</p>
-                            <button onClick={() => onEditUser({} as any)} className="text-blue-700 hover:underline text-xs font-bold uppercase tracking-widest mt-2">Assign First Employee</button>
-                        </div>
-                    )}
-                </div>
-                )}
-
-                {/* 2. SUB-UNITS GRID (Priority #2) */}
-                {activeTab === 'SUBUNITS' && (
-                <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                    <div className="flex items-center gap-3 border-b border-slate-200 pb-4">
-                        <div className="w-8 h-8 bg-indigo-700 text-white rounded-sm flex items-center justify-center">
-                            <Building2 size={18} />
-                        </div>
-                        <h3 className="text-xl font-bold text-slate-900 tracking-tight">Organizational Units</h3>
-                        <span className="text-xs font-bold bg-slate-200 text-slate-700 px-2 py-0.5 rounded-none uppercase">{subUnits.length} Units</span>
-                    </div>
-
-                    {subUnits.length > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {subUnits.map(unit => {
-                                const unitManager = users.find(u => u.id === unit.managerId);
-                                const unitSubUnits = depts.filter(d => d.parentId === unit.id);
-                                
-                                // Direct personnel in this unit
-                                const unitPersonnel = users.filter(u => u.departmentId === unit.id);
-                                
-                                return (
-                                    <div 
-                                        key={unit.id} 
-                                        onClick={() => onSelectDept(unit.id)}
-                                        className="bg-white border border-slate-300 rounded-none group hover: active:scale-[0.99] transition-all cursor-pointer overflow-hidden flex flex-col"
-                                    >
-                                        <div className="p-6 flex-1">
-                                            <div className="flex justify-between items-start mb-6">
-                                                <div className="w-12 h-12 bg-indigo-50 text-indigo-700 rounded-sm flex items-center justify-center group-hover:bg-indigo-700 group-hover:text-white transition-all border border-indigo-100">
-                                                    <Building2 size={24} />
-                                                </div>
-                                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button onClick={(e) => { e.stopPropagation(); onEdit(unit); }} className="p-1.5 text-slate-400 hover:text-slate-900 transition-colors"><Edit2 size={16}/></button>
-                                                    <button onClick={(e) => { e.stopPropagation(); onDelete(unit.id); }} className="p-1.5 text-slate-400 hover:text-red-700 transition-colors"><Trash2 size={16}/></button>
-                                                </div>
-                                            </div>
-
-                                            <h4 className="text-lg font-bold text-slate-900 mb-1 tracking-tight group-hover:text-indigo-700 transition-colors uppercase">{unit.name}</h4>
-                                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-6">{unit.type?.replace('_', ' ') || 'UNIT'}</p>
-
-                                            <div className="space-y-4">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-7 h-7 bg-slate-50 rounded-none flex items-center justify-center text-slate-400">
-                                                        <UserCheck size={14} />
-                                                    </div>
-                                                    <div className="min-w-0">
-                                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Unit Manager</p>
-                                                        <p className="text-xs font-bold text-slate-800 truncate">{(unitManager && (unitManager.role !== Role.CEO && unitManager.orgLevel !== 'CEO' || currentUser?.role === Role.CEO || currentUser?.role === Role.ADMIN)) ? unitManager.name : 'Unassigned'}</p>
-                                                    </div>
-                                                </div>
-
-                                                <div className="grid grid-cols-2 gap-3 mt-4">
-                                                    <div className="bg-slate-50 p-2.5 rounded-none border border-slate-100">
-                                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter mb-1">Personnel</p>
-                                                        <p className="text-sm font-black text-slate-900">{unitPersonnel.length}</p>
-                                                    </div>
-                                                    <div className="bg-slate-50 p-2.5 rounded-none border border-slate-100">
-                                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter mb-1">Sub-Units</p>
-                                                        <p className="text-sm font-black text-slate-900">{unitSubUnits.length}</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between group-hover:bg-indigo-700/5 transition-colors">
-                                            <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-widest">Explore Unit</span>
-                                            <ChevronRight size={14} className="text-indigo-700 group-hover:translate-x-1 transition-transform" />
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    ) : (
-                        <div className="text-center py-16 bg-white border border-dashed border-slate-300 rounded-none">
-                            <Building2 size={48} className="mx-auto text-slate-200 mb-4" />
-                            <h4 className="text-lg font-bold text-slate-400">Terminal Node</h4>
-                            <p className="text-slate-500 max-w-xs mx-auto text-sm mt-1">This organizational unit has no sub-divisions defined.</p>
-                            <button onClick={() => onAddChild(dept.id)} className="mt-6 inline-flex items-center gap-2 px-6 py-2.5 bg-blue-700 text-white font-bold uppercase text-xs tracking-widest rounded-sm hover:bg-blue-800 transition-all shadow-md">
-                                <Plus size={16} /> Create Sub-Unit
-                            </button>
-                        </div>
-                    )}
-                </div>
-                )}
-            </div>
-        </div>
-    );
-};
 
 // --- Org Hierarchy: tree-list + detail panel ---
 
@@ -2846,8 +2061,8 @@ const CompanyOrgView: React.FC<{
                                             const job = jobs.find(j => j.id === person.jobProfileId);
                                             return (
                                                 <div key={person.id} className="flex items-center gap-4 px-4 py-3 hover:bg-slate-50 transition-colors group">
-                                                    <div className="w-9 h-9 rounded-none bg-slate-100 flex items-center justify-center text-slate-900 font-bold border border-slate-200 shrink-0">
-                                                        {person.avatarUrl ? <img src={person.avatarUrl} alt="" className="w-full h-full object-cover" /> : person.name[0]}
+                                                    <div className="w-9 h-9 rounded-none bg-slate-100 flex items-center justify-center overflow-hidden text-slate-900 font-bold border border-slate-200 shrink-0">
+                                                        <Avatar src={person.avatarUrl} name={person.name} />
                                                     </div>
                                                     <div className="min-w-0 flex-1">
                                                         <div className="flex items-center gap-2">
@@ -3178,7 +2393,11 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
   const [showBulkUpload, setShowBulkUpload] = useState(false);
   // COURSE has no form here — the catalogue is its own page (TrainingCatalogue);
   // the overview card only offers its bulk import.
-  const [bulkType, setBulkType] = useState<'USER' | 'JOB' | 'SKILL' | 'DEPT' | 'PROJECT' | 'COURSE'>('USER');
+  const [bulkType, setBulkType] = useState<'USER' | 'JOB' | 'SKILL' | 'DEPT' | 'PROJECT' | 'COURSE' | 'DEPT_TEMPLATE'>('USER');
+  // The org-structure screen owns THREE importers (the org units themselves, the
+  // department job-profile template, and the flat JOB sheet), so its Bulk Upload
+  // control is a menu rather than a single button.
+  const [bulkMenuOpen, setBulkMenuOpen] = useState(false);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -3187,6 +2406,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
   // Reset search when view changes
   useEffect(() => {
     setSearchTerm('');
+    setBulkMenuOpen(false);
     setSelectedDeptProfileId(null);
     setSelectedProjectId(null);
     setCurrentPage(1);
@@ -3284,23 +2504,6 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
 
   const totalUserPages = Math.ceil(filteredUsers.length / itemsPerPage);
 
-  const filteredDepts = useMemo(() => {
-    return depts.filter(dept =>
-      searchTerm === '' ||
-      dept.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (dept.code || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (dept.nameAr || '').includes(searchTerm) ||
-      (users.find(u => u.id === dept.managerId)?.name || '').toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [depts, searchTerm, users]);
-
-
-  const handleApprove = useCallback(async (user: User) => {
-    await dataService.updateUser({ ...user, status: 'ACTIVE' });
-    await dataService.logActivity('Approved User', user.name);
-    setRefreshKey(k => k + 1);
-  }, []);
-
   const handleApproveSkill = useCallback((skill: Skill) => {
     const approvedEvidences = dataService.getEvidences({ skillId: skill.id, status: 'APPROVED' });
     if (approvedEvidences.length === 0) {
@@ -3308,12 +2511,6 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
       return;
     }
     handleEdit('SKILL', skill);
-  }, []);
-
-  const handleReject = useCallback(async (user: User) => {
-    await dataService.updateUser({ ...user, status: 'REJECTED' });
-    await dataService.logActivity('Rejected User', user.name);
-    setRefreshKey(k => k + 1);
   }, []);
 
   const handleEdit = useCallback((type: 'USER' | 'JOB' | 'SKILL' | 'DEPT' | 'PROJECT', item: any) => {
@@ -3384,7 +2581,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
       setRefreshKey(k => k + 1);
   }, [users, depts, jobs]);
 
-  const handleBulkUpload = useCallback((type: 'USER' | 'JOB' | 'SKILL' | 'DEPT' | 'PROJECT') => {
+  const handleBulkUpload = useCallback((type: 'USER' | 'JOB' | 'SKILL' | 'DEPT' | 'PROJECT' | 'DEPT_TEMPLATE') => {
     setBulkType(type);
     setShowBulkUpload(true);
   }, []);
@@ -3475,24 +2672,23 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
   if (view === 'OVERVIEW') {
       return (
         <div className="space-y-8">
-            <div className="relative overflow-hidden rounded-none bg-blue-900 p-8 ">
-                <div className="absolute top-0 right-0 -mt-10 -mr-10 h-64 w-64 rounded-none bg-blue-800/10 blur-3xl"></div>
-                <div className="absolute bottom-0 left-0 -mb-10 -ml-10 h-64 w-64 rounded-none bg-blue-800/10 blur-3xl"></div>
-                
-                <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
+            <div className="relative overflow-hidden rounded-none bg-blue-900 px-6 py-4">
+                <div className="absolute top-0 right-0 -mt-10 -mr-10 h-40 w-40 rounded-none bg-blue-700/20 blur-3xl"></div>
+
+                <div className="relative z-10 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                     <div>
-                        <h2 className="text-3xl font-bold text-white tracking-tight">System Command Center</h2>
-                        <p className="text-slate-600 mt-2 max-w-xl">
+                        <h2 className="text-xl font-bold text-white tracking-tight">System Command Center</h2>
+                        <p className="text-blue-200 text-sm mt-1 max-w-xl">
                             Real-time overview of workforce competency, operational readiness, and organizational structure configuration.
                         </p>
                     </div>
                     <div className="flex gap-3">
-                         <div className="px-4 py-2 bg-white/5 backdrop-blur rounded-sm border border-white/10">
-                            <p className="text-[10px] uppercase tracking-widest text-slate-600 font-bold">System Status</p>
-                            <div className="flex items-center gap-2 mt-1">
+                         <div className="px-3 py-1.5 bg-white/10 backdrop-blur rounded-sm border border-white/20">
+                            <p className="text-[10px] uppercase tracking-widest text-blue-200 font-bold">System Status</p>
+                            <div className="flex items-center gap-2 mt-0.5">
                                 <span className="relative flex h-2 w-2">
-                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-none bg-slate-400 opacity-75"></span>
-                                  <span className="relative inline-flex rounded-none h-2 w-2 bg-slate-500"></span>
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-none bg-emerald-300 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-none h-2 w-2 bg-emerald-400"></span>
                                 </span>
                                 <span className="text-white font-bold text-sm">Operational</span>
                             </div>
@@ -3810,12 +3006,56 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                         )}
                     </div>
                     <div className="flex items-center gap-2 w-full md:w-auto">
-                        <button
-                            onClick={() => handleBulkUpload(view === 'USERS' ? 'USER' : view === 'SKILLS' ? 'SKILL' : 'DEPT')}
-                            className="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-sm text-xs font-bold uppercase tracking-wide flex items-center gap-2 transition-all flex-1 md:flex-none justify-center"
-                        >
-                            <FileSpreadsheet size={16} className="text-blue-700" /> Bulk Upload
-                        </button>
+                        {view === 'DEPTS' ? (
+                            /* Org structure is where job profiles live, so this screen is the
+                               home of all three structural importers. Until now the JOB and
+                               DEPT_TEMPLATE readers existed in code but were reachable from
+                               nowhere in the UI. */
+                            <div className="relative flex-1 md:flex-none">
+                                <button
+                                    onClick={() => setBulkMenuOpen(o => !o)}
+                                    className="w-full bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-sm text-xs font-bold uppercase tracking-wide flex items-center gap-2 transition-all justify-center"
+                                >
+                                    <FileSpreadsheet size={16} className="text-blue-700" /> Bulk Upload
+                                    <ChevronDown size={14} className={`transition-transform ${bulkMenuOpen ? 'rotate-180' : ''}`} />
+                                </button>
+                                {bulkMenuOpen && (
+                                    <>
+                                        <div className="fixed inset-0 z-10" onClick={() => setBulkMenuOpen(false)} />
+                                        <div className="absolute right-0 mt-1 w-80 bg-white border border-slate-300 rounded-sm shadow-lg z-20 overflow-hidden">
+                                            <button
+                                                onClick={() => { setBulkMenuOpen(false); handleBulkUpload('DEPT_TEMPLATE'); }}
+                                                className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors border-b border-slate-100"
+                                            >
+                                                <span className="block text-xs font-bold uppercase tracking-wide text-slate-900">Department Template</span>
+                                                <span className="block text-[11px] text-slate-600 mt-0.5">The workbook a department fills in and returns — its positions and competency matrix become job profiles. Checked before anything is written.</span>
+                                            </button>
+                                            <button
+                                                onClick={() => { setBulkMenuOpen(false); handleBulkUpload('JOB'); }}
+                                                className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors border-b border-slate-100"
+                                            >
+                                                <span className="block text-xs font-bold uppercase tracking-wide text-slate-900">Job Profiles</span>
+                                                <span className="block text-[11px] text-slate-600 mt-0.5">The flat sheet: one row per position and skill. Upload the skill library first — a skill this sheet cannot find is created blank.</span>
+                                            </button>
+                                            <button
+                                                onClick={() => { setBulkMenuOpen(false); handleBulkUpload('DEPT'); }}
+                                                className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors"
+                                            >
+                                                <span className="block text-xs font-bold uppercase tracking-wide text-slate-900">Departments</span>
+                                                <span className="block text-[11px] text-slate-600 mt-0.5">The org units themselves — general departments, departments and sections.</span>
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        ) : (
+                            <button
+                                onClick={() => handleBulkUpload(view === 'USERS' ? 'USER' : 'SKILL')}
+                                className="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-sm text-xs font-bold uppercase tracking-wide flex items-center gap-2 transition-all flex-1 md:flex-none justify-center"
+                            >
+                                <FileSpreadsheet size={16} className="text-blue-700" /> Bulk Upload
+                            </button>
+                        )}
                          <button onClick={() => handleAdd(view === 'USERS' ? 'USER' : view === 'SKILLS' ? 'SKILL' : 'DEPT')}
                              className="bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-sm text-xs font-bold uppercase tracking-wide  flex items-center gap-2 transition-all flex-1 md:flex-none justify-center">
                              <Plus size={16} /> Add {
@@ -3868,8 +3108,8 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                                <tr key={user.id} className="hover:bg-slate-50 transition-colors group">
                                    <td className="p-4 pl-6">
                                        <div className="flex items-center gap-3">
-                                           <div className="w-9 h-9 rounded-none bg-slate-50 flex items-center justify-center text-slate-900 font-bold ">
-                                               {user.avatarUrl ? <img src={user.avatarUrl} alt="" className="w-full h-full object-cover rounded-none"/> : user.name[0]}
+                                           <div className="w-9 h-9 rounded-none bg-slate-50 flex items-center justify-center overflow-hidden text-slate-900 font-bold shrink-0">
+                                               <Avatar src={user.avatarUrl} name={user.name} />
                                            </div>
                                            <div>
                                                <div className="font-bold text-slate-900 group-hover:text-slate-900 transition-colors flex items-center gap-2">

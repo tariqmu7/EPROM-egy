@@ -97,7 +97,6 @@ export function createApp() {
 
   // Error handler — logs with the request id and returns it to the client so a
   // user-reported failure can be traced. Never leaks internals.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
     (req.log ?? logger).error('unhandled_error', {
       err: err instanceof Error ? err.message : String(err),

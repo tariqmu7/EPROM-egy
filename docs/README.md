@@ -15,6 +15,7 @@ and `WORKPLAN.md` (active local-server hardening tracker).
 - [DEPLOYMENT_RUNBOOK.md](runbooks/DEPLOYMENT_RUNBOOK.md) — Docker Compose deploy to the company VM (first-time VM setup, full detail).
 - [ROLLBACK_RUNBOOK.md](runbooks/ROLLBACK_RUNBOOK.md) — revert images/code + restore Postgres from a backup.
 - [MONDAY_GO_LIVE_CHECKLIST.md](runbooks/MONDAY_GO_LIVE_CHECKLIST.md) — first-launch cutover checklist.
+- [BD_EC_PRODUCTION_LOAD_RUNBOOK.md](runbooks/BD_EC_PRODUCTION_LOAD_RUNBOOK.md) — loading the Business Development & External Contracts department (skills, profiles, accounts, courses) via the `server/scripts/etl/bd-ec/` pipeline, plus the demo history layer and how to purge it.
 
 ## qa/ — quality & task tracking
 - [QA_TASKS.md](qa/QA_TASKS.md)

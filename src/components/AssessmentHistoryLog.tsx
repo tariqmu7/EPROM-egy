@@ -1,23 +1,14 @@
 import React, { useState, useMemo } from 'react';
-import { User, Role } from '../types';
+import { User } from '../types';
 import { dataService } from '../services/store';
 import { useStoreData } from '../hooks/useStoreData';
 import {
-  History, 
   Search, 
   Filter, 
-  ChevronRight, 
-  Eye, 
   Calendar, 
-  User as UserIcon, 
-  Target, 
-  Award, 
   MessageSquare,
   ArrowUpRight,
-  Clock,
   XCircle,
-  CheckCircle,
-  FileText
 } from 'lucide-react';
 
 interface AssessmentHistoryLogProps {

@@ -1065,7 +1065,7 @@ interface EvidencePanelProps {
 }
 
 const EvidencePanel: React.FC<EvidencePanelProps> = ({
-  evidence, currentUser, selectedLevel, setSelectedLevel,
+  evidence, selectedLevel, setSelectedLevel,
   reviewerComment, setReviewerComment, isProcessing,
   onApprove, onReject, getUserName, getUser, getSkillName, getRequiredLevel
 }) => {

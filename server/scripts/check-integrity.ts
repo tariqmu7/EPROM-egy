@@ -40,6 +40,8 @@ const REFS: Ref[] = [
   { from: 'evidences', field: 'userId', to: 'users', label: 'evidence → user' },
   { from: 'evidences', field: 'skillId', to: 'skills', label: 'evidence → skill' },
   { from: 'notifications', field: 'userId', to: 'users', label: 'notification → user' },
+  { from: '"developmentPlans"', field: 'userId', to: 'users', label: 'development plan → owner' },
+  { from: '"developmentPlans"', field: 'jobProfileId', to: '"jobProfiles"', label: 'development plan → job profile' },
 ];
 
 interface Dangling {
@@ -75,7 +77,15 @@ async function checkRequiredSkills(): Promise<Dangling> {
   const sql = `
     SELECT jp.id AS row_id, elem->>'skillId' AS ref
     FROM "jobProfiles" jp
-    CROSS JOIN LATERAL jsonb_array_elements(COALESCE(jp.data->'requiredSkills', '[]'::jsonb)) elem
+    -- store.ts's preparePayload writes requiredSkills as a JSON *string*, so the
+    -- field is either an array or a string holding one (safeJsonField reads both).
+    CROSS JOIN LATERAL jsonb_array_elements(
+      CASE jsonb_typeof(jp.data->'requiredSkills')
+        WHEN 'array' THEN jp.data->'requiredSkills'
+        WHEN 'string' THEN (jp.data->>'requiredSkills')::jsonb
+        ELSE '[]'::jsonb
+      END
+    ) elem
     WHERE elem->>'skillId' IS NOT NULL
       AND NOT EXISTS (
         SELECT 1 FROM skills s
@@ -85,6 +95,70 @@ async function checkRequiredSkills(): Promise<Dangling> {
   const { rows } = await query(sql);
   return {
     label: 'job profile → required skill',
+    count: rows.length,
+    samples: rows.slice(0, 5).map((r) => ({ rowId: String(r.row_id), ref: String(r.ref) })),
+  };
+}
+
+// trainingCourses.linkedSkillIds[] → skills (array of ids).
+// A course linked to a deleted skill is worse than no course: getCoursesForSkill
+// never returns it, so the ITP falls back to "intensive training required" while
+// the catalogue page still counts the skill as covered.
+async function checkCourseSkillLinks(): Promise<Dangling> {
+  const sql = `
+    SELECT c.id AS row_id, elem AS ref
+    FROM "trainingCourses" c
+    -- preparePayload has no stringify rule for this collection, so the field is
+    -- normally a real array — but an older ETL row could hold a JSON string.
+    CROSS JOIN LATERAL jsonb_array_elements_text(
+      CASE jsonb_typeof(c.data->'linkedSkillIds')
+        WHEN 'array' THEN c.data->'linkedSkillIds'
+        WHEN 'string' THEN (c.data->>'linkedSkillIds')::jsonb
+        ELSE '[]'::jsonb
+      END
+    ) elem
+    WHERE elem <> ''
+      AND NOT EXISTS (
+        SELECT 1 FROM skills s
+        WHERE s.id = elem OR s.data->>'id' = elem
+      )
+  `;
+  const { rows } = await query(sql);
+  return {
+    label: 'training course → linked skill',
+    count: rows.length,
+    samples: rows.slice(0, 5).map((r) => ({ rowId: String(r.row_id), ref: String(r.ref) })),
+  };
+}
+
+// developmentPlans.items[].{skillId,courseId} → skills / trainingCourses.
+// A plan item is the agreed, FROZEN record of a gap: if its skill or its course
+// has since been deleted, the item still renders (skillName is denormalised)
+// but nothing can re-measure or re-book it, and the sign-off before/after pair
+// silently stops meaning anything. Worth seeing.
+async function checkPlanItemRefs(field: 'skillId' | 'courseId', to: string, label: string): Promise<Dangling> {
+  const sql = `
+    SELECT dp.id AS row_id, elem->>'${field}' AS ref
+    FROM "developmentPlans" dp
+    -- preparePayload does NOT stringify developmentPlans.items, so this is
+    -- normally a real array — the string arm is there for hand-loaded rows.
+    CROSS JOIN LATERAL jsonb_array_elements(
+      CASE jsonb_typeof(dp.data->'items')
+        WHEN 'array' THEN dp.data->'items'
+        WHEN 'string' THEN (dp.data->>'items')::jsonb
+        ELSE '[]'::jsonb
+      END
+    ) elem
+    WHERE elem->>'${field}' IS NOT NULL
+      AND elem->>'${field}' <> ''
+      AND NOT EXISTS (
+        SELECT 1 FROM ${to} t
+        WHERE t.id = elem->>'${field}' OR t.data->>'id' = elem->>'${field}'
+      )
+  `;
+  const { rows } = await query(sql);
+  return {
+    label,
     count: rows.length,
     samples: rows.slice(0, 5).map((r) => ({ rowId: String(r.row_id), ref: String(r.ref) })),
   };
@@ -105,6 +179,21 @@ async function main(): Promise<void> {
     results.push(await checkRequiredSkills());
   } catch (e) {
     console.error(`  ! could not check job profile → required skill: ${(e as Error).message}`);
+  }
+  for (const [field, to, label] of [
+    ['skillId', 'skills', 'development plan item → skill'],
+    ['courseId', '"trainingCourses"', 'development plan item → course'],
+  ] as const) {
+    try {
+      results.push(await checkPlanItemRefs(field, to, label));
+    } catch (e) {
+      console.error(`  ! could not check ${label}: ${(e as Error).message}`);
+    }
+  }
+  try {
+    results.push(await checkCourseSkillLinks());
+  } catch (e) {
+    console.error(`  ! could not check training course → linked skill: ${(e as Error).message}`);
   }
 
   const problems = results.filter((r) => r.count > 0);

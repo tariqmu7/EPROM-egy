@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { User, Skill, Role, EvaluationQuestion } from '../types';
+import { Avatar } from '../components/Avatar';
+import { User, Skill, EvaluationQuestion } from '../types';
 import { dataService } from '../services/store';
 import { useStoreData } from '../hooks/useStoreData';
 import {
@@ -7,11 +8,9 @@ import {
   MessageSquare, 
   CheckCircle, 
   Clock, 
-  Calendar,
   User as UserIcon,
   ChevronRight,
   ClipboardCheck,
-  Search,
   ArrowRight,
   ShieldAlert,
   ListChecks,
@@ -276,7 +275,7 @@ export const ManagerialInterviews: React.FC<ManagerialInterviewsProps> = ({ curr
                 className={`w-full text-left p-4 flex items-center gap-4 transition-all ${selectedSubordinateId === sub.id ? 'bg-slate-50 border-l-4 border-slate-900' : 'hover:bg-slate-50 border-l-4 border-transparent'}`}
               >
                 <div className="w-10 h-10 rounded-none bg-slate-100 border border-slate-300 flex-shrink-0 overflow-hidden">
-                  <img src={sub.avatarUrl} alt={sub.name} className="w-full h-full object-cover" />
+                  <Avatar src={sub.avatarUrl} name={sub.name} />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="font-bold text-slate-900 text-sm truncate">{sub.name}</div>
@@ -310,7 +309,7 @@ export const ManagerialInterviews: React.FC<ManagerialInterviewsProps> = ({ curr
                <div className="p-6 border-b border-slate-300 bg-slate-50 flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-none border border-slate-300 overflow-hidden bg-white">
-                      <img src={selectedSubordinate.avatarUrl} alt={selectedSubordinate.name} className="w-full h-full object-cover" />
+                      <Avatar src={selectedSubordinate.avatarUrl} name={selectedSubordinate.name} />
                     </div>
                     <div>
                       <h4 className="font-bold text-slate-900 text-lg leading-tight uppercase tracking-tight">{selectedSubordinate.name}</h4>

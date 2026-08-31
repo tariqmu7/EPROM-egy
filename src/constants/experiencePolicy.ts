@@ -80,4 +80,3 @@ export function validateBands(bands: ExperienceLevelBand[]): string[] {
   return errors;
 }
 
-type ExperienceLevelBandInput = { minYears: number; maxYears?: number; level: number };

@@ -112,13 +112,22 @@ export const AdminAnalytics: React.FC = () => {
   const [overview, setOverview] = useState<OrgOverview | null>(null);
   const [overviewError, setOverviewError] = useState<string | null>(null);
 
+  // Clearing the figure is a SCOPE change, not a refresh. `storeVersion` bumps
+  // on every poll tick, so blanking the state in the fetch effect made the whole
+  // page drop to skeletons every few seconds. The "no placeholder number while a
+  // figure is in flight" rule still holds: the skeleton shows on first load and
+  // whenever the scope changes — when there genuinely is no figure yet — while a
+  // background refresh of an already-loaded scope swaps the numbers in place.
   useEffect(() => {
-    let cancelled = false;
     setOverview(null);
     setOverviewError(null);
+  }, [selectedDeptId]);
+
+  useEffect(() => {
+    let cancelled = false;
     dataService
       .getOrgOverview(selectedDeptId)
-      .then(res => { if (!cancelled) setOverview(res); })
+      .then(res => { if (!cancelled) { setOverview(res); setOverviewError(null); } })
       .catch(err => { if (!cancelled) setOverviewError(err?.message || 'Could not load live coverage.'); });
     return () => { cancelled = true; };
   }, [selectedDeptId, storeVersion]);

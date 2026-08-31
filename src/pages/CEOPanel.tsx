@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { User, Role, Department, Skill, JobProfile, ORG_LEVEL_LABELS, OrgLevel, OrgOverview, CompetencyCoverage } from '../types';
+import { Avatar } from '../components/Avatar';
+import { User, ORG_LEVEL_LABELS, OrgOverview, CompetencyCoverage } from '../types';
 import { dataService } from '../services/store';
 import { useStoreData } from '../hooks/useStoreData';
-import { Search, Users, ShieldCheck, Briefcase, Award, ChevronRight, Activity, Filter, LayoutGrid, List, FileSpreadsheet, UserCircle, MapPin, Building2 } from 'lucide-react';
+import { Search, Users, ShieldCheck, Award, ChevronRight, Activity, LayoutGrid, List, Building2 } from 'lucide-react';
 import { CompliancePercent, CoverageNote } from '../components/CoverageIndicator';
 
 interface CEOPanelProps {
@@ -10,7 +11,7 @@ interface CEOPanelProps {
   onViewProfile?: (userId: string) => void;
 }
 
-export const CEOPanel: React.FC<CEOPanelProps> = ({ currentUser, onViewProfile }) => {
+export const CEOPanel: React.FC<CEOPanelProps> = ({ onViewProfile }) => {
   const [searchTerm, setSearchTerm] = useState('');
   // All other filters are now unified into searchTerm for maximum scalability
 
@@ -282,8 +283,8 @@ export const CEOPanel: React.FC<CEOPanelProps> = ({ currentUser, onViewProfile }
                   <tr key={person.id} className="hover:bg-slate-50 group transition-colors">
                     <td className="px-8 py-6">
                       <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-slate-100 border border-slate-200 rounded-none flex items-center justify-center text-slate-900 font-black text-lg group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">
-                          {person.avatarUrl ? <img src={person.avatarUrl} alt="" className="w-full h-full object-cover"/> : person.name[0]}
+                        <div className="w-12 h-12 bg-slate-100 border border-slate-200 rounded-none flex items-center justify-center overflow-hidden shrink-0 text-slate-900 font-black text-lg group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">
+                          <Avatar src={person.avatarUrl} name={person.name} />
                         </div>
                         <div>
                           <div className="text-base font-black text-slate-900 uppercase tracking-tight leading-none mb-1">{person.name}</div>

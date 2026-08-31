@@ -13,12 +13,9 @@
 // ============================================================================
 import EmbeddedPostgres from 'embedded-postgres';
 import { existsSync, rmSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 const PG_PORT = Number(process.env.DEV_PG_PORT ?? 5433);
 const API_PORT = Number(process.env.DEV_API_PORT ?? 4000);
-const here = dirname(fileURLToPath(import.meta.url));
 // Keep the cluster data OUT of the repo (scratchpad).
 const dataDir =
   process.env.DEV_PG_DIR ??
