@@ -38,6 +38,10 @@ services:
       BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL}
       ALLOW_SIGNUP: ${ALLOW_SIGNUP:-false}
       CORS_ORIGINS: ${CORS_ORIGINS}
+      # One reverse proxy (the `web` nginx container) fronts the API, so Express
+      # must read the caller from X-Forwarded-For — otherwise the rate limiters
+      # bucket the whole company under nginx's IP.
+      TRUST_PROXY: ${TRUST_PROXY:-1}
       # Nightly sweep (server/src/jobs/) — runs in THIS container, not a crontab.
       # Container time is UTC unless the host says otherwise, so 02:00 here is
       # 02:00 UTC = 04:00 Cairo. Both are quiet; change JOBS_HOUR if that matters.

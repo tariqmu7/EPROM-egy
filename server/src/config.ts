@@ -24,6 +24,17 @@ export const config = {
     ssl: (process.env.PGSSL ?? 'false') === 'true' ? { rejectUnauthorized: false } : undefined,
   },
 
+  // How many reverse proxies sit in front of the API. In the documented deploy
+  // there is exactly ONE (the `web` nginx container), which appends the caller
+  // to X-Forwarded-For. Express must be told, or `req.ip` is the proxy's address
+  // for EVERY request — which silently collapses both rate limiters into a
+  // single shared bucket for the whole company (one person's polling can lock
+  // everybody out with 429s) and makes the access log useless for tracing.
+  // Kept a number, never `true`: trusting the whole chain would let a caller
+  // forge X-Forwarded-For and evade the limiter entirely. Set 0 when the API is
+  // exposed directly with no proxy in front of it.
+  trustProxy: Number(process.env.TRUST_PROXY ?? 1),
+
   jwtSecret: process.env.NODE_ENV === 'test' ? (process.env.JWT_SECRET ?? 'test-secret') : required('JWT_SECRET'),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '12h',
   bcryptRounds: Number(process.env.BCRYPT_ROUNDS ?? 12),

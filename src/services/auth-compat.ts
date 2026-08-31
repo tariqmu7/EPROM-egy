@@ -3,7 +3,12 @@
 //
 // Provides the subset of `firebase/auth` that store.ts + App.tsx use:
 //   signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut,
-//   onAuthStateChanged, sendPasswordResetEmail.
+//   onAuthStateChanged.
+//
+// There is deliberately NO sendPasswordResetEmail: reset-by-email was never
+// finished (no SMTP relay, no redeem endpoint) and was removed. A forgotten
+// password is reset by an admin from Admin → Employees, which forces a change
+// at next login.
 //
 // NOTE ON SIGN-UP: Firebase's createUserWithEmailAndPassword also *signs the
 // new user in*, and store.ts then writes the users/{uid} document itself. Our
@@ -164,10 +169,6 @@ export async function signOut(_auth?: unknown): Promise<void> {
   currentUser = null;
   mustResetPassword = false;
   notify();
-}
-
-export async function sendPasswordResetEmail(_auth: unknown, email: string): Promise<void> {
-  await api.post('/auth/reset-password', { email });
 }
 
 // Firebase-style listener. Resolves the current session once on first call,

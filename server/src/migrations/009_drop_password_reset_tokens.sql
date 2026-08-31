@@ -1,0 +1,16 @@
+-- 009: remove the half-built "forgot my password" flow.
+--
+-- 001 created `password_reset_tokens` for a reset-by-email journey that was
+-- never finished: `/auth/reset-password` minted a token, but NO endpoint ever
+-- redeemed one and no SMTP relay was ever wired up. A token table nobody can
+-- spend is not a feature, it is a store of password-equivalent secrets sitting
+-- in the database for no reason — so the endpoint and the table both go.
+--
+-- The supported reset path is unchanged and already works:
+--   Admin → Employees → set a temporary password (`/auth/admin/set-password`),
+-- which flags `auth_credentials.must_reset` and forces a change at next login.
+--
+-- If a company SMTP relay ever becomes available, a proper request + redeem
+-- pair should be added fresh (with hashed, single-use tokens) rather than
+-- resurrecting this table.
+DROP TABLE IF EXISTS password_reset_tokens;

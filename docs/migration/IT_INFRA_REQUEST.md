@@ -48,12 +48,12 @@
 | Backup storage target | Network share / NAS path, ~50 GB | We run a nightly database dump; IT retains per policy |
 | Retention | Per EPROM policy (e.g. 30 days) | Confirm retention + who monitors |
 
-## 6. Email (optional — for "forgot password")
+## 6. Email — NOT required
 
-| Item | Requested | Notes |
-|---|---|---|
-| Internal SMTP relay host + port | e.g. `smtp.eprom.local:25` | Lets the app email password-reset links |
-| **If unavailable** | We use **admin-set temporary passwords** instead | No SMTP dependency; admin resets from the panel |
+**Nothing to provide.** Decided 31 Aug 2026: the app sends no email at all. A forgotten
+password is reset by an administrator from Admin → Employees, which issues a temporary
+password the employee must change at next sign-in. If an internal SMTP relay is offered
+later, emailed reset links can be added then.
 
 ## 7. Accounts & Ownership
 

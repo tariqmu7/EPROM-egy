@@ -34,7 +34,6 @@ vi.mock('../auth-compat', () => ({
   createUserWithEmailAndPassword: vi.fn(),
   signInWithEmailAndPassword: vi.fn(),
   signOut: vi.fn(),
-  sendPasswordResetEmail: vi.fn(),
   compatAuth: { currentUser: null },
 }));
 // Stored monthly snapshots are the ONE thing the store reads over plain REST

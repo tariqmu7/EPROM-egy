@@ -66,10 +66,8 @@ beforeAll(async () => {
   await query(
     'CREATE TABLE tombstones (collection TEXT NOT NULL, id TEXT NOT NULL, deleted_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (collection, id))',
   );
-  // Migration 001; /auth/admin/release-login clears any outstanding token here.
-  await query(
-    'CREATE TABLE password_reset_tokens (token TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires_at TIMESTAMPTZ NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now())',
-  );
+  // NOTE: there is deliberately no password_reset_tokens table — migration 009
+  // dropped it with the half-built reset-by-email flow.
 
   await seedUser(ADMIN, 'ADMIN', 'admin-pass');
   await seedUser(EMP, 'EMPLOYEE', 'emp-pass', { managerId: 'mgr-x', orgLevel: 'JP' });
@@ -122,6 +120,15 @@ function idsOf(res: { body: { documents: { id: string }[] } }): string[] {
 }
 
 describe('health + auth', () => {
+  // Regression: the API always runs behind the `web` nginx container, which
+  // passes the caller in X-Forwarded-For. Without `trust proxy`, express reports
+  // the PROXY's address as req.ip for every request, so both rate limiters
+  // bucket the entire company together — one busy client can 429 everyone — and
+  // the access log attributes every request to nginx.
+  it('trusts exactly one reverse proxy hop', () => {
+    expect(app.get('trust proxy')).toBe(1);
+  });
+
   it('health check works', async () => {
     const res = await request(app).get('/health');
     expect(res.status).toBe(200);
@@ -735,6 +742,14 @@ describe('optimistic concurrency (version)', () => {
 // Admin-issued temporary password: the only password-recovery path until an
 // SMTP relay exists for self-service email resets.
 describe('admin password reset → forced change', () => {
+  // The half-built reset-by-email route is GONE (there was never a redeem
+  // endpoint or an SMTP relay). An admin-issued temporary password below is the
+  // only supported way back in — this pins that the dead route stays dead.
+  it('has no self-service password-reset endpoint', async () => {
+    const res = await request(app).post('/auth/reset-password').send({ email: EMP.email });
+    expect(res.status).toBe(404);
+  });
+
   it('non-admins cannot set another user\'s password', async () => {
     const empTok = await login(EMP.email, 'emp-pass');
     const res = await request(app)
@@ -833,12 +848,6 @@ describe('deleting an employee releases their login', () => {
 
   it('destroys the password, frees the email, and keeps the archived profile', async () => {
     const adminTok = await login(ADMIN.email, 'admin-pass');
-    // An outstanding reset token must not survive as a back door.
-    await query('INSERT INTO password_reset_tokens (token, user_id, expires_at) VALUES ($1, $2, $3)', [
-      'tok-leaver',
-      LEAVER.id,
-      new Date(Date.now() + 3600_000).toISOString(),
-    ]);
     // What the UI does first: archive the profile.
     const before = (await query('SELECT data FROM users WHERE id = $1', [LEAVER.id])).rows[0].data;
     await query('UPDATE users SET data = $2 WHERE id = $1', [LEAVER.id, { ...before, isArchived: true }]);
@@ -850,9 +859,8 @@ describe('deleting an employee releases their login', () => {
     expect(res.status).toBe(200);
     expect(res.body.emailReleased).toBe(LEAVER.email);
 
-    // Password and token are gone.
+    // The password is gone.
     expect((await query('SELECT 1 FROM auth_credentials WHERE user_id = $1', [LEAVER.id])).rows.length).toBe(0);
-    expect((await query('SELECT 1 FROM password_reset_tokens WHERE user_id = $1', [LEAVER.id])).rows.length).toBe(0);
 
     // The profile survives for history, but no longer holds the address — the
     // KEY is removed, not blanked, so the unique email index lets it be reissued.

@@ -18,6 +18,10 @@ import { analyticsRouter } from './analytics/routes.js';
 export function createApp() {
   const app = express();
 
+  // Resolve the real caller behind the nginx reverse proxy (see config.trustProxy).
+  // Must be set before the rate limiters, which key their buckets on `req.ip`.
+  app.set('trust proxy', config.trustProxy);
+
   app.use(helmet());
   app.use(
     cors({

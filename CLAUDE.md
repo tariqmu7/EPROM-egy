@@ -482,7 +482,12 @@ no external cloud. Four services:
 ### API surface ([`server/src/app.ts`](server/src/app.ts))
 - `GET /health` — liveness (`{ ok: true }`), unauthenticated. `GET /health/ready` also pings the
   DB (`503` if down) so orchestrators can tell "restart me" from "not ready yet".
-- `/auth/*` — public: `login`, `signup`, password reset; `/auth/me` is protected. Auth endpoints
+- `/auth/*` — public: `login`, `signup`; `/auth/me` is protected. There is **no self-service
+  password reset** — the half-built `/auth/reset-password` (a token nothing could redeem, with no
+  SMTP relay) was removed along with its table in migration
+  [`009_drop_password_reset_tokens.sql`](server/src/migrations/009_drop_password_reset_tokens.sql).
+  A forgotten password is reset by an admin (`/auth/admin/set-password`), which sets
+  `must_reset` and forces a change at next login. Auth endpoints
   are rate-limited; a blunt global IP rate limit guards the rest (off under `NODE_ENV=test`).
 - `/col/:collection` — authenticated generic CRUD/query over the Postgres tables
   (allowlisted collection names in [`server/src/collections/registry.ts`](server/src/collections/registry.ts)).

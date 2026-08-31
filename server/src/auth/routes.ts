@@ -242,8 +242,8 @@ export function authRouter(): Router {
   // never be reissued.
   //
   // This frees both, in ONE transaction:
-  //   • credential + any outstanding reset tokens are deleted → no password and
-  //     no route back in (and /login now also refuses archived profiles);
+  //   • the credential row is deleted → no password and no route back in (and
+  //     /login now also refuses archived profiles);
   //   • the address moves out of `email` into `archivedEmail` → the index no
   //     longer holds it, so the address can be used for a new account, while the
   //     archived record still shows who it belonged to.
@@ -277,7 +277,6 @@ export function authRouter(): Router {
 
       const freedEmail = await withTransaction(async (tx) => {
         await tx('DELETE FROM auth_credentials WHERE user_id = $1', [userId]);
-        await tx('DELETE FROM password_reset_tokens WHERE user_id = $1', [userId]);
         // Read-modify-write under a row lock rather than jsonb surgery in SQL:
         // the document is the app's shape, and this keeps the key removal
         // obvious (and portable to the pg-mem test harness).
@@ -297,34 +296,6 @@ export function authRouter(): Router {
       });
 
       res.json({ ok: true, emailReleased: freedEmail });
-    } catch (e) {
-      next(e);
-    }
-  });
-
-  // ── REQUEST PASSWORD RESET (token; emailing wired later if SMTP exists) ────
-  router.post('/reset-password', loginLimiter, async (req: Request, res: Response, next) => {
-    try {
-      const parsed = z.object({ email: emailSchema }).safeParse(req.body);
-      // Always return 200 so the endpoint can't be used to probe which emails exist.
-      if (!parsed.success) {
-        res.json({ ok: true });
-        return;
-      }
-      const cred = (await query('SELECT user_id FROM auth_credentials WHERE lower(email) = $1', [parsed.data.email]))
-        .rows[0];
-      if (cred) {
-        const token = randomUUID();
-        const expires = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-        await query('INSERT INTO password_reset_tokens (token, user_id, expires_at) VALUES ($1, $2, $3)', [
-          token,
-          cred.user_id,
-          expires,
-        ]);
-        // TODO(Phase 6): email the reset link via the internal SMTP relay.
-        console.log(`[reset-password] token for ${parsed.data.email}: ${token}`);
-      }
-      res.json({ ok: true });
     } catch (e) {
       next(e);
     }
