@@ -102,6 +102,18 @@ A job profile's `orgLevel` is **derived from the org-chart node's structural typ
 
 ## Core Business Logic (services/store.ts)
 
+> **Where the pure maths lives.** Scoring, coverage, assessment scheduling/resolution, career path
+> and the ITP were lifted out of `store.ts` into [`src/services/competency/`](src/services/competency/),
+> layered `context → resolution → scheduling → scoring → coverage → career → itp`. Each function
+> takes a **`CompetencyContext`** — the named set of lookups it is allowed to read — so it cannot
+> reach a listener, a write path or the auth session, and it can be tested without booting the store
+> ([`src/services/competency/__tests__/engine.test.ts`](src/services/competency/__tests__/engine.test.ts)).
+> `DataService` implements that context and keeps thin delegating methods, so **every method named
+> below still exists on `dataService` with the same signature** — call it exactly as before.
+> Two things stay on the service on purpose: the **score cache** (only the service knows when a write
+> invalidates a score, so the context points at the cached wrappers), and everything that **writes**
+> (development plans, evidence, work experience, courses, notifications).
+
 ### Skill Scoring (`getUserSkillScore`)
 - **360° / OJT skills**: Weighted average — Self 10% + Peer 30% + Manager 60%
 - **Direct assessment skills**: Latest score from WRITTEN_EXAM, INTERVIEW, or PRACTICAL_DEMO
