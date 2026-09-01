@@ -1,4 +1,4 @@
-import { User, Role, JobProfile, Skill, Project, Department, Assessment, ActivityLog, ORG_HIERARCHY_ORDER, ORG_LEVEL_NUMBERS, Notification, AssessmentCycle, Nomination, IndividualTrainingPlan, TrainingRecommendation, OrgLevel, Evidence, PromotionRequirement, CareerProgressionPlan, CareerLevelProgress, TrainingCourse, ScheduledAssessment, AssessmentMethod, Certificate, CareerHistoryEntry, SkillLevel, EvaluationQuestion, AssessmentPlan, AssessmentInstruction, SkillAssessmentMethod, AssessmentAudience, JobProfileSkill, DepartmentType, DEPT_TYPE_TO_ORG_LEVEL, RaterWeights, DEFAULT_RATER_WEIGHTS, WorkExperience, WorkExperienceSkill, WorkExperienceStatus, WorkExperiencePolicy, SkillScoreSource, CompetencyCoverage, CompetencySnapshot, OrgOverview, TrainingNeedsAnalysis, DevelopmentPlan, DevelopmentPlanItem, DevelopmentPlanStatus, DevelopmentItemStatus, DevelopmentPlanItemProgress, DevelopmentPlanProgress, SKILL_CRITICALITY_WEIGHTS, skillCriticalityOf, skillCriticalityWeight } from '../types';
+import { User, Role, JobProfile, Skill, Project, Department, Assessment, ActivityLog, ORG_LEVEL_NUMBERS, Notification, AssessmentCycle, Nomination, IndividualTrainingPlan, OrgLevel, Evidence, CareerProgressionPlan, TrainingCourse, ScheduledAssessment, AssessmentMethod, Certificate, CareerHistoryEntry, SkillLevel, EvaluationQuestion, AssessmentPlan, AssessmentInstruction, SkillAssessmentMethod, AssessmentAudience, JobProfileSkill, DepartmentType, DEPT_TYPE_TO_ORG_LEVEL, RaterWeights, WorkExperience, WorkExperienceSkill, WorkExperienceStatus, WorkExperiencePolicy, SkillScoreSource, CompetencyCoverage, CompetencySnapshot, OrgOverview, TrainingNeedsAnalysis, DevelopmentPlan, DevelopmentPlanItem, DevelopmentPlanStatus, DevelopmentItemStatus, DevelopmentPlanItemProgress, DevelopmentPlanProgress } from '../types';
 import { DEFAULT_WORK_EXPERIENCE_POLICY, suggestLevelFromYears } from '../constants/experiencePolicy';
 import {
   collection,
@@ -33,6 +33,12 @@ import {
   compatAuth as auth,
 } from './auth-compat';
 import { api } from './api-client';
+// The competency engine: the pure maths (scoring, coverage, scheduling,
+// career, ITP) that used to live inline in this file. It reads the store
+// through an explicit CompetencyContext and writes nothing — see
+// `./competency/index.ts` for the layering.
+import * as engine from './competency';
+import type { CompetencyContext } from './competency';
 import { localAvatar } from '../utils/localAvatar';
 import { assertUploadableImage } from '../utils/fileUpload';
 import { newId } from '../utils/uuid';
@@ -157,43 +163,6 @@ export interface FirestoreErrorInfo {
       photoUrl: string | null;
     }[];
   }
-}
-
-/**
- * Running totals behind getUserCoverage / getGroupCoverage. Kept separate from
- * the finished CompetencyCoverage so a group total is just repeated addition.
- */
-interface CoverageAccumulator {
-  required: number;
-  measured: number;
-  provisional: number;
-  unknown: number;
-  compliantKnown: number;
-  gapsKnown: number;
-  totalGap: number;
-}
-
-function newCoverageAccumulator(): CoverageAccumulator {
-  return { required: 0, measured: 0, provisional: 0, unknown: 0, compliantKnown: 0, gapsKnown: 0, totalGap: 0 };
-}
-
-function finalizeCoverage(acc: CoverageAccumulator): CompetencyCoverage {
-  const known = acc.measured + acc.provisional;
-  return {
-    required: acc.required,
-    measured: acc.measured,
-    provisional: acc.provisional,
-    unknown: acc.unknown,
-    known,
-    measuredPct: acc.required > 0 ? Math.round((acc.measured / acc.required) * 100) : 0,
-    knownPct: acc.required > 0 ? Math.round((known / acc.required) * 100) : 0,
-    compliantKnown: acc.compliantKnown,
-    gapsKnown: acc.gapsKnown,
-    totalGap: acc.totalGap,
-    // null, never 0 — "nothing measured" is not "0% compliant".
-    compliancePct: known > 0 ? Math.round((acc.compliantKnown / known) * 100) : null,
-    avgGap: known > 0 ? acc.totalGap / known : null,
-  };
 }
 
 export class DataService {
@@ -321,7 +290,37 @@ export class DataService {
     });
   };
 
+  // The read-only view of this store handed to the competency engine
+  // (`./competency`). Built ONCE in the constructor; the collection fields are
+  // getters, so a listener replacing `this.assessments` with a fresh array is
+  // picked up without rebuilding the context. The score lookups deliberately
+  // point at the CACHED wrappers, so one render scores each user+skill once.
+  private readonly engineCtx: CompetencyContext;
+
   constructor() {
+    // Arrow readers, not a `this` alias: the engine must always see the CURRENT
+    // array, because every listener REPLACES its collection rather than mutating it.
+    const readAssessments = () => this.assessments;
+    const readEvidences = () => this.evidences;
+    const readInstructions = () => this.assessmentInstructions;
+    this.engineCtx = {
+      getSkill: (id) => this.getSkill(id),
+      getUserById: (id) => this.getUserById(id),
+      getJobProfile: (id) => this.getJobProfile(id),
+      getAllJobs: (includeArchived) => this.getAllJobs(includeArchived),
+      getCoursesForSkill: (skillId) => this.getCoursesForSkill(skillId),
+      getEffectiveRequirements: (profile) => this.getEffectiveRequirements(profile),
+      getGeneralDeptId: (deptId) => this.getGeneralDeptId(deptId),
+      isManager: (user) => this.isManager(user),
+      getExperienceBaseline: (userId, skillId) => this.getExperienceBaseline(userId, skillId),
+      getUserSkillScore: (userId, skillId, includeArchived) =>
+        this.getUserSkillScore(userId, skillId, includeArchived),
+      getUserSkillScoreDetail: (userId, skillId) => this.getUserSkillScoreDetail(userId, skillId),
+      get assessments() { return readAssessments(); },
+      get evidences() { return readEvidences(); },
+      get assessmentInstructions() { return readInstructions(); },
+    };
+
     // Listen to auth state changes
     onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -2076,66 +2075,9 @@ export class DataService {
     return res.snapshots || [];
   }
 
+  /** The live training PROPOSAL — recomputed, never stored. See `./competency/itp.ts`. */
   generateIndividualTrainingPlan(userId: string): IndividualTrainingPlan | null {
-    const user = this.getUserById(userId);
-    if (!user || !user.jobProfileId || !user.orgLevel) return null;
-
-    const job = this.getJobProfile(user.jobProfileId);
-    if (!job) return null;
-
-    const requirements = this.getEffectiveRequirements(job);
-    const recommendations: TrainingRecommendation[] = [];
-
-    requirements.forEach(req => {
-      const currentScore = this.getUserSkillScore(userId, req.skillId);
-      const gap = req.requiredLevel - currentScore;
-
-      if (gap > 0) {
-        const skill = this.getSkill(req.skillId);
-        const skillName = skill?.name || 'Unknown Skill';
-        const criticality = skillCriticalityOf(skill?.criticality);
-        const weight = SKILL_CRITICALITY_WEIGHTS[criticality];
-
-        const matchingCourse = this.getCoursesForSkill(req.skillId)[0];
-
-        const recommendationText = matchingCourse
-          ? `Enroll in "${matchingCourse.title}" (${matchingCourse.provider}) to bridge the gap.`
-          : gap >= 2
-          ? `Intensive training and external certification required for ${skillName}.`
-          : `On-the-job training and mentorship recommended to reach proficiency level ${req.requiredLevel}.`;
-
-        // A safety-critical shortfall is chased sooner than a deep gap on
-        // something optional — the same weighting the TNA ranks a unit by,
-        // applied to one person's plan.
-        const targetDate = new Date();
-        targetDate.setMonth(targetDate.getMonth() + (criticality === 'SAFETY_CRITICAL' ? 3 : gap >= 2 ? 6 : 3));
-
-        recommendations.push({
-          skillId: req.skillId,
-          skillName,
-          gap,
-          recommendation: recommendationText,
-          priority: (gap * weight >= 2 ? 'HIGH' : gap * weight >= 1 ? 'MEDIUM' : 'LOW'),
-          status: 'NOT_STARTED',
-          targetDate: targetDate.toISOString(),
-          supervisorSignOff: false,
-          courseId: matchingCourse?.id
-        });
-      }
-    });
-
-    return {
-      id: `itp_${userId}_${Date.now()}`,
-      userId,
-      // Worst first by WEIGHTED gap: how deep the shortfall is × how much the
-      // skill matters. A 1-level safety gap outranks a 2-level nice-to-have.
-      recommendations: recommendations.sort((a, b) =>
-        b.gap * skillCriticalityWeight(this.getSkill(b.skillId)?.criticality)
-        - a.gap * skillCriticalityWeight(this.getSkill(a.skillId)?.criticality)
-        || b.gap - a.gap),
-      generatedAt: new Date().toISOString(),
-      status: 'ACTIVE'
-    };
+    return engine.generateIndividualTrainingPlan(this.engineCtx, userId);
   }
 
   // ─── DEVELOPMENT PLANS (the SAVED training plan) ─────────────────────────
@@ -2640,218 +2582,50 @@ export class DataService {
     return { writtenExams, managerialInterviews, evaluations360, workRecords };
   }
 
-  // Does a method block's audience include this user?
+  // ─── ASSESSMENT SCHEDULING ────────────────────────────────────────────────
+  // Thin delegations to `./competency/scheduling.ts`, whose server port is
+  // `server/src/jobs/scheduling.ts` — change one side, change both.
+
+  /** Does a method block's audience include this user? */
   isUserInAudience(
     userId: string,
     m: { audience: AssessmentAudience; audienceOrgLevels?: OrgLevel[]; audienceDepartmentIds?: string[] }
   ): boolean {
-    const user = this.getUserById(userId);
-    if (!user) return false;
-    switch (m.audience) {
-      case 'ALL':
-        return true;
-      case 'FRESH_ONLY':
-        return user.orgLevel === 'FR';
-      case 'MANAGERS_ONLY':
-        return this.isManager(user);
-      case 'ORG_LEVELS':
-        return !!user.orgLevel && (m.audienceOrgLevels || []).includes(user.orgLevel);
-      case 'DEPARTMENTS':
-        return (m.audienceDepartmentIds || []).includes(user.departmentId);
-      default:
-        return false;
-    }
+    return engine.isUserInAudience(this.engineCtx, userId, m);
   }
 
-  // Per-skill assessment method blocks whose audience applies to the user.
+  /** Per-skill assessment method blocks whose audience applies to the user. */
   getApplicableMethodsForUserSkill(userId: string, skillId: string): SkillAssessmentMethod[] {
-    return this.getSkillAssessmentMethods(skillId)
-      .filter(m => this.isUserInAudience(userId, m));
+    return engine.getApplicableMethodsForUserSkill(this.engineCtx, userId, skillId);
   }
 
-  // The 360°/OJT rater blend (self/peer/manager) to apply for this user+skill.
-  // Reads the first applicable OJT/360 method block that carries raterWeights;
-  // falls back to DEFAULT_RATER_WEIGHTS so behavior is unchanged when unset.
+  /** The 360°/OJT rater blend (self/peer/manager) to apply for this user+skill. */
   getRaterWeightsForUserSkill(userId: string, skillId: string): RaterWeights {
-    const block = this.getApplicableMethodsForUserSkill(userId, skillId).find(m =>
-      (m.method === 'OJT_OBSERVATION' || m.method === 'THREE_SIXTY_EVALUATION') && m.raterWeights);
-    return block?.raterWeights || DEFAULT_RATER_WEIGHTS;
+    return engine.getRaterWeightsForUserSkill(this.engineCtx, userId, skillId);
   }
 
-  // The exam pass mark (0-100) for a user+skill: the job profile's per-skill
-  // override (JobProfileSkill.passingScorePercent) when set, otherwise the
-  // skill's own WRITTEN_EXAM default. null when neither is configured.
+  /** The exam pass mark (0-100) for a user+skill; null when none is configured. */
   getPassingScoreForUserSkill(userId: string, skillId: string): number | null {
-    const user = this.getUserById(userId);
-    const job = user?.jobProfileId ? this.getJobProfile(user.jobProfileId) : undefined;
-    const profileReq = job
-      ? this.getEffectiveRequirements(job).find(r => r.skillId === skillId)
-      : undefined;
-    if (typeof profileReq?.passingScorePercent === 'number') return profileReq.passingScorePercent;
-    const examDefault = this.getSkillAssessmentMethods(skillId)
-      .find(m => m.method === 'WRITTEN_EXAM' && typeof m.passingScorePercent === 'number');
-    return typeof examDefault?.passingScorePercent === 'number' ? examDefault.passingScorePercent : null;
+    return engine.getPassingScoreForUserSkill(this.engineCtx, userId, skillId);
   }
 
-  // True when an applicable method block schedules the skill as
-  // certificate-based (evidence carries an expiry date).
+  /** True when an applicable block schedules the skill as certificate-based. */
   isSkillCertificateBasedForUser(userId: string, skillId: string): boolean {
-    return this.getApplicableMethodsForUserSkill(userId, skillId)
-      .some(m => m.frequency === 'CERTIFICATE_BASED');
+    return engine.isSkillCertificateBasedForUser(this.engineCtx, userId, skillId);
   }
 
-  // Next due date for one method block/user/skill, or null if it never recurs.
-  private computeMethodNextDueDate(m: SkillAssessmentMethod, userId: string, skillId: string): Date | null {
-    if (m.frequency === 'ONE_TIME') return null;
-
-    const now = new Date();
-
-    if (m.frequency === 'CERTIFICATE_BASED') {
-      const userEvidences = this.evidences.filter(e =>
-        e.userId === userId && e.skillId === skillId && e.status === 'APPROVED' && e.expiryDate);
-      if (userEvidences.length === 0) return now; // due until a valid certificate exists
-      const latest = userEvidences.sort((a, b) =>
-        new Date(b.expiryDate!).getTime() - new Date(a.expiryDate!).getTime())[0];
-      return new Date(latest.expiryDate!);
-    }
-
-    const userAssessments = this.assessments
-      .filter(a => a.subjectId === userId && a.skillId === skillId && !a.isArchived)
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    const lastDate = userAssessments.length > 0 ? new Date(userAssessments[0].date) : null;
-
-    if (m.frequency === 'ANNUAL_FIXED_DATE') {
-      const month = (m.fixedMonth ?? 1) - 1; // JS months are 0-based
-      const day = m.fixedDay ?? 1;
-      // Most recent occurrence of the fixed date on/before today.
-      let lastDue = new Date(now.getFullYear(), month, day);
-      if (lastDue > now) lastDue = new Date(now.getFullYear() - 1, month, day);
-      // Overdue if it has never been assessed since the latest fixed date.
-      if (!lastDate || lastDate < lastDue) return now;
-      // Otherwise the next occurrence after today.
-      const next = new Date(now.getFullYear(), month, day);
-      if (next <= now) next.setFullYear(next.getFullYear() + 1);
-      return next;
-    }
-
-    if (m.frequency === 'ANYTIME_ANNUAL') {
-      if (!lastDate || lastDate.getFullYear() < now.getFullYear()) return now;
-      return new Date(now.getFullYear() + 1, 0, 1); // due again at the start of next year
-    }
-
-    // Rolling intervals: WEEKLY / MONTHLY / QUARTERLY
-    if (!lastDate) return now; // never assessed → due now
-    const next = new Date(lastDate);
-    if (m.frequency === 'WEEKLY') next.setDate(next.getDate() + 7);
-    else if (m.frequency === 'MONTHLY') next.setMonth(next.getMonth() + 1);
-    else if (m.frequency === 'QUARTERLY') next.setMonth(next.getMonth() + 3);
-    return next;
-  }
-
-  // Earliest (most urgent) next-due date across every method block that applies
-  // to this user+skill. Returns null when no block schedules the skill — a skill
-  // with no recurring method is treated as one-time and never becomes due again.
+  /**
+   * Earliest (most urgent) next-due date across every method block that applies
+   * to this user+skill. null when no block schedules the skill — a skill with no
+   * recurring method is one-time and never becomes due again.
+   */
   getNextAssessmentDate(userId: string, skillId: string): Date | null {
-    const methods = this.getApplicableMethodsForUserSkill(userId, skillId);
-    if (methods.length === 0) return null;
-
-    let earliest: Date | null = null;
-    for (const m of methods) {
-      const due = this.computeMethodNextDueDate(m, userId, skillId);
-      if (!due) continue;
-      if (!earliest || due < earliest) earliest = due;
-    }
-    return earliest;
+    return engine.getNextAssessmentDate(this.engineCtx, userId, skillId);
   }
 
+  /** Readiness against each rung above. See `./competency/career.ts`. */
   generateCareerPath(userId: string): CareerProgressionPlan | null {
-    const user = this.getUserById(userId);
-    if (!user || !user.jobProfileId || !user.orgLevel) return null;
-
-    const currentJob = this.getJobProfile(user.jobProfileId);
-    if (!currentJob) return null;
-
-    // Succession Logic: Find all jobs in the same General Department to bridge gap requirements.
-    // Prefer the user's explicit generalDepartmentId (the canonical grouping that
-    // survives org-chart rebuilds); fall back to walking departmentId up the tree.
-    // Jobs are matched either by direct departmentId equality (career-ladder
-    // profiles are keyed straight to the general department) or by their own
-    // tree walk — robust to orphaned departmentId references.
-    const generalDeptId = user.generalDepartmentId || this.getGeneralDeptId(user.departmentId);
-    const deptJobs = this.getAllJobs().filter(j =>
-      j.departmentId === generalDeptId || this.getGeneralDeptId(j.departmentId) === generalDeptId
-    );
-
-    const currentIndex = ORG_HIERARCHY_ORDER.indexOf(user.orgLevel);
-    if (currentIndex === -1) return null;
-
-    const roadmap: CareerLevelProgress[] = [];
-
-    // Loop from current position up to GM (index 0)
-    for (let i = currentIndex - 1; i >= 0; i--) {
-      const level = ORG_HIERARCHY_ORDER[i];
-
-      // Each position is its own profile at a single org level. Find the
-      // department's position profile for this higher level and use its
-      // required skills as the promotion target.
-      const targetJob = deptJobs.find(j => j.orgLevel === level && this.getEffectiveRequirements(j).length > 0)
-        || deptJobs.find(j => j.orgLevel === level);
-      const requirements = this.getEffectiveRequirements(targetJob);
-
-      const promReqs: PromotionRequirement[] = [];
-      let totalGapPoints = 0;
-      
-      requirements.forEach(req => {
-        const { score: currentScore, source } = this.getUserSkillScoreDetail(userId, req.skillId);
-        const gap = Math.max(0, req.requiredLevel - currentScore);
-        const skill = this.getSkill(req.skillId);
-        // A skill that was never assessed is an unknown, not a shortfall — the
-        // readiness bar must show it as "not measured" rather than a failure.
-        const isMeasured = source !== 'NONE';
-
-        promReqs.push({
-          skillId: req.skillId,
-          skillName: skill?.name || 'Unknown Skill',
-          currentScore,
-          requiredScore: req.requiredLevel,
-          gap,
-          isMeasured
-        });
-
-        // Gap points drive readiness, so only MEASURED skills contribute: an
-        // unassessed skill would otherwise add a full-size phantom gap.
-        if (isMeasured) totalGapPoints += gap;
-      });
-
-      const unmeasuredCount = promReqs.filter(r => !r.isMeasured).length;
-      const measuredCount = promReqs.length - unmeasuredCount;
-
-      let readinessStatus: 'READY_NOW' | 'READY_1_2_YEARS' | 'READY_3_5_YEARS' | 'DEVELOPMENT_NEEDED' = 'DEVELOPMENT_NEEDED';
-      if (measuredCount === 0) {
-        // Nothing measured against this level: no readiness claim is possible,
-        // so stay on the most conservative bucket rather than invent progress.
-        readinessStatus = 'DEVELOPMENT_NEEDED';
-      } else if (totalGapPoints === 0 && unmeasuredCount === 0) {
-        // READY_NOW is a claim about the whole position — it needs every
-        // requirement measured, not just no gaps among those that were.
-        readinessStatus = 'READY_NOW';
-      } else if (totalGapPoints <= 2) readinessStatus = 'READY_1_2_YEARS';
-      else if (totalGapPoints <= 5) readinessStatus = 'READY_3_5_YEARS';
-
-      roadmap.push({
-        level,
-        requirements: promReqs,
-        readinessStatus,
-        isDefined: requirements.length > 0,
-        unmeasuredCount
-      });
-    }
-
-    return {
-      userId,
-      currentLevel: user.orgLevel,
-      roadmap
-    };
+    return engine.generateCareerPath(this.engineCtx, userId);
   }
 
   // --- PUBLIC METHODS (GETTERS - Synchronous for UI Performance) ---
@@ -3055,106 +2829,17 @@ export class DataService {
   }
 
   /**
-   * The uncached score computation, plus where the number came from.
-   *
-   * Score precedence, strongest first:
-   *   1. A real assessment (360° blend, or the latest direct exam/interview/demo)
-   *   2. Approved evidence carrying an assignedScore
-   *   3. VERIFIED work experience — a capped PROVISIONAL baseline
-   * Tier 3 is reached only when 1 and 2 produced nothing at all, so recorded
-   * measurement always beats self-reported history.
+   * The uncached score computation, plus where the number came from. The maths
+   * lives in `./competency/scoring.ts` (server port: `server/src/jobs/scoring.ts`
+   * — change one side, change both); the CACHE below stays here, because only
+   * this service knows when a write invalidates a score.
    */
   private computeSkillScore(
     userId: string,
     skillId: string,
     includeArchived: boolean,
   ): { score: number; source: SkillScoreSource } {
-    const skill = this.getSkill(skillId);
-    if (!skill) return { score: 0, source: 'NONE' };
-
-    let result: number;
-    let source: SkillScoreSource;
-
-    // Behavioral (360) Logic
-    if (this.getSkillPrimaryMethod(skillId) === 'OJT_OBSERVATION') {
-      let userAssessments = this.assessments.filter(a => a.subjectId === userId && a.skillId === skillId);
-      if (!includeArchived) {
-        userAssessments = userAssessments.filter(a => !a.isArchived);
-      }
-      if (userAssessments.length === 0) { result = 0; source = 'NONE'; }
-      else {
-        // Average across *distinct raters*, counting each rater only once at
-        // their most recent rating. The 360 average is meant to blend multiple
-        // people's views (esp. peers), not multiple time points from the same
-        // person — so a rater who re-rates across cycles must not be
-        // double-counted, and the current score reflects their latest input.
-        const latestPerRater = (arr: Assessment[]) => {
-          const byRater = new Map<string, Assessment>();
-          for (const a of arr) {
-            const prev = byRater.get(a.raterId);
-            if (!prev || new Date(a.date).getTime() > new Date(prev.date).getTime()) byRater.set(a.raterId, a);
-          }
-          return [...byRater.values()];
-        };
-        const selfA = latestPerRater(userAssessments.filter(a => a.type === 'SELF'));
-        const peerA = latestPerRater(userAssessments.filter(a => a.type === 'PEER'));
-        const mgrA = latestPerRater(userAssessments.filter(a => a.type === 'MANAGER'));
-
-        const avgSelf = selfA.length > 0 ? selfA.reduce((s, a) => s + a.score, 0) / selfA.length : null;
-        const avgPeer = peerA.length > 0 ? peerA.reduce((s, a) => s + a.score, 0) / peerA.length : null;
-        const avgMgr = mgrA.length > 0 ? mgrA.reduce((s, a) => s + a.score, 0) / mgrA.length : null;
-
-        // 360° blend is admin-configurable per skill (see SkillAssessmentMethod
-        // .raterWeights); defaults to Self 10 / Peer 30 / Mgr 60. Weights are
-        // re-normalized over the rater types that actually submitted.
-        const rw = this.getRaterWeightsForUserSkill(userId, skillId);
-        let totalWeight = 0;
-        let weightedScore = 0;
-
-        if (avgSelf !== null) { weightedScore += avgSelf * rw.self; totalWeight += rw.self; }
-        if (avgPeer !== null) { weightedScore += avgPeer * rw.peer; totalWeight += rw.peer; }
-        if (avgMgr  !== null) { weightedScore += avgMgr  * rw.manager; totalWeight += rw.manager; }
-
-        result = totalWeight === 0 ? 0 : Math.round(weightedScore / totalWeight);
-        source = result > 0 ? 'ASSESSMENT' : 'NONE';
-      }
-    } else {
-      // Evidence, Online Assessment, or Interview Logic
-      let directAssessments = this.assessments.filter(a => a.subjectId === userId && a.skillId === skillId && (a.type === 'WRITTEN_EXAM' || a.type === 'INTERVIEW' || a.type === 'PRACTICAL_DEMO'));
-      if (!includeArchived) {
-        directAssessments = directAssessments.filter(a => !a.isArchived);
-      }
-
-      if (directAssessments.length > 0) {
-        result = directAssessments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0].score;
-        source = 'ASSESSMENT';
-      } else {
-        const relevantEvidence = this.evidences.filter(e => e.userId === userId && e.skillId === skillId && e.status === 'APPROVED' && e.assignedScore);
-        if (relevantEvidence.length === 0) { result = 0; source = 'NONE'; }
-        else {
-          const maxScore = Math.max(...relevantEvidence.map(e => e.assignedScore || 0));
-          result = Math.min(Math.max(Math.round(maxScore), 1), 5);
-          source = 'EVIDENCE';
-        }
-      }
-    }
-
-    // ── Provisional baseline from VERIFIED work experience ────────────────────
-    // Placed AFTER the if/else deliberately, so BOTH branches fall through here.
-    // The 360°/OJT branch never reaches the evidence tier, and an unconfigured
-    // skill defaults to OJT_OBSERVATION (getSkillPrimaryMethod), so putting this
-    // inside the `else` would skip most skills.
-    //
-    // `result === 0` is precisely "no usable assessment AND no scored evidence".
-    if (result === 0) {
-      const provisional = this.getExperienceBaseline(userId, skillId);
-      if (provisional > 0) {
-        result = provisional;
-        source = 'EXPERIENCE';
-      }
-    }
-
-    return { score: result, source };
+    return engine.computeSkillScore(this.engineCtx, userId, skillId, includeArchived);
   }
 
   getUserSkillScore(userId: string, skillId: string, includeArchived: boolean = false): number {
@@ -3191,61 +2876,19 @@ export class DataService {
 
   // ─── MEASURED vs UNKNOWN (coverage) ──────────────────────────────────────
   //
-  // Every gap/compliance number in the app divides by "required skills", which
-  // silently counts a never-assessed skill as a failed one (score 0). These
-  // helpers are the single place that splits a requirement list into
-  // measured / provisional / unknown, so a page can say "X of Y measured"
-  // beside any percentage — and show "—" instead of 0% when nothing is known.
-  //
-  // Compliance is deliberately computed over the KNOWN skills only. A
-  // provisional (work-experience) score counts as known because it counts as a
-  // score everywhere else, but it is NOT counted as measured.
+  // The split that lets a page say "X of Y measured" beside any percentage,
+  // and show "—" instead of 0% when nothing is known. The maths is in
+  // `./competency/coverage.ts`; the browser keeps only the SMALL-scope calls
+  // (one person, one manager's team) — org-wide totals come from the server.
 
   /** Coverage of one employee against their own job profile's requirements. */
   getUserCoverage(userId: string): CompetencyCoverage {
-    const acc = newCoverageAccumulator();
-    this.accumulateUserCoverage(acc, userId);
-    return finalizeCoverage(acc);
+    return engine.getUserCoverage(this.engineCtx, userId);
   }
 
-  /**
-   * Coverage summed across a set of employees (a team, a department, the whole
-   * company). Percentages are over the pooled requirement count, so a person
-   * with no job profile contributes nothing rather than a misleading 0%.
-   */
+  /** Coverage pooled across a set of employees (a team, a unit). */
   getGroupCoverage(userIds: string[]): CompetencyCoverage {
-    const acc = newCoverageAccumulator();
-    for (const id of userIds) this.accumulateUserCoverage(acc, id);
-    return finalizeCoverage(acc);
-  }
-
-  private accumulateUserCoverage(acc: CoverageAccumulator, userId: string): void {
-    const user = this.getUserById(userId);
-    const job = user?.jobProfileId ? this.getJobProfile(user.jobProfileId) : null;
-    if (!job) return;
-
-    for (const req of this.getEffectiveRequirements(job)) {
-      const { score, source } = this.getUserSkillScoreDetail(userId, req.skillId);
-      acc.required++;
-
-      if (source === 'NONE') {
-        // The 0 here means "we never looked", not "they scored nothing" — it
-        // must not reach any gap or compliance figure.
-        acc.unknown++;
-        continue;
-      }
-
-      if (source === 'EXPERIENCE') acc.provisional++;
-      else acc.measured++;
-
-      const gap = Math.max(0, req.requiredLevel - score);
-      if (gap > 0) {
-        acc.gapsKnown++;
-        acc.totalGap += gap;
-      } else {
-        acc.compliantKnown++;
-      }
-    }
+    return engine.getGroupCoverage(this.engineCtx, userIds);
   }
 
   getAssessments(filters: { raterId?: string, subjectId?: string, cycleId?: string, skillId?: string, includeArchived?: boolean }) {
@@ -3353,83 +2996,40 @@ export class DataService {
   }
 
   // --- ASSESSMENT RESOLUTION (per-skill, legacy-safe) ---
+  // Thin delegations to `./competency/resolution.ts`, which answers "how is
+  // this skill assessed" from the inline blocks, falling back to the
+  // deprecated linked instructions / per-skill fields until the one-time
+  // migration below has run.
 
-  // The assessment method blocks defined inline on a skill. Falls back to a
-  // synthesized block from the deprecated linked-instruction / per-skill fields
-  // when none are set (covers any not-yet-migrated docs).
+  /** The method blocks defined inline on a skill (legacy-safe). */
   getSkillAssessmentMethods(skillId: string): SkillAssessmentMethod[] {
-    const skill = this.getSkill(skillId);
-    if (!skill) return [];
-    if ((skill.assessmentMethods || []).length > 0) return skill.assessmentMethods!;
-    return this.synthesizeLegacyMethods(skill);
-  }
-
-  // Build per-skill method blocks from the deprecated linked AssessmentInstruction
-  // docs or the old per-skill fields, so resolution keeps working before the
-  // one-time migration runs. Defaults frequency/audience (scheduling lived on
-  // separate plans, so legacy blocks recur only if a matching plan still does).
-  private synthesizeLegacyMethods(skill: Skill): SkillAssessmentMethod[] {
-    const fromInstruction = (i: AssessmentInstruction): SkillAssessmentMethod => ({
-      id: `legacy-instr:${i.id}`,
-      method: i.method,
-      assessmentQuestion: i.assessmentQuestion,
-      assessmentLink: i.assessmentLink,
-      questions: [
-        ...(i.evaluationQuestions || []),
-        ...(i.interviewQuestions || []),
-        ...(i.threeSixtyQuestions || []),
-        ...(i.annualAppraisalQuestions || [])
-      ],
-      frequency: 'ONE_TIME',
-      audience: 'ALL'
-    });
-
-    const linked = (skill.assessmentInstructionIds || [])
-      .map(id => this.assessmentInstructions.find(i => i.id === id))
-      .filter((i): i is AssessmentInstruction => !!i && i.status === 'ACTIVE');
-    if (linked.length > 0) return linked.map(fromInstruction);
-
-    if (skill.assessmentMethod || skill.assessmentQuestion || skill.assessmentLink) {
-      return [{
-        id: `legacy:${skill.id}`,
-        method: skill.assessmentMethod || 'OJT_OBSERVATION',
-        assessmentQuestion: skill.assessmentQuestion,
-        assessmentLink: skill.assessmentLink,
-        questions: [
-          ...(skill.evaluationQuestions || []),
-          ...(skill.interviewQuestions || []),
-          ...(skill.threeSixtyQuestions || [])
-        ],
-        frequency: 'ONE_TIME',
-        audience: 'ALL'
-      }];
-    }
-    return [];
+    return engine.getSkillAssessmentMethods(this.engineCtx, skillId);
   }
 
   getSkillMethods(skillId: string): AssessmentMethod[] {
-    return Array.from(new Set(this.getSkillAssessmentMethods(skillId).map(m => m.method)));
+    return engine.getSkillMethods(this.engineCtx, skillId);
   }
 
   skillHasMethod(skillId: string, method: AssessmentMethod): boolean {
-    return this.getSkillMethods(skillId).includes(method);
+    return engine.skillHasMethod(this.engineCtx, skillId, method);
   }
 
-  // The method that drives single-method consumers (scoring, queue bucket).
-  // Defaults to OJT_OBSERVATION so an unconfigured skill still routes to 360.
+  /**
+   * The method that drives single-method consumers (scoring, queue bucket).
+   * Defaults to OJT_OBSERVATION so an unconfigured skill still routes to 360.
+   */
   getSkillPrimaryMethod(skillId: string): AssessmentMethod {
-    return this.getSkillAssessmentMethods(skillId)[0]?.method || 'OJT_OBSERVATION';
+    return engine.getSkillPrimaryMethod(this.engineCtx, skillId);
   }
 
   getSkillAssessmentLink(skillId: string): string | undefined {
-    const methods = this.getSkillAssessmentMethods(skillId);
-    const exam = methods.find(m => m.method === 'WRITTEN_EXAM' && m.assessmentLink);
-    return exam?.assessmentLink || methods.find(m => m.assessmentLink)?.assessmentLink;
+    return engine.getSkillAssessmentLink(this.engineCtx, skillId);
   }
 
   getSkillAssessmentQuestion(skillId: string): string | undefined {
-    return this.getSkillAssessmentMethods(skillId).find(m => m.assessmentQuestion)?.assessmentQuestion;
+    return engine.getSkillAssessmentQuestion(this.engineCtx, skillId);
   }
+
 
   // One-time, idempotent migration of the deprecated assessment model
   // (AssessmentInstruction "how" + AssessmentPlan "when" + legacy per-skill
@@ -3455,7 +3055,7 @@ export class DataService {
     try {
       for (const skill of pending) {
         // "How" blocks from linked instructions / legacy fields.
-        const blocks = this.synthesizeLegacyMethods(skill);
+        const blocks = engine.synthesizeLegacyMethods(this.engineCtx, skill);
         if (blocks.length === 0) continue;
 
         // Overlay "when"/"who" from any active plan covering this skill, matched
