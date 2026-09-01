@@ -79,6 +79,10 @@ export function batchRouter(): Router {
             const { rows } = await tx('SELECT data FROM users WHERE id = $1', [id]);
             return rows.length ? (rows[0].data as Record<string, any>) : null;
           };
+          const getDepartmentDoc = async (id: string): Promise<Record<string, any> | null> => {
+            const { rows } = await tx('SELECT data FROM departments WHERE id = $1', [id]);
+            return rows.length ? (rows[0].data as Record<string, any>) : null;
+          };
 
           // Pass 1: authorize everything first.
           for (const op of ops) {
@@ -89,7 +93,7 @@ export function batchRouter(): Router {
             const incoming = op.type === 'delete' ? null : { ...(op.data ?? {}), id: op.id };
             const merged = op.type === 'update' && existing ? { ...existing, ...(op.data ?? {}), id: op.id } : incoming;
 
-            const ok = await can(name, action, { user, getUserDoc, docId: op.id, existing, incoming: merged });
+            const ok = await can(name, action, { user, getUserDoc, getDepartmentDoc, docId: op.id, existing, incoming: merged });
             if (!ok) {
               throw new BatchReject(403, { error: `forbidden: ${op.type} ${op.collection}/${op.id}` });
             }

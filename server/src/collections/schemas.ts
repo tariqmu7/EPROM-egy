@@ -93,6 +93,13 @@ const departmentsSchema = baseDoc.extend({
 
 const notificationsSchema = baseDoc.extend({
   userId: id.optional(),
+  // Who wrote it (hole H7). Present on every client write — authz requires it to
+  // BE the caller — and absent on the nightly sweep's own messages.
+  createdBy: id.optional(),
+  // A bell entry, not a document: bounded so a scripted caller cannot stuff a
+  // novel into everyone's notification list.
+  title: z.string().max(200).optional(),
+  message: z.string().max(2000).optional(),
 });
 
 const workExperiencesSchema = baseDoc.extend({

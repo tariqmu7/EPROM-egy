@@ -24,6 +24,11 @@ export interface PolicyCtx {
   incoming?: Doc | null; // new or merged document (create/update)
   // Looks up another user's document (for manager-of checks). Returns null if absent.
   getUserDoc: (id: string) => Promise<Doc | null>;
+  // Looks up a department document. Supervision in this org is EITHER an explicit
+  // `managerId` chain OR ownership of the department/section somebody sits in
+  // (mirrors DataService.getSubordinates), so the second route needs department
+  // documents. Optional: a caller that cannot supply it simply loses that route.
+  getDepartmentDoc?: (id: string) => Promise<Doc | null>;
 }
 
 // ── Helper predicates (mirror the rules' helper functions) ──────────────────
@@ -83,6 +88,47 @@ async function isManagerOf(ctx: PolicyCtx, targetUserId?: string): Promise<boole
   return !!target && target.managerId === ctx.user.id;
 }
 
+// Department types whose manager counts as the DIRECT supervisor of everyone in
+// them. A GENERAL department's owner deliberately does not pull a whole org
+// branch in as direct reports — same restriction as DataService.getSubordinates.
+const DIRECT_DEPT_TYPES = new Set(['ASSISTANT_GENERAL', 'DEPARTMENT', 'SECTION']);
+
+// "Does the caller supervise this person?" — the SUPERSET of isAncestorManager:
+// it also follows the department route (you manage the section they sit in), so
+// it matches what the SPA itself calls a subordinate. Used to decide which
+// assessment TYPES a rater may write; never used to widen a read.
+//
+// Walks UP from the target through both routes at once, bounded by org depth.
+async function supervises(ctx: PolicyCtx, targetId?: string): Promise<boolean> {
+  const self = canonicalId(ctx.user);
+  if (!targetId || targetId === self) return false;
+  const seen = new Set<string>();
+  let frontier = [targetId];
+  for (let hops = 0; hops < 12 && frontier.length > 0; hops++) {
+    const next: string[] = [];
+    for (const id of frontier) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const node = await ctx.getUserDoc(id);
+      if (!node) continue;
+      const mgr = node.managerId ? String(node.managerId) : '';
+      if (mgr === self) return true;
+      if (mgr) next.push(mgr);
+      const deptId = node.departmentId ? String(node.departmentId) : '';
+      if (deptId && ctx.getDepartmentDoc) {
+        const dept = await ctx.getDepartmentDoc(deptId);
+        const owner = dept?.managerId ? String(dept.managerId) : '';
+        if (owner && DIRECT_DEPT_TYPES.has(String(dept?.type))) {
+          if (owner === self) return true;
+          next.push(owner); // climb from the unit's owner too
+        }
+      }
+    }
+    frontier = next;
+  }
+  return false;
+}
+
 function isValidOrgLevel(doc?: Doc | null): boolean {
   if (!doc || !('orgLevel' in doc) || doc.orgLevel == null) return true;
   return (ORG_LEVEL as readonly string[]).includes(doc.orgLevel);
@@ -129,7 +175,7 @@ export async function can(collection: CollectionName, action: Action, ctx: Polic
     case 'developmentPlans':
       return developmentPlansPolicy(action, ctx, admin);
     case 'notifications':
-      return notificationsPolicy(action, ctx);
+      return notificationsPolicy(action, ctx, admin);
     case 'nominations':
       return nominationsPolicy(action, ctx, admin);
     default:
@@ -210,6 +256,95 @@ function usersPolicy(action: Action, ctx: PolicyCtx, admin: boolean): boolean | 
   }
 }
 
+// ── The rater-relationship rule (hole H6) ──────────────────────────────────
+//
+// An assessment's `type` is not a label the rater picks — it is a statement
+// about WHO scored WHOM, and the score engine pays by it: a MANAGER score
+// carries 60% of a 360 result, while a SELF score carries 10%. Create only ever
+// checked that `raterId` was the caller, so a plain employee could POST
+// `subjectId = raterId = self` with `type: 'MANAGER'` and hand themselves the
+// heavyweight score (H6) — or an INTERVIEW / WRITTEN_EXAM record, which the
+// direct-assessment branch takes at face value as the latest score.
+//
+// The three screens that write assessments (BehavioralAssessment,
+// AnnualAppraisal, ManagerialInterviews) already DERIVE the type from the real
+// relationship. This re-derives the same thing server-side:
+//
+//   SELF                                  → the subject must be the rater
+//   MANAGER / INTERVIEW / PRACTICAL_DEMO
+//   / WRITTEN_EXAM / WORK_RECORD_REVIEW   → the rater must supervise the subject
+//   UPWARD                                → the subject must supervise the rater
+//   PEER                                  → anyone but yourself
+//
+// Admins (and the ETL/import path, which runs as admin) are exempt: exam scores
+// are imported centrally and have no rater relationship to prove.
+
+const SUPERVISOR_ASSESSMENT_TYPES = new Set([
+  'MANAGER',
+  'INTERVIEW',
+  'PRACTICAL_DEMO',
+  'WRITTEN_EXAM',
+  'WORK_RECORD_REVIEW',
+]);
+
+// Is this id the caller? Compares BOTH id shapes — create/update send the raw
+// auth uid while stored subject/rater fields hold the canonical id, and after
+// the migration the two legitimately differ.
+function isSelfId(user: AuthedUser, id?: unknown): boolean {
+  if (typeof id !== 'string' || id === '') return false;
+  return id === user.id || id === canonicalId(user);
+}
+
+async function assessmentTypeMatchesRelationship(ctx: PolicyCtx, doc?: Doc | null): Promise<boolean> {
+  if (!doc) return false;
+  const type = typeof doc.type === 'string' ? doc.type : '';
+  const subjectId = typeof doc.subjectId === 'string' ? doc.subjectId : '';
+  if (!subjectId) return false;
+  const onSelf = isSelfId(ctx.user, subjectId);
+
+  if (type === 'SELF') return onSelf;
+  if (onSelf) return false; // every other type is a judgement by somebody ELSE
+  if (type === 'PEER') return true;
+  if (type === 'UPWARD') {
+    // Rating your own supervisor: the SUBJECT must supervise the rater.
+    return supervisesCaller(ctx, subjectId);
+  }
+  if (SUPERVISOR_ASSESSMENT_TYPES.has(type)) return supervises(ctx, subjectId);
+  return false; // unknown type — refuse rather than guess
+}
+
+// The mirror of `supervises`: does `candidateId` supervise the caller? Walks the
+// caller's own chain upward and looks for them.
+async function supervisesCaller(ctx: PolicyCtx, candidateId: string): Promise<boolean> {
+  const self = canonicalId(ctx.user);
+  if (candidateId === self) return false;
+  const seen = new Set<string>();
+  let frontier = [self];
+  for (let hops = 0; hops < 12 && frontier.length > 0; hops++) {
+    const next: string[] = [];
+    for (const id of frontier) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const node = await ctx.getUserDoc(id);
+      if (!node) continue;
+      const mgr = node.managerId ? String(node.managerId) : '';
+      if (mgr === candidateId) return true;
+      if (mgr) next.push(mgr);
+      const deptId = node.departmentId ? String(node.departmentId) : '';
+      if (deptId && ctx.getDepartmentDoc) {
+        const dept = await ctx.getDepartmentDoc(deptId);
+        const owner = dept?.managerId ? String(dept.managerId) : '';
+        if (owner && DIRECT_DEPT_TYPES.has(String(dept?.type)) && owner !== id) {
+          if (owner === candidateId) return true;
+          next.push(owner);
+        }
+      }
+    }
+    frontier = next;
+  }
+  return false;
+}
+
 async function assessmentsPolicy(action: Action, ctx: PolicyCtx, admin: boolean): Promise<boolean> {
   const { user, existing, incoming } = ctx;
   switch (action) {
@@ -221,10 +356,18 @@ async function assessmentsPolicy(action: Action, ctx: PolicyCtx, admin: boolean)
       if (existing.subjectId === self || existing.raterId === self) return true;
       return isAncestorManager(ctx, existing.subjectId);
     }
-    case 'create':
-      return !!incoming && (incoming.raterId === user.id || admin);
-    case 'update':
-      return !!existing && (existing.raterId === user.id || admin);
+    case 'create': {
+      if (admin) return !!incoming;
+      if (!incoming || incoming.raterId !== user.id) return false;
+      return assessmentTypeMatchesRelationship(ctx, incoming);
+    }
+    case 'update': {
+      if (admin) return !!existing;
+      if (!existing || existing.raterId !== user.id) return false;
+      // The merged document is what will be stored — re-derive against it, so an
+      // edit can't quietly turn a PEER score into a MANAGER one.
+      return assessmentTypeMatchesRelationship(ctx, incoming ?? existing);
+    }
     case 'delete':
       return admin;
   }
@@ -429,13 +572,38 @@ async function developmentPlansPolicy(action: Action, ctx: PolicyCtx, admin: boo
   }
 }
 
-function notificationsPolicy(action: Action, ctx: PolicyCtx): boolean {
+// ── Notification attribution (hole H7) ─────────────────────────────────────
+//
+// Create used to require only that `userId` was a string, so any employee could
+// POST a notification into anybody's bell with any wording — a fake "your
+// manager approved your evidence", indistinguishable from the system's own
+// messages (H7).
+//
+// Restricting the RECIPIENT would not fix it and would break the app: the
+// legitimate senders are all over the place (an employee's re-submission
+// notifies their manager, a reviewer notifies the employee, a 360 rater notifies
+// a peer, a nomination notifies any colleague). What actually carries the attack
+// is that the message can pretend to come from the system. So the rule is
+// ATTRIBUTION, not restriction:
+//
+//   * a client-written notification MUST carry `createdBy` = the caller
+//     (store.ts stamps it from the live session), and
+//   * `sourceKey` is reserved for the nightly sweep — a client may not set it.
+//
+// The bell renders "from <name>" whenever `createdBy` is present, so a message a
+// colleague wrote can no longer wear the system's voice. Admins are exempt, and
+// the nightly job writes server-side without going through this policy at all.
+function notificationsPolicy(action: Action, ctx: PolicyCtx, admin: boolean): boolean {
   const { user, existing, incoming } = ctx;
   switch (action) {
     case 'read':
       return !!existing && existing.userId === user.id; // owner-only
-    case 'create':
-      return !!incoming && typeof incoming.userId === 'string';
+    case 'create': {
+      if (!incoming || typeof incoming.userId !== 'string') return false;
+      if (admin) return true;
+      if (incoming.sourceKey != null) return false; // the sweep's field, not a client's
+      return isSelfId(user, incoming.createdBy);
+    }
     case 'update':
     case 'delete':
       return !!existing && existing.userId === user.id;

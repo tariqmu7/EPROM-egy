@@ -73,8 +73,15 @@ async function loadRow(table: string, id: string): Promise<DocRow | null> {
   return { data: rows[0].data as Record<string, any>, version: Number(rows[0].version ?? 1) };
 }
 
+// Supervision also runs through department ownership (you manage the section
+// somebody sits in), so authz needs department documents as well as user ones.
+async function getDepartmentDoc(id: string): Promise<Record<string, any> | null> {
+  const { rows } = await query('SELECT data FROM departments WHERE id = $1', [id]);
+  return rows.length ? (rows[0].data as Record<string, any>) : null;
+}
+
 function ctxBase(user: AuthedUser) {
-  return { user, getUserDoc };
+  return { user, getUserDoc, getDepartmentDoc };
 }
 
 async function authorize(

@@ -56,7 +56,7 @@ beforeAll(async () => {
   // migrations, so we declare the columns the route/batch SQL depends on here.
   const cols =
     '(id TEXT PRIMARY KEY, data JSONB NOT NULL, version INTEGER NOT NULL DEFAULT 1, created_by TEXT, updated_by TEXT, updated_at TIMESTAMPTZ NOT NULL DEFAULT now(), created_at TIMESTAMPTZ NOT NULL DEFAULT now())';
-  for (const t of ['users', 'skills', 'assessments', 'evidences', 'nominations', 'notifications']) {
+  for (const t of ['users', 'skills', 'assessments', 'evidences', 'nominations', 'notifications', 'departments']) {
     await query(`CREATE TABLE ${t} ${cols}`);
   }
   // Quoted camelCase tables (case-sensitive), matching what registry.tableFor()
@@ -189,13 +189,16 @@ describe('authorization parity with firestore.rules', () => {
     const mine = await request(app)
       .post('/col/assessments')
       .set('Authorization', `Bearer ${empTok}`)
-      .send({ data: { raterId: EMP.id, subjectId: OTHER.id, skillId: 'skill-1', score: 4 } });
+      // `type` is now part of the contract: it states the rater/subject
+      // relationship the score is paid by, and PEER is the one an unrelated
+      // colleague may claim (see the H6 suite below).
+      .send({ data: { raterId: EMP.id, subjectId: OTHER.id, skillId: 'skill-1', score: 4, type: 'PEER' } });
     expect(mine.status).toBe(201);
 
     const forged = await request(app)
       .post('/col/assessments')
       .set('Authorization', `Bearer ${empTok}`)
-      .send({ data: { raterId: OTHER.id, subjectId: EMP.id, skillId: 'skill-1', score: 5 } });
+      .send({ data: { raterId: OTHER.id, subjectId: EMP.id, skillId: 'skill-1', score: 5, type: 'PEER' } });
     expect(forged.status).toBe(403);
   });
 
@@ -588,8 +591,10 @@ describe('batch is atomic and authorized inside the transaction (F-7)', () => {
       .set('Authorization', `Bearer ${empTok}`)
       .send({
         operations: [
-          { type: 'set', collection: 'notifications', id: 'n-ok-1', data: { userId: EMP.id, title: 'a', message: 'm', isRead: false } },
-          { type: 'set', collection: 'notifications', id: 'n-ok-2', data: { userId: EMP.id, title: 'b', message: 'm', isRead: false } },
+          // `createdBy` is now required on any client-written notification — see
+          // the H7 suite below.
+          { type: 'set', collection: 'notifications', id: 'n-ok-1', data: { userId: EMP.id, title: 'a', message: 'm', isRead: false, createdBy: EMP.id } },
+          { type: 'set', collection: 'notifications', id: 'n-ok-2', data: { userId: EMP.id, title: 'b', message: 'm', isRead: false, createdBy: EMP.id } },
         ],
       });
     expect(res.status).toBe(200);
@@ -1119,5 +1124,196 @@ describe('deleting an employee releases their login', () => {
     const res = await request(app).post('/auth/login').send({ email: legacy.email, password: 'legacy-pass' });
     expect(res.status).toBe(403);
     expect(res.body.error).toBe('account_not_active');
+  });
+});
+
+// ===========================================================================
+// H6 — an assessment's TYPE is a claim about who scored whom, and the score
+// engine pays by it (a MANAGER score carries 60% of a 360 result, a SELF score
+// 10%; INTERVIEW / WRITTEN_EXAM are taken at face value as the latest score).
+// Create only ever checked that the rater was the caller, so an employee could
+// post `subjectId = raterId = self` with `type: 'MANAGER'` and award themselves
+// the heavyweight score. The server now re-derives the same mapping the three
+// writing screens use.
+// ===========================================================================
+describe('assessments: the type must match the real relationship', () => {
+  // Its own little org, independent of where this suite sits in the file:
+  //   rel-boss  -- managerId -->  rel-emp                  (the chain route)
+  //   rel-head  -- manages SECTION dept-rel -->  rel-emp   (the department route)
+  const REL_EMP = { id: 'rel-emp', email: 'relemp@eprom.local' };
+  const REL_BOSS = { id: 'rel-boss', email: 'relboss@eprom.local' };
+  const REL_HEAD = { id: 'rel-head', email: 'relhead@eprom.local' };
+  const REL_PEER = { id: 'rel-peer', email: 'relpeer@eprom.local' };
+
+  beforeAll(async () => {
+    await seedUser(REL_BOSS, 'EMPLOYEE', 'relboss-pass', { orgLevel: 'SH' });
+    await seedUser(REL_HEAD, 'EMPLOYEE', 'relhead-pass', { orgLevel: 'SH' });
+    await seedUser(REL_PEER, 'EMPLOYEE', 'relpeer-pass', { orgLevel: 'JP', departmentId: 'dept-rel' });
+    await seedUser(REL_EMP, 'EMPLOYEE', 'relemp-pass', {
+      orgLevel: 'JP',
+      managerId: REL_BOSS.id,
+      departmentId: 'dept-rel',
+    });
+    await seedDoc('departments', 'dept-rel', { name: 'Rel Section', type: 'SECTION', managerId: REL_HEAD.id });
+  });
+
+  const post = (tok: string, id: string, data: Record<string, unknown>) =>
+    request(app).post('/col/assessments').set('Authorization', `Bearer ${tok}`).send({ id, data });
+
+  it('H6 - an employee cannot write a manager-grade score of themselves', async () => {
+    const tok = await login(REL_EMP.email, 'relemp-pass');
+
+    for (const type of ['MANAGER', 'INTERVIEW', 'PRACTICAL_DEMO', 'WRITTEN_EXAM', 'WORK_RECORD_REVIEW']) {
+      const res = await post(tok, `a-self-${type}`, {
+        raterId: REL_EMP.id, subjectId: REL_EMP.id, skillId: 's-1', score: 5, type,
+      });
+      expect(res.status).toBe(403);
+    }
+
+    // The honest self-evaluation still works - it is just worth 10%.
+    const honest = await post(tok, 'a-self-ok', {
+      raterId: REL_EMP.id, subjectId: REL_EMP.id, skillId: 's-1', score: 5, type: 'SELF',
+    });
+    expect(honest.status).toBe(201);
+  });
+
+  it('a colleague may rate a peer, but not as their manager', async () => {
+    const tok = await login(REL_PEER.email, 'relpeer-pass');
+
+    const peer = await post(tok, 'a-peer-ok', {
+      raterId: REL_PEER.id, subjectId: REL_EMP.id, skillId: 's-1', score: 4, type: 'PEER',
+    });
+    expect(peer.status).toBe(201);
+
+    const posing = await post(tok, 'a-peer-posing', {
+      raterId: REL_PEER.id, subjectId: REL_EMP.id, skillId: 's-1', score: 5, type: 'MANAGER',
+    });
+    expect(posing.status).toBe(403);
+  });
+
+  it('a real supervisor may - by the chain OR by owning the section', async () => {
+    const bossTok = await login(REL_BOSS.email, 'relboss-pass');
+    const byChain = await post(bossTok, 'a-mgr-chain', {
+      raterId: REL_BOSS.id, subjectId: REL_EMP.id, skillId: 's-1', score: 4, type: 'MANAGER',
+    });
+    expect(byChain.status).toBe(201);
+
+    // The department route matters: the SPA calls everyone in a section you own
+    // a direct report, so a section head who is nobody else's `managerId` must
+    // still be able to score them.
+    const headTok = await login(REL_HEAD.email, 'relhead-pass');
+    const byDept = await post(headTok, 'a-mgr-dept', {
+      raterId: REL_HEAD.id, subjectId: REL_EMP.id, skillId: 's-1', score: 4, type: 'INTERVIEW',
+    });
+    expect(byDept.status).toBe(201);
+  });
+
+  it('UPWARD is only allowed against your own supervisor', async () => {
+    const tok = await login(REL_EMP.email, 'relemp-pass');
+
+    const real = await post(tok, 'a-up-ok', {
+      raterId: REL_EMP.id, subjectId: REL_BOSS.id, skillId: 's-1', score: 3, type: 'UPWARD',
+    });
+    expect(real.status).toBe(201);
+
+    // A stranger is not "my supervisor" - that would put an unearned upward
+    // record on their profile.
+    const stranger = await post(tok, 'a-up-stranger', {
+      raterId: REL_EMP.id, subjectId: OTHER.id, skillId: 's-1', score: 1, type: 'UPWARD',
+    });
+    expect(stranger.status).toBe(403);
+  });
+
+  it('an edit cannot upgrade a peer score into a manager score', async () => {
+    const tok = await login(REL_PEER.email, 'relpeer-pass');
+    const upgrade = await request(app)
+      .patch('/col/assessments/a-peer-ok')
+      .set('Authorization', `Bearer ${tok}`)
+      .send({ data: { type: 'MANAGER', score: 5 } });
+    expect(upgrade.status).toBe(403);
+  });
+
+  it('the /batch route is not a back door', async () => {
+    const tok = await login(REL_EMP.email, 'relemp-pass');
+    const res = await request(app)
+      .post('/batch')
+      .set('Authorization', `Bearer ${tok}`)
+      .send({
+        operations: [
+          { type: 'set', collection: 'assessments', id: 'a-batch-self', data: { raterId: REL_EMP.id, subjectId: REL_EMP.id, skillId: 's-1', score: 5, type: 'MANAGER' } },
+        ],
+      });
+    expect(res.status).toBe(403);
+    const check = await query('SELECT id FROM assessments WHERE id = $1', ['a-batch-self']);
+    expect(check.rows.length).toBe(0);
+  });
+});
+
+// ===========================================================================
+// H7 — a notification used to need nothing but a recipient id, so any employee
+// could drop a message into anybody's bell in the system's own voice ("your
+// manager approved your evidence"). Restricting the RECIPIENT would not fix
+// that and would break the app - the legitimate senders are everywhere. The
+// rule is attribution: a client-written notification must name its sender, and
+// `sourceKey` stays the nightly sweep's alone.
+// ===========================================================================
+describe('notifications: nobody may write in the system voice', () => {
+  const SENDER = { id: 'notif-1', email: 'notif@eprom.local' };
+  beforeAll(async () => {
+    await seedUser(SENDER, 'EMPLOYEE', 'notif-pass', { orgLevel: 'JP' });
+  });
+
+  const post = (tok: string, id: string, data: Record<string, unknown>) =>
+    request(app).post('/col/notifications').set('Authorization', `Bearer ${tok}`).send({ id, data });
+
+  it('H7 - an unattributed notification is refused', async () => {
+    const tok = await login(SENDER.email, 'notif-pass');
+    const res = await post(tok, 'n-anon', {
+      userId: OTHER.id, title: 'Evidence Approved', message: 'Your evidence was approved.', type: 'SUCCESS',
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it('the sender cannot be somebody else', async () => {
+    const tok = await login(SENDER.email, 'notif-pass');
+    const res = await post(tok, 'n-forged', {
+      userId: OTHER.id, title: 'From your boss', message: 'Do this.', type: 'INFO', createdBy: MGR.id,
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it('sourceKey belongs to the nightly sweep, not to a client', async () => {
+    const tok = await login(SENDER.email, 'notif-pass');
+    const res = await post(tok, 'n-sourcekey', {
+      userId: OTHER.id, title: 'Assessment due', message: 'Overdue.', type: 'WARNING',
+      createdBy: SENDER.id, sourceKey: 'assess:emp-2:2026-09',
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it('an honest, signed notification still goes through', async () => {
+    const tok = await login(SENDER.email, 'notif-pass');
+    const res = await post(tok, 'n-signed', {
+      userId: OTHER.id, title: 'New Assessment Received', message: 'You received a new assessment.',
+      type: 'INFO', createdBy: SENDER.id,
+    });
+    expect(res.status).toBe(201);
+    const row = await query('SELECT data FROM notifications WHERE id = $1', ['n-signed']);
+    expect(row.rows[0].data.createdBy).toBe(SENDER.id);
+  });
+
+  it('the /batch route is not a back door', async () => {
+    const tok = await login(SENDER.email, 'notif-pass');
+    const res = await request(app)
+      .post('/batch')
+      .set('Authorization', `Bearer ${tok}`)
+      .send({
+        operations: [
+          { type: 'set', collection: 'notifications', id: 'n-batch-anon', data: { userId: OTHER.id, title: 'System', message: 'Click here.', type: 'INFO' } },
+        ],
+      });
+    expect(res.status).toBe(403);
+    const check = await query('SELECT id FROM notifications WHERE id = $1', ['n-batch-anon']);
+    expect(check.rows.length).toBe(0);
   });
 });

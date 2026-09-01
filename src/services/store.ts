@@ -3562,8 +3562,15 @@ export class DataService {
   // hiccups don't silently drop notification writes.
   async addNotification(notification: Omit<Notification, 'id' | 'createdAt' | 'isRead'>) {
     const id = doc(collection(db, 'notifications')).id;
+    // Attribution is mandatory on a client write (hole H7): the API refuses a
+    // notification that does not name its sender, so nothing sent from a browser
+    // can impersonate the system. Only the nightly sweep writes unattributed.
+    const { actorId } = this.resolveActor();
     const newNotification: Notification = {
       ...notification,
+      // Falls back to the raw auth uid — the API accepts either id shape — so a
+      // notification written before the user roster has loaded still attributes.
+      createdBy: notification.createdBy ?? actorId ?? auth.currentUser?.uid,
       id,
       createdAt: new Date().toISOString(),
       isRead: false

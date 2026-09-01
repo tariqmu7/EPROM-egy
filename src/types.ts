@@ -1045,6 +1045,14 @@ export interface Notification {
   createdAt: string;
   actionLink?: string; // Optional link to navigate when clicked
   /**
+   * Who wrote this notification, as a canonical user id — stamped by
+   * `DataService.addNotification` from the live session and REQUIRED by the API
+   * on any non-admin write (hole H7). A notification with no `createdBy` came
+   * from the system (the nightly sweep); one with it is shown as "from <name>",
+   * so a message a colleague wrote can never wear the system's voice.
+   */
+  createdBy?: string;
+  /**
    * Set only by the server's nightly sweep (server/src/jobs/nightly.ts). It
    * embeds the subject AND the period — `assess:<userId>:2026-08`,
    * `cert:<userId>:<certId>:30`, `team:<managerId>:2026-W32` — and the job

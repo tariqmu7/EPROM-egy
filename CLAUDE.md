@@ -579,6 +579,26 @@ and returns it in the `500` body. Zero-dependency logger in [`server/src/logger.
   (`isManagerOf`) or an admin writes the verdict, and never on their own record. Without this an
   employee could POST an already-`APPROVED`, self-scored evidence, or an already-`VERIFIED`
   experience, and award themselves a competency level over the API in one call.
+- **An assessment's `type` is a claim about who scored whom, and the server re-derives it.** The
+  score engine pays by type — a MANAGER score carries 60% of a 360 result against a SELF score's
+  10%, and INTERVIEW / WRITTEN_EXAM are taken at face value as the latest score — so `type` is
+  authorized, not accepted: `SELF` only on yourself; `MANAGER` / `INTERVIEW` / `PRACTICAL_DEMO` /
+  `WRITTEN_EXAM` / `WORK_RECORD_REVIEW` only on somebody you **supervise**; `UPWARD` only on
+  somebody who supervises **you**; `PEER` on anyone but yourself. Supervision here is `supervises()`
+  in [`server/src/authz.ts`](server/src/authz.ts) — the explicit `managerId` chain **or** ownership
+  of the department/section the person sits in, mirroring `DataService.getSubordinates`, which is
+  why `PolicyCtx` now also carries `getDepartmentDoc`. Admins are exempt (imported exam scores have
+  no rater relationship to prove). Without this an employee could POST `subjectId = raterId = self`
+  with `type: 'MANAGER'` and hand themselves the heavyweight score.
+- **A notification written from a browser must name its sender.** Create used to require only a
+  recipient id, so any employee could drop a message into anybody's bell in the system's own voice.
+  Restricting the *recipient* would not fix that and would break the app (an employee's re-submission
+  notifies their manager, a reviewer notifies the employee, a 360 rater notifies a peer, a nomination
+  notifies any colleague), so the rule is **attribution**: a non-admin create must carry
+  `createdBy` = the caller, and `sourceKey` stays the nightly sweep's alone. `DataService.addNotification`
+  stamps `createdBy` from the live session; the sweep writes straight to SQL with none, and
+  [`NotificationBell`](src/components/NotificationBell.tsx) shows "From <name>" or "System" on every
+  row — so nothing a colleague wrote can pass itself off as the system.
 - `BOOTSTRAP_ADMIN_EMAIL` is treated as ADMIN before any user holds the `ADMIN` role
   (first-run / recovery only); normal admin access is role-driven (`users` doc `role == 'ADMIN'`).
 

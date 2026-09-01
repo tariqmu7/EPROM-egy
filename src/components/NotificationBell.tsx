@@ -30,6 +30,15 @@ function timeAgo(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString();
 }
 
+// Who wrote this? `createdBy` is stamped on every client-written notification
+// and absent on the system's own (the nightly sweep, and the synthesized dyn-*
+// rows computed in the browser).
+function senderName(notification: Notification): string {
+  if (!notification.createdBy) return 'System';
+  const sender = dataService.getUserById(notification.createdBy);
+  return sender ? `From ${sender.name}` : 'From another user';
+}
+
 export const NotificationBell: React.FC<NotificationBellProps> = ({ user, onNavigate }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -193,6 +202,14 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ user, onNavi
                             </span>
                           </div>
                           <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">{notification.message}</p>
+                          {/* Attribution (hole H7). A notification written from a
+                              browser must name its sender — the API rejects one
+                              that doesn't — so anything a colleague wrote says so
+                              here and can't pass itself off as a system message.
+                              Only the nightly sweep writes unattributed. */}
+                          <p className="text-[10px] text-slate-400 mt-0.5">
+                            {senderName(notification)}
+                          </p>
                           {notification.actionLink && (
                             <span className="text-[10px] font-bold text-blue-600 mt-1 inline-block">View →</span>
                           )}
