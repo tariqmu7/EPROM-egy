@@ -570,6 +570,19 @@ and returns it in the `500` body. Zero-dependency logger in [`server/src/logger.
   manager-grade org level. The **bootstrap-admin grant keys off the address the session signed in
   with** (`auth_credentials`, carried as `AuthedUser.authEmail`), never the users document's
   user-writable `email` field.
+- **A session can END while the app is open, and the app must notice.** A JWT is stateless, so
+  without a check a password change or a deactivation would leave existing tokens working for the
+  rest of `JWT_EXPIRES_IN` (12h) — an admin resetting a compromised account would not actually lock
+  the attacker out. [`middleware/authenticate.ts`](server/src/middleware/authenticate.ts) compares
+  the token's `iat` against `auth_credentials.updated_at` (which moves on every change-password and
+  admin set-password) and refuses an older token `401`; a 2-second skew allowance covers `iat`'s
+  whole-second precision. `/auth/change-password` returns a **fresh token** so the tab doing the
+  change survives while every OTHER session ends. On the client, `api-client.ts` calls a
+  `setSessionInvalidHandler` on any AUTHENTICATED request rejected as no-longer-a-session (401, or
+  403 `account_not_active`), which tears the session down through `auth-compat` — store listeners
+  and cached data dropped, App back at the login screen with the reason. An ordinary authz `403`
+  and a 401 on an unauthenticated request (a wrong password at the login form) must **not** end the
+  session.
 - **A submission never carries its own verdict.** `evidences` and `workExperiences` are claims the
   employee makes and somebody else judges, and the judgement is what feeds a score — so a write by
   the **subject** of the record (create or update, any non-admin) must arrive/stay `PENDING` with

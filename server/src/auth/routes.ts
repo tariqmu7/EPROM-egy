@@ -198,7 +198,12 @@ export function authRouter(): Router {
          ON CONFLICT (user_id) DO UPDATE SET password_hash = EXCLUDED.password_hash, must_reset = false, updated_at = now()`,
         [userId, req.user!.email, await hashPassword(parsed.data.newPassword)],
       );
-      res.json({ ok: true });
+      // Every token issued before this moment is now dead (authenticate.ts
+      // compares `iat` against the credential's updated_at) — that is the point:
+      // changing your password signs your OTHER sessions out. Hand this caller a
+      // fresh one so the tab they are sitting in survives its own change.
+      const token = signToken({ sub: userId, email: req.user!.authEmail || req.user!.email });
+      res.json({ ok: true, token });
     } catch (e) {
       next(e);
     }

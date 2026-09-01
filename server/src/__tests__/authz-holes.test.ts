@@ -67,7 +67,10 @@ beforeAll(async () => {
     await query(`CREATE TABLE "${t}" ${cols}`);
   }
   await query(
-    'CREATE TABLE auth_credentials (user_id TEXT PRIMARY KEY, email TEXT, password_hash TEXT, must_reset BOOLEAN, updated_at TIMESTAMPTZ, created_at TIMESTAMPTZ)',
+    // updated_at mirrors the real schema's NOT NULL DEFAULT now(): authenticate.ts
+    // compares the token's `iat` against it to retire tokens issued before a
+    // password change, and a null here would silently skip that check.
+    'CREATE TABLE auth_credentials (user_id TEXT PRIMARY KEY, email TEXT, password_hash TEXT, must_reset BOOLEAN, updated_at TIMESTAMPTZ NOT NULL DEFAULT now(), created_at TIMESTAMPTZ NOT NULL DEFAULT now())',
   );
   await query(
     'CREATE TABLE tombstones (collection TEXT NOT NULL, id TEXT NOT NULL, deleted_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (collection, id))',

@@ -22,9 +22,15 @@ import { ChangePasswordForm } from './components/ChangePasswordForm';
 import { dataService, isBootstrapAdminEmail } from './services/store';
 // Note: OnlineAssessments, ManagerialInterviews, EvidencePortal, BehavioralAssessment
 // are rendered via EvaluationsHub (lazy-loaded above) — no direct import needed.
-import { compatAuth as auth, onAuthStateChanged, fetchAuthConfig } from './services/auth-compat';
+import {
+  compatAuth as auth,
+  onAuthStateChanged,
+  fetchAuthConfig,
+  getSessionEndedReason,
+  clearSessionEndedReason,
+} from './services/auth-compat';
 import { User, Role } from './types';
-import { ShieldCheck, Loader2, Lock, User as UserIcon, CheckCircle, ArrowRight, ArrowLeft, Clock } from 'lucide-react';
+import { ShieldCheck, Loader2, Lock, User as UserIcon, CheckCircle, AlertCircle, ArrowRight, ArrowLeft, Clock } from 'lucide-react';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -41,6 +47,10 @@ const App: React.FC = () => {
   const [allowSignup, setAllowSignup] = useState(false);
   const [pendingApproval, setPendingApproval] = useState(false);
   const [mustChangePassword, setMustChangePassword] = useState(false);
+  // Why the session ended on its own (token expired, account deactivated,
+  // password changed elsewhere). Shown on the login screen so a user who is
+  // suddenly back at sign-in knows what happened instead of assuming a crash.
+  const [sessionEndedReason, setSessionEndedReason] = useState<string | null>(null);
   
   const [activeTab, setActiveTab] = useState('emp-dashboard');
   const [tabKey, setTabKey] = useState(0);
@@ -91,7 +101,11 @@ const App: React.FC = () => {
           if (mounted) setUser(null);
         }
       } else {
-        if (mounted) setUser(null);
+        if (mounted) {
+          setUser(null);
+          setMustChangePassword(false);
+          setSessionEndedReason(getSessionEndedReason());
+        }
       }
 
       if (mounted) setIsLoading(false);
@@ -117,6 +131,8 @@ const App: React.FC = () => {
   const handleAuth = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setSessionEndedReason(null);
+    clearSessionEndedReason();
     setAuthLoading(true);
 
     try {
@@ -168,6 +184,7 @@ const App: React.FC = () => {
     await dataService.signOut();
     setUser(null);
     setMustChangePassword(false);
+    setSessionEndedReason(null);
     setEmail('');
     setPassword('');
   }, []);
@@ -384,6 +401,21 @@ const App: React.FC = () => {
                 </div>
                 
                 <form onSubmit={handleAuth} className="space-y-5">
+                    {sessionEndedReason && (
+                        <div className="bg-amber-50 border border-amber-200 text-amber-900 p-4 rounded-none flex items-start gap-3">
+                            <AlertCircle size={20} className="mt-0.5 flex-shrink-0 text-amber-500" />
+                            <div className="text-sm">
+                                <p className="font-bold">You were signed out</p>
+                                <p className="text-slate-700 mt-1">
+                                    {sessionEndedReason === 'account_not_active'
+                                        ? 'Your account is no longer active. Contact your administrator.'
+                                        : sessionEndedReason === 'password_changed'
+                                          ? 'Your password was changed, which ends every other session. Sign in with the new one.'
+                                          : 'Your session expired. Please sign in again — any unsaved changes were not stored.'}
+                                </p>
+                            </div>
+                        </div>
+                    )}
                     {signupSuccess && (
                         <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-none flex items-start gap-3">
                             <CheckCircle size={20} className="mt-0.5 flex-shrink-0 text-emerald-500" />

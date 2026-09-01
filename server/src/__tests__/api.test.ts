@@ -15,6 +15,10 @@ const MGR = { id: 'mgr-1', email: 'mgr@eprom.local' }; // manages sub-1 → sub-
 const CEO = { id: 'ceo-1', email: 'ceo@eprom.local' };
 // The recovery address BOOTSTRAP_ADMIN_EMAIL points at — nobody is seeded with it.
 const BOOTSTRAP_EMAIL = 'bootstrap@eprom.local';
+// Session-lifecycle subjects — see 'a live session ends when the account does'.
+const SESS = { id: 'sess-1', email: 'sess@eprom.local' };
+const SESS_OFF = { id: 'sess-2', email: 'sessoff@eprom.local' };
+const SESS_PW = { id: 'sess-3', email: 'sesspw@eprom.local' };
 
 async function seedUser(u: { id: string; email: string }, role: string, password: string, extra: any = {}) {
   const pw = await import('../auth/password.js');
@@ -66,7 +70,10 @@ beforeAll(async () => {
     await query(`CREATE TABLE "${t}" ${cols}`);
   }
   await query(
-    'CREATE TABLE auth_credentials (user_id TEXT PRIMARY KEY, email TEXT, password_hash TEXT, must_reset BOOLEAN, updated_at TIMESTAMPTZ, created_at TIMESTAMPTZ)',
+    // updated_at mirrors the real schema's NOT NULL DEFAULT now(): authenticate.ts
+    // compares the token's `iat` against it to retire tokens issued before a
+    // password change, and a null here would silently skip that check.
+    'CREATE TABLE auth_credentials (user_id TEXT PRIMARY KEY, email TEXT, password_hash TEXT, must_reset BOOLEAN, updated_at TIMESTAMPTZ NOT NULL DEFAULT now(), created_at TIMESTAMPTZ NOT NULL DEFAULT now())',
   );
   await query(
     'CREATE TABLE tombstones (collection TEXT NOT NULL, id TEXT NOT NULL, deleted_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (collection, id))',
@@ -78,6 +85,11 @@ beforeAll(async () => {
   await seedUser(EMP, 'EMPLOYEE', 'emp-pass', { managerId: 'mgr-x', orgLevel: 'JP' });
   await seedUser(OTHER, 'EMPLOYEE', 'other-pass');
   await seedUser(CEO, 'CEO', 'ceo-pass');
+  // Their own accounts, because the session tests below churn passwords and
+  // account status — neither can be done to a user other tests depend on.
+  await seedUser(SESS, 'EMPLOYEE', 'sess-pass', { orgLevel: 'JP' });
+  await seedUser(SESS_OFF, 'EMPLOYEE', 'sessoff-pass', { orgLevel: 'JP' });
+  await seedUser(SESS_PW, 'EMPLOYEE', 'sesspw-pass', { orgLevel: 'JP' });
 
   // Management chain for read-scoping tests: MGR → sub-1 → sub-2.
   await seedUser(MGR, 'EMPLOYEE', 'mgr-pass', { orgLevel: 'SH' });
@@ -1315,5 +1327,76 @@ describe('notifications: nobody may write in the system voice', () => {
     expect(res.status).toBe(403);
     const check = await query('SELECT id FROM notifications WHERE id = $1', ['n-batch-anon']);
     expect(check.rows.length).toBe(0);
+  });
+});
+
+
+// ── The session must be able to END while the app is open ────────────────────
+// A JWT is stateless: once issued it is good until it expires. That means a
+// password change or a deactivation does nothing to the sessions already out
+// there unless the server checks for it on every request — so an admin resetting
+// a compromised account's password would NOT actually lock the attacker out for
+// the rest of JWT_EXPIRES_IN (12h). authenticate.ts closes that by comparing the
+// token's `iat` against auth_credentials.updated_at.
+describe('a live session ends when the account does', () => {
+  it('retires a token issued before the password last changed', async () => {
+    const tok = await login(SESS.email, 'sess-pass');
+    expect((await request(app).get('/auth/me').set('Authorization', `Bearer ${tok}`)).status).toBe(200);
+
+    // What a password change does to the credential row. Pushed clear of the
+    // middleware's CLOCK_SKEW_MS: `iat` is whole seconds, so a real change and
+    // a token minted in the same millisecond-fast test are indistinguishable
+    // without this — the skew is deliberate (see authenticate.ts) and only
+    // delays revocation by a second in production.
+    await query('UPDATE auth_credentials SET updated_at = $1 WHERE user_id = $2', [
+      new Date(Date.now() + 10_000),
+      SESS.id,
+    ]);
+
+    const dead = await request(app).get('/auth/me').set('Authorization', `Bearer ${tok}`);
+    expect(dead.status).toBe(401);
+    expect(String(dead.body.error)).toMatch(/password change/);
+  });
+
+  it('hands the caller a fresh token so their own tab survives their own change', async () => {
+    const tok = await login(SESS_PW.email, 'sesspw-pass');
+    const changed = await request(app)
+      .post('/auth/change-password')
+      .set('Authorization', `Bearer ${tok}`)
+      .send({ currentPassword: 'sesspw-pass', newPassword: 'sesspw-pass-2' });
+    expect(changed.status).toBe(200);
+    expect(typeof changed.body.token).toBe('string');
+
+    // The returned token is a working session for the same person.
+    const me = await request(app).get('/auth/me').set('Authorization', `Bearer ${changed.body.token}`);
+    expect(me.status).toBe(200);
+    expect(me.body.user.id).toBe(SESS_PW.id);
+    expect(
+      (await request(app).post('/auth/login').send({ email: SESS_PW.email, password: 'sesspw-pass-2' })).status,
+    ).toBe(200);
+  });
+
+  it('refuses a deactivated account mid-session with a code the client can act on', async () => {
+    const tok = await login(SESS_OFF.email, 'sessoff-pass');
+    expect((await request(app).get('/auth/me').set('Authorization', `Bearer ${tok}`)).status).toBe(200);
+
+    const doc = (await query('SELECT data FROM users WHERE id = $1', [SESS_OFF.id])).rows[0].data;
+    await query('UPDATE users SET data = $1 WHERE id = $2', [{ ...doc, status: 'REJECTED' }, SESS_OFF.id]);
+
+    const res = await request(app).get('/auth/me').set('Authorization', `Bearer ${tok}`);
+    expect(res.status).toBe(403);
+    // The CODE matters: the SPA signs the user out on this one, and must NOT
+    // sign them out on an ordinary permission refusal (next test).
+    expect(res.body.error).toBe('account_not_active');
+  });
+
+  it('does not use that code for an ordinary permission refusal', async () => {
+    const empTok = await login(OTHER.email, 'other-pass');
+    const res = await request(app)
+      .patch(`/col/users/${ADMIN.id}`)
+      .set('Authorization', `Bearer ${empTok}`)
+      .send({ name: 'Not Yours' });
+    expect(res.status).toBe(403);
+    expect(res.body.error).not.toBe('account_not_active');
   });
 });

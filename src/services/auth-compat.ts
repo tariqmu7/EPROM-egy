@@ -17,7 +17,14 @@
 // PHASE3_FRONTEND_SWAP.md. The compat below returns the created id so the
 // rewrite is minimal.
 // ============================================================================
-import { api, getToken, setToken, clearToken } from './api-client';
+import {
+  api,
+  getToken,
+  setToken,
+  clearToken,
+  setSessionInvalidHandler,
+  type SessionEndReason,
+} from './api-client';
 
 export interface ProviderInfo {
   providerId: string;
@@ -115,7 +122,15 @@ export async function signInWithEmailAndPassword(
 // Self-service password change. `currentPassword` is optional only while the
 // account is in the forced-reset state (the server enforces this, not us).
 export async function changePassword(newPassword: string, currentPassword?: string): Promise<void> {
-  await api.post('/auth/change-password', { newPassword, currentPassword });
+  const res = await api.post<{ ok: boolean; token?: string }>('/auth/change-password', {
+    newPassword,
+    currentPassword,
+  });
+  // The change retires every token issued before it — including the one this tab
+  // is holding. The server hands back a fresh one so THIS session survives while
+  // the others end; without storing it the user would change their password and
+  // be thrown out on their very next request.
+  if (res?.token) setToken(res.token);
   mustResetPassword = false;
 }
 
@@ -168,8 +183,36 @@ export async function signOut(_auth?: unknown): Promise<void> {
   clearToken();
   currentUser = null;
   mustResetPassword = false;
+  sessionEndedReason = null;
   notify();
 }
+
+// ── A session that died on its own ───────────────────────────────────────────
+// Set when the API rejected an authenticated request as no-longer-a-session
+// (token expired, account deactivated, password changed elsewhere). The token is
+// already gone by then; this tears the client-side session down the same way
+// signOut does, so store.ts drops its listeners and cached data and App.tsx
+// returns to the login screen — with a reason to show, instead of a frozen
+// dashboard whose every save fails.
+let sessionEndedReason: SessionEndReason | null = null;
+
+export function getSessionEndedReason(): SessionEndReason | null {
+  return sessionEndedReason;
+}
+
+export function clearSessionEndedReason(): void {
+  sessionEndedReason = null;
+}
+
+setSessionInvalidHandler((reason) => {
+  // Already signed out (a burst of in-flight polls all fail at once) — the first
+  // one did the work; don't re-notify for each.
+  if (!currentUser) return;
+  sessionEndedReason = reason;
+  currentUser = null;
+  mustResetPassword = false;
+  notify();
+});
 
 // Firebase-style listener. Resolves the current session once on first call,
 // then invokes cb on every future auth change. Returns an unsubscribe fn.

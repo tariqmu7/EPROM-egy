@@ -73,6 +73,32 @@ export class ApiNetworkError extends Error {
 // every log line for that request, so a failure reported by a user can be traced.
 const newRequestId = newId;
 
+// ── The session is dead ──────────────────────────────────────────────────────
+// A token can stop working WHILE the app is open: it expires (12h), an admin
+// deactivates or archives the account, or a password change retires it. The
+// client used to drop the token on a 401 and throw — so React kept rendering a
+// signed-in app whose every request failed silently, and the user went on typing
+// into a page that could no longer save. Anything that rejects an AUTHENTICATED
+// request as "you are not a valid session any more" now ends the session for
+// real: auth-compat registers a handler here that clears the user and notifies
+// App, which falls back to the login screen with an explanation.
+export type SessionEndReason = 'expired' | 'account_not_active' | 'password_changed';
+
+let onSessionInvalid: ((reason: SessionEndReason) => void) | null = null;
+
+export function setSessionInvalidHandler(fn: ((reason: SessionEndReason) => void) | null): void {
+  onSessionInvalid = fn;
+}
+
+// A 403 is USUALLY an ordinary authorization refusal ("you may not edit that
+// user") and must NOT end the session. Only the server's account-level codes do.
+function sessionEndReason(status: number, body: unknown): SessionEndReason | null {
+  const code = typeof (body as { error?: unknown })?.error === 'string' ? (body as { error: string }).error : '';
+  if (status === 403) return code === 'account_not_active' ? 'account_not_active' : null;
+  if (status !== 401) return null;
+  return code.includes('password change') ? 'password_changed' : 'expired';
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = { 'X-Request-Id': newRequestId() };
   const token = getToken();
@@ -99,8 +125,14 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   const parsed = text ? JSON.parse(text) : undefined;
 
   if (!res.ok) {
-    // An expired/invalid token: drop it so the app falls back to the login screen.
-    if (res.status === 401) clearToken();
+    // Only a request that CARRIED a token can have its session invalidated. A
+    // 401 from /auth/login is a wrong password, not a dead session — firing the
+    // handler there would blank the login screen the user is typing into.
+    const reason = token ? sessionEndReason(res.status, parsed) : null;
+    if (reason) {
+      clearToken();
+      onSessionInvalid?.(reason);
+    }
     throw new ApiError(res.status, parsed);
   }
   return parsed as T;
