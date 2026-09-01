@@ -75,6 +75,14 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    # ── HTTPS (off by default) ────────────────────────────────────────────────
+    # nginx will not start if ssl_certificate names a file that isn't there, so
+    # the https site ships as a separate file that is mounted in only once a
+    # certificate exists. Uncomment BOTH lines, put ecms.crt + ecms.key in
+    # deploy/tls/certs/, and follow deploy/tls/README.md.
+    # volumes:
+    #   - ./deploy/tls/certs:/etc/nginx/certs:ro
+    #   - ./deploy/nginx/tls.conf:/etc/nginx/conf.d/tls.conf:ro
     # Only start serving once the API is actually healthy, not merely started —
     # otherwise the first requests through /api race the API's boot/migrations.
     depends_on:
@@ -85,17 +93,18 @@ services:
   backup:
     image: postgres:16-alpine
     environment:
+      PGHOST: postgres
+      PGUSER: ${PGUSER}
       PGPASSWORD: ${PGPASSWORD}
+      PGDATABASE: ${PGDATABASE}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
     volumes:
       - ./backups:/backups
-    entrypoint: ["/bin/sh", "-c"]
-    command: >
-      "while true; do
-         echo \"[backup] $$(date -Iseconds) starting\";
-         pg_dump -h postgres -U ${PGUSER} ${PGDATABASE} | gzip > /backups/cms-$$(date +%F-%H%M).sql.gz || echo '[backup] FAILED';
-         find /backups -name '*.sql.gz' -mtime +30 -delete;
-         sleep 86400;
-       done"
+      # The loop lives in a real script, not in this YAML string: it has to tell
+      # a failed pg_dump apart from a successful one (gzip succeeds on an empty
+      # pipe) and must never prune old dumps after a failure. See deploy/backup.sh.
+      - ./deploy/backup.sh:/usr/local/bin/backup.sh:ro
+    entrypoint: ["/bin/sh", "/usr/local/bin/backup.sh"]
     depends_on:
       postgres:
         condition: service_healthy

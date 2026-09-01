@@ -14,6 +14,7 @@ and `WORKPLAN.md` (active local-server hardening tracker).
 - [DEV_WORKFLOW.md](runbooks/DEV_WORKFLOW.md) — **start here**: how a change goes laptop → PR → staging → production.
 - [DEPLOYMENT_RUNBOOK.md](runbooks/DEPLOYMENT_RUNBOOK.md) — Docker Compose deploy to the company VM (first-time VM setup, full detail).
 - [ROLLBACK_RUNBOOK.md](runbooks/ROLLBACK_RUNBOOK.md) — revert images/code + restore Postgres from a backup.
+- [PRODUCTION_HARDENING.md](runbooks/PRODUCTION_HARDENING.md) — what is hardened and what is still open: TLS (the one thing still off), the CSP and header set, the secret-strength boot check, backup verification and the monthly restore rehearsal, and the dependency-advisory decisions.
 - [MONDAY_GO_LIVE_CHECKLIST.md](runbooks/MONDAY_GO_LIVE_CHECKLIST.md) — first-launch cutover checklist.
 - [BD_EC_PRODUCTION_LOAD_RUNBOOK.md](runbooks/BD_EC_PRODUCTION_LOAD_RUNBOOK.md) — loading the Business Development & External Contracts department (skills, profiles, accounts, courses) via the `server/scripts/etl/bd-ec/` pipeline, plus the demo history layer and how to purge it.
 

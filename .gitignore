@@ -48,3 +48,10 @@ job_profiles/
 *.njsproj
 *.sln
 *.sw?
+
+# TLS material for the deploy (deploy/tls/README.md). The private key is a
+# credential — it must never reach GitHub. Certificates live only on the VM.
+deploy/tls/certs/
+*.pem
+*.key
+*.crt

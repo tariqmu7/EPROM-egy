@@ -554,6 +554,49 @@ and returns it in the `500` body. Zero-dependency logger in [`server/src/logger.
   [`server/src/config.ts`](server/src/config.ts).
 - **Docker Compose:** copy [`.env.docker.example`](.env.docker.example) → `.env` (repo root):
   `PGUSER` / `PGPASSWORD` / `PGDATABASE`, `JWT_SECRET`, `BOOTSTRAP_ADMIN_EMAIL`, `CORS_ORIGINS`.
+- **Secrets refuse to be placeholders.** `JWT_SECRET` is the password to every
+  account at once (hold it and you can mint an ADMIN token for any user id;
+  every check in `authz.ts` is downstream of "the signature is valid"). Under
+  `NODE_ENV=production` — which `server/Dockerfile` sets, so this fires exactly
+  on the VM — [`server/src/config.ts`](server/src/config.ts) refuses to boot on a
+  secret under 32 chars or one containing placeholder wording, and on a
+  `PGPASSWORD` under 16. The shipped example is 33 characters long, so the
+  marker rule, not the length rule, is what catches it
+  (`server/src/__tests__/config.test.ts`).
+
+### The wire, the headers and the backups
+See [`docs/runbooks/PRODUCTION_HARDENING.md`](docs/runbooks/PRODUCTION_HARDENING.md).
+
+- **TLS is the one thing still OFF.** The stack listens on plain http, so every
+  password and every 12-hour bearer token crosses the network in the clear. It
+  is not enabled by default because nginx will not start without a certificate
+  file. Switching it on is [`deploy/tls/README.md`](deploy/tls/README.md):
+  certificate into `deploy/tls/certs/`, uncomment the two `web` volumes in
+  `docker-compose.yml` (which mount the certs and
+  [`deploy/nginx/tls.conf`](deploy/nginx/tls.conf)), swap the port-80 block for
+  the redirect. `Strict-Transport-Security` lives ONLY in the https site.
+- **The CSP is strict, and that is a code constraint.** Every dependency is
+  bundled by Vite and the Inter font is self-hosted, so the app loads nothing
+  from the internet and
+  [`deploy/nginx/security-headers.inc`](deploy/nginx/security-headers.inc) can
+  say `script-src 'self'` — **no inline script anywhere**, which is why
+  `exportCompetenceStatement` drives printing from the opener window instead of
+  writing a `<script>` into the generated sheet. `style-src 'unsafe-inline'`
+  (React inline style attributes) and `img-src data: blob:` (base64 attachments,
+  Excel downloads) are the two deliberate relaxations. Add a CDN script, an
+  external font or an embedded viewer and the browser blocks it **silently** —
+  change the policy in the same commit. The set is one `.inc` file included by
+  each server block (`.inc`, not `.conf`, so nginx does not also load it at http
+  level); [`deploy/nginx.conf`](deploy/nginx.conf), the standalone host install,
+  carries the same set inline and must be kept in step.
+- **A backup file exists only if it is a real backup.** The old one-liner
+  (`pg_dump | gzip > f.gz`) reported gzip's exit status, and gzip succeeds on an
+  empty pipe — a failed dump wrote a valid-looking file and the retention sweep
+  then deleted the good ones. [`deploy/backup.sh`](deploy/backup.sh) checks
+  pg_dump's status, the dump's completion marker and the compressed size, renames
+  into place last, and **prunes only after a verified good dump**. Restoring is
+  [`deploy/restore-db.sh`](deploy/restore-db.sh) (staging by default) — run it
+  monthly against the newest dump; a dump nobody has restored is not a backup.
 
 ### Auth & authorization
 - Email/password. Passwords are **bcrypt**-hashed; login issues a **JWT (HS256)** signed with

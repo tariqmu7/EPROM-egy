@@ -16,5 +16,9 @@ RUN npm run build
 # ── serve with nginx ─────────────────────────────────────────────────────────
 FROM nginx:1.27-alpine
 COPY deploy/nginx/nginx.conf /etc/nginx/conf.d/default.conf
+# The shared header set. Named .inc, not .conf, so nginx's own
+# `include /etc/nginx/conf.d/*.conf` does NOT load it a second time at http
+# level — it is pulled in explicitly by each server block instead.
+COPY deploy/nginx/security-headers.inc /etc/nginx/conf.d/security-headers.inc
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 80 443

@@ -82,9 +82,18 @@ PostgreSQL) to the company Linux VM via **Docker Compose**. Run each step in seq
 
    > This file holds secrets and is **git-ignored** — never commit it.
 
-10. **(TLS, recommended)** Install the certificate for your DNS name and enable the HTTPS
-    `server {}` block in [`../../deploy/nginx/nginx.conf`](../../deploy/nginx/nginx.conf)
-    (mount the cert into the `web` container). Until then the app is served over HTTP on port 80.
+10. **(TLS — do this)** Until it is done, every login password and every 12-hour session
+    token crosses the company network in the clear. Full procedure:
+    [`../../deploy/tls/README.md`](../../deploy/tls/README.md) — certificate into
+    `deploy/tls/certs/`, uncomment the two `web` volumes in `docker-compose.yml`, replace the
+    port-80 block in [`../../deploy/nginx/nginx.conf`](../../deploy/nginx/nginx.conf) with the
+    redirect written at the bottom of it. Until then the app is served over HTTP on port 80.
+
+    > **The `.env` you just wrote must not contain the example values.** The api container
+    > refuses to start on a `JWT_SECRET` under 32 characters or one still containing
+    > "change-me", and on a short `PGPASSWORD` — see
+    > [`PRODUCTION_HARDENING.md`](PRODUCTION_HARDENING.md) §3. If `docker compose up` leaves
+    > `api` restarting, read `docker compose logs api`: it names the variable.
 
 ---
 
@@ -139,6 +148,16 @@ PostgreSQL) to the company Linux VM via **Docker Compose**. Run each step in seq
   ```
   docker compose exec -T postgres pg_dump -U "$PGUSER" "$PGDATABASE" | gzip > backups/manual-$(date +%F-%H%M).sql.gz
   ```
+- A file named `cms-*.sql.gz` is only ever written after `deploy/backup.sh` has checked
+  pg_dump's exit status, the dump's completion marker and the compressed size, and old dumps
+  are pruned **only** after a good one — so an empty `backups/` folder means the backups are
+  failing, not that nothing changed. `docker compose logs backup` says why.
+- **Restore rehearsal — monthly, not optional.** A dump nobody has ever restored is not a
+  backup, it is a file. Run
+  [`../../deploy/restore-db.sh`](../../deploy/restore-db.sh) against the newest dump (it
+  targets STAGING and refuses production without an explicit flag), then
+  `npm run integrity`. Procedure and what to record:
+  [`PRODUCTION_HARDENING.md`](PRODUCTION_HARDENING.md) §4.
 
 ---
 

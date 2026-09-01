@@ -147,7 +147,6 @@ export function buildCompetenceStatementHtml(input: CompetenceStatementInput): s
     figures above — they are neither met nor failed. Generated automatically by EPROM CMS.
   </div>
 
-  <script>window.onload = function(){ setTimeout(function(){ window.print(); }, 300); };</script>
 </body></html>`;
 }
 
@@ -158,4 +157,17 @@ export function exportCompetenceStatement(input: CompetenceStatementInput): void
   win.document.open();
   win.document.write(html);
   win.document.close();
+  // The print call is driven from HERE, not from a <script> inside the written
+  // document. A document.write'd about:blank inherits this page's Content-
+  // Security-Policy, and the policy nginx serves is `script-src 'self'` — an
+  // inline script in the generated HTML would simply be blocked and the sheet
+  // would never print. Calling across the same-origin window handle is not.
+  win.focus();
+  setTimeout(() => {
+    try {
+      win.print();
+    } catch {
+      /* the user closed the tab before it rendered */
+    }
+  }, 300);
 }

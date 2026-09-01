@@ -1,0 +1,12 @@
+# Files that RUN on the Linux VM must keep LF endings, whatever a Windows
+# checkout would otherwise do to them. A shell script that reaches the VM with
+# CRLF fails with the classic "bad interpreter: /bin/sh^M" — and the ones here
+# are the backup loop and the restore, which is the worst possible place to
+# discover it. Scoped to these patterns on purpose: a blanket `* text=auto`
+# would renormalise the whole repo in one unreviewable diff.
+*.sh            text eol=lf
+*.conf          text eol=lf
+*.inc           text eol=lf
+Dockerfile*     text eol=lf
+docker-compose*.yml text eol=lf
+*.sql           text eol=lf
