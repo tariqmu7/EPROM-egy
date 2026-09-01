@@ -39,9 +39,14 @@ import { api } from './api-client';
 // `./competency/index.ts` for the layering.
 import * as engine from './competency';
 import type { CompetencyContext } from './competency';
+// The write half: one module per feature (evidence, work experience,
+// development plans, training catalogue, notifications, assessments). These
+// CHANGE data, so unlike the engine they need the service — they get exactly
+// what `WriteHost` lists and nothing more. See `./writes/index.ts`.
+import * as writes from './writes';
+import type { WriteHost } from './writes';
 import { localAvatar } from '../utils/localAvatar';
 import { assertUploadableImage } from '../utils/fileUpload';
-import { newId } from '../utils/uuid';
 
 // Temporary password an admin hands to a locked-out user. Cryptographically
 // random; the alphabet drops look-alike characters (0/O, 1/l/I) because these
@@ -297,6 +302,12 @@ export class DataService {
   // point at the CACHED wrappers, so one render scores each user+skill once.
   private readonly engineCtx: CompetencyContext;
 
+  // The service-side view of this store handed to the feature write modules
+  // (`./writes`). Same discipline as engineCtx and built alongside it: bound
+  // arrows over the private plumbing, getters over the collections (every
+  // listener REPLACES its array, so a captured one would go stale).
+  private readonly writeCtx: WriteHost;
+
   constructor() {
     // Arrow readers, not a `this` alias: the engine must always see the CURRENT
     // array, because every listener REPLACES its collection rather than mutating it.
@@ -319,6 +330,43 @@ export class DataService {
       get assessments() { return readAssessments(); },
       get evidences() { return readEvidences(); },
       get assessmentInstructions() { return readInstructions(); },
+    };
+
+    const readUsers = () => this.users;
+    const readWorkExperiences = () => this.workExperiences;
+    const readDevelopmentPlans = () => this.developmentPlans;
+    const readTrainingCourses = () => this.trainingCourses;
+    const readNotifications = () => this.notifications;
+    const readSkills = () => this.skills;
+    this.writeCtx = {
+      persist: (name, item) => this.persistItem(name, item),
+      update: (name, item) => this.updateItem(name, item),
+      remove: (name, id) => this.deleteItem(name, id),
+      preparePayload: (name, item) => this.preparePayload(name, item),
+      reportWriteError: (error, path) => this.handleFirestoreError(error, OperationType.WRITE, path),
+      withRetry: (fn) => this.withRetry(fn),
+      logActivity: (action, target, details) => this.logActivity(action, target, details),
+      // The attributed path, not the raw write: everything a feature sends goes
+      // through DataService.addNotification so it always names its sender (H7).
+      notify: (n) => this.addNotification(n),
+      clearScoreCache: () => this.skillScoreCache.clear(),
+      currentActor: () => this.resolveActor(),
+      authUid: () => auth.currentUser?.uid,
+      getUserById: (id) => this.getUserById(id),
+      getUserSkillScore: (userId, skillId) => this.getUserSkillScore(userId, skillId),
+      getUserSkillScoreDetail: (userId, skillId) => this.getUserSkillScoreDetail(userId, skillId),
+      getUserCoverage: (userId) => this.getUserCoverage(userId),
+      getTrainingCourse: (id) => this.getTrainingCourse(id),
+      generateIndividualTrainingPlan: (userId) => this.generateIndividualTrainingPlan(userId),
+      suggestExperienceLevel: (years) => this.suggestExperienceLevel(years),
+      get users() { return readUsers(); },
+      get evidences() { return readEvidences(); },
+      get workExperiences() { return readWorkExperiences(); },
+      get developmentPlans() { return readDevelopmentPlans(); },
+      get trainingCourses() { return readTrainingCourses(); },
+      get notifications() { return readNotifications(); },
+      get assessments() { return readAssessments(); },
+      get skills() { return readSkills(); },
     };
 
     // Listen to auth state changes
@@ -820,7 +868,6 @@ export class DataService {
       }, this.handleError('projects'))
     );
 
-
     // `userId` is the auth account uid. Activity docs (assessments,
     // evidences, notifications, nominations) key their owner/subject/rater
     // fields by the viewer's canonical `id` *field*, which differs from the
@@ -1088,6 +1135,7 @@ export class DataService {
   }
 
   // --- Evidences ---
+  // The writes live in `./writes/evidence.ts`; the getters stay here.
   getEvidences(filters?: { userId?: string, skillId?: string, status?: string }) {
     let result = this.evidences;
     if (filters?.userId) result = result.filter(e => e.userId === filters.userId);
@@ -1097,111 +1145,23 @@ export class DataService {
   }
 
   async addEvidence(evidence: Omit<Evidence, 'id' | 'status' | 'submittedAt'>) {
-    const id = doc(collection(db, 'evidences')).id;
-    const newEvidence: Evidence = {
-      ...evidence,
-      id,
-      status: 'PENDING',
-      submittedAt: new Date().toISOString()
-    };
-
-    // A2.1: Batch evidence + manager notification so neither is orphaned on failure.
-    const batch = writeBatch(db);
-    batch.set(doc(db, 'evidences', id), this.preparePayload('evidences', newEvidence));
-
-    const user = this.users.find(u => u.id === evidence.userId);
-    if (user && user.managerId) {
-      const notifId = doc(collection(db, 'notifications')).id;
-      const notif = {
-        id: notifId,
-        userId: user.managerId,
-        title: 'New Evidence Submitted',
-        message: `${user.name} submitted evidence for review.`,
-        type: 'INFO',
-        createdAt: new Date().toISOString(),
-        isRead: false
-      };
-      batch.set(doc(db, 'notifications', notifId), notif);
-    }
-
-    try {
-      await batch.commit();
-    } catch (e) {
-      this.handleFirestoreError(e, OperationType.WRITE, `evidences/${id}`);
-      throw e;
-    }
-    return newEvidence;
+    return writes.addEvidence(this.writeCtx, evidence);
   }
 
   async updateEvidence(id: string, updates: { notes?: string; fileUrl?: string; fileName?: string; expiryDate?: string }) {
-    const evidence = this.evidences.find(e => e.id === id);
-    if (!evidence) return;
-    const wasActedOn = evidence.status === 'APPROVED' || evidence.status === 'REJECTED';
-    const updatedEvidence: Evidence = {
-      ...evidence,
-      ...updates,
-      status: 'PENDING',
-      submittedAt: new Date().toISOString(),
-      reviewedAt: undefined,
-      reviewedBy: undefined,
-      assignedScore: undefined,
-      reviewerComment: undefined
-    };
-    await this.updateItem('evidences', updatedEvidence);
-    const user = this.users.find(u => u.id === evidence.userId);
-    if (user && user.managerId) {
-      await this.addNotification({
-        userId: user.managerId,
-        title: 'Evidence Re-Submitted for Review',
-        message: `${user.name} edited their evidence${wasActedOn ? ` (previously ${evidence.status.toLowerCase()})` : ''} and it requires re-approval.`,
-        type: 'WARNING',
-        actionLink: 'manager-approvals'
-      });
-    }
+    return writes.updateEvidence(this.writeCtx, id, updates);
   }
 
   async deleteEvidence(id: string) {
-    const evidence = this.evidences.find(e => e.id === id);
-    if (!evidence) return;
-    const wasActedOn = evidence.status === 'APPROVED' || evidence.status === 'REJECTED';
-    await this.deleteItem('evidences', id);
-    const user = this.users.find(u => u.id === evidence.userId);
-    if (wasActedOn && user && user.managerId) {
-      await this.addNotification({
-        userId: user.managerId,
-        title: 'Evidence Withdrawn',
-        message: `${user.name} deleted their evidence that was previously ${evidence.status.toLowerCase()}. No further action is needed.`,
-        type: 'INFO',
-        actionLink: 'manager-approvals'
-      });
-    }
+    return writes.deleteEvidence(this.writeCtx, id);
   }
 
   async updateEvidenceStatus(id: string, status: 'APPROVED' | 'REJECTED', reviewerId: string, level?: number, comment?: string) {
-    const evidence = this.evidences.find(e => e.id === id);
-    if (evidence) {
-      const updatedEvidence = {
-        ...evidence,
-        status,
-        reviewedAt: new Date().toISOString(),
-        reviewedBy: reviewerId,
-        assignedScore: status === 'APPROVED' ? (level || 3) : undefined,
-        reviewerComment: comment || undefined
-      };
-      await this.updateItem('evidences', updatedEvidence);
-
-      // Notify user
-      await this.addNotification({
-        userId: evidence.userId,
-        title: `Evidence ${status}`,
-        message: `Your evidence submission was ${status.toLowerCase()}.${comment ? ` Reviewer note: ${comment}` : ''}`,
-        type: status === 'APPROVED' ? 'SUCCESS' : 'ERROR',
-        actionLink: 'evidence-portal'
-      });
-    }
+    return writes.updateEvidenceStatus(this.writeCtx, id, status, reviewerId, level, comment);
   }
 
   // --- WORK EXPERIENCE ---
+  // Policy + submission/verdict writes: `./writes/workExperience.ts`.
   // Employee-submitted external employment, verified by the direct manager.
   // A VERIFIED entry's per-skill verifiedLevel becomes a capped PROVISIONAL
   // baseline in getUserSkillScore — never overriding a real assessment.
@@ -1225,9 +1185,7 @@ export class DataService {
   }
 
   async updateWorkExperiencePolicy(policy: WorkExperiencePolicy) {
-    await this.persistItem('appSettings', { id: 'work-experience', ...policy });
-    this.skillScoreCache.clear();
-    await this.logActivity('Updated Work Experience Policy', `Cap: Level ${policy.maxProvisionalLevel}, ${policy.enabled ? 'enabled' : 'disabled'}`);
+    return writes.updateWorkExperiencePolicy(this.writeCtx, policy);
   }
 
   getWorkExperiences(userId?: string, filters?: { status?: WorkExperienceStatus }): WorkExperience[] {
@@ -1258,119 +1216,20 @@ export class DataService {
   }
 
   async addWorkExperience(entry: Omit<WorkExperience, 'id' | 'status' | 'submittedAt' | 'reviewedAt' | 'reviewedBy'>) {
-    const id = doc(collection(db, 'workExperiences')).id;
-    const newEntry: WorkExperience = {
-      ...entry,
-      id,
-      // Stamp the band-table suggestion at submit time so the verifier sees what
-      // was proposed, and so a later policy change doesn't silently rewrite the
-      // basis of an existing verdict.
-      skills: (entry.skills || []).map(s => ({
-        ...s,
-        suggestedLevel: this.suggestExperienceLevel(s.yearsApplied),
-      })),
-      status: 'PENDING',
-      submittedAt: new Date().toISOString(),
-    };
-
-    // Batch the entry + manager notification so neither is orphaned on failure
-    // (same reasoning as addEvidence).
-    const batch = writeBatch(db);
-    batch.set(doc(db, 'workExperiences', id), this.preparePayload('workExperiences', newEntry));
-
-    const user = this.users.find(u => u.id === entry.userId);
-    if (user && user.managerId) {
-      const notifId = doc(collection(db, 'notifications')).id;
-      batch.set(doc(db, 'notifications', notifId), {
-        id: notifId,
-        userId: user.managerId,
-        title: 'Work Experience Submitted',
-        message: `${user.name} submitted work experience at ${newEntry.employer} for verification.`,
-        type: 'INFO',
-        createdAt: new Date().toISOString(),
-        isRead: false,
-        actionLink: 'manager-approvals',
-      });
-    }
-
-    try {
-      await batch.commit();
-    } catch (e) {
-      this.handleFirestoreError(e, OperationType.WRITE, `workExperiences/${id}`);
-      throw e;
-    }
-    await this.logActivity('Submitted Work Experience', `${newEntry.employer} — ${newEntry.jobTitle}`);
-    return newEntry;
+    return writes.addWorkExperience(this.writeCtx, entry);
   }
 
-  /**
-   * Owner edit. Any change re-opens verification and drops the previous verdict:
-   * a verified level must always trace back to the record the verifier actually
-   * saw.
-   */
   async updateWorkExperience(
     id: string,
     updates: Partial<Omit<WorkExperience, 'id' | 'userId' | 'status' | 'submittedAt' | 'reviewedAt' | 'reviewedBy'>>,
   ) {
-    const existing = this.workExperiences.find(w => w.id === id);
-    if (!existing) return;
-    const wasActedOn = existing.status === 'VERIFIED' || existing.status === 'REJECTED';
-
-    const skills = (updates.skills ?? existing.skills ?? []).map(s => ({
-      ...s,
-      suggestedLevel: this.suggestExperienceLevel(s.yearsApplied),
-      verifiedLevel: undefined,
-    }));
-
-    const updated: WorkExperience = {
-      ...existing,
-      ...updates,
-      skills,
-      status: 'PENDING',
-      submittedAt: new Date().toISOString(),
-      reviewedAt: undefined,
-      reviewedBy: undefined,
-      reviewerComment: undefined,
-    };
-    await this.updateItem('workExperiences', updated);
-    this.skillScoreCache.clear();
-
-    const user = this.users.find(u => u.id === existing.userId);
-    if (user && user.managerId) {
-      await this.addNotification({
-        userId: user.managerId,
-        title: 'Work Experience Re-Submitted',
-        message: `${user.name} edited their ${existing.employer} experience${wasActedOn ? ` (previously ${existing.status.toLowerCase()})` : ''} and it requires re-verification.`,
-        type: 'WARNING',
-        actionLink: 'manager-approvals',
-      });
-    }
+    return writes.updateWorkExperience(this.writeCtx, id, updates);
   }
 
   async deleteWorkExperience(id: string) {
-    const existing = this.workExperiences.find(w => w.id === id);
-    if (!existing) return;
-    const wasActedOn = existing.status === 'VERIFIED' || existing.status === 'REJECTED';
-    await this.deleteItem('workExperiences', id);
-    this.skillScoreCache.clear();
-
-    const user = this.users.find(u => u.id === existing.userId);
-    if (wasActedOn && user && user.managerId) {
-      await this.addNotification({
-        userId: user.managerId,
-        title: 'Work Experience Withdrawn',
-        message: `${user.name} deleted their ${existing.employer} experience that was previously ${existing.status.toLowerCase()}. No further action is needed.`,
-        type: 'INFO',
-        actionLink: 'manager-approvals',
-      });
-    }
+    return writes.deleteWorkExperience(this.writeCtx, id);
   }
 
-  /**
-   * Record a verdict. `finalLevels` maps skillId → the level the verifier
-   * confirmed; anything absent falls back to the stamped suggestion. Rejecting
-   * clears every level so the record can never contribute a score.
-   */
   async verifyWorkExperience(
     id: string,
     decision: 'VERIFIED' | 'REJECTED',
@@ -1378,39 +1237,7 @@ export class DataService {
     finalLevels?: Record<string, number>,
     comment?: string,
   ) {
-    const existing = this.workExperiences.find(w => w.id === id);
-    if (!existing) return;
-
-    const skills = (existing.skills || []).map(s => {
-      if (decision === 'REJECTED') return { ...s, verifiedLevel: undefined };
-      const raw = finalLevels?.[s.skillId] ?? s.suggestedLevel ?? this.suggestExperienceLevel(s.yearsApplied);
-      return { ...s, verifiedLevel: Math.min(Math.max(Math.round(raw), 1), 5) };
-    });
-
-    const updated: WorkExperience = {
-      ...existing,
-      skills,
-      status: decision,
-      reviewedAt: new Date().toISOString(),
-      reviewedBy: reviewerId,
-      reviewerComment: comment || undefined,
-    };
-    await this.updateItem('workExperiences', updated);
-    // The listener also clears this, but that is a poll away — clear now so a
-    // same-tick re-render shows the new score.
-    this.skillScoreCache.clear();
-
-    await this.addNotification({
-      userId: existing.userId,
-      title: `Work Experience ${decision === 'VERIFIED' ? 'Verified' : 'Rejected'}`,
-      message: `Your work experience at ${existing.employer} was ${decision.toLowerCase()}.${comment ? ` Reviewer note: ${comment}` : ''}`,
-      type: decision === 'VERIFIED' ? 'SUCCESS' : 'ERROR',
-      actionLink: 'emp-dashboard',
-    });
-    await this.logActivity(
-      decision === 'VERIFIED' ? 'Verified Work Experience' : 'Rejected Work Experience',
-      `${existing.employer} — ${existing.jobTitle}`,
-    );
+    return writes.verifyWorkExperience(this.writeCtx, id, decision, reviewerId, finalLevels, comment);
   }
 
   /**
@@ -2049,7 +1876,6 @@ export class DataService {
     return api.get<OrgOverview>(`/analytics/overview?scope=${encodeURIComponent(scope)}`);
   }
 
-
   // ─── STORED HISTORY (monthly snapshots) ──────────────────────────────────
   //
   // Everything else on this class is computed live from the documents in
@@ -2081,6 +1907,9 @@ export class DataService {
   }
 
   // ─── DEVELOPMENT PLANS (the SAVED training plan) ─────────────────────────
+  //
+  // The WRITES (propose → create → activate → track → sign off) are in
+  // `./writes/developmentPlans.ts`; the readers below stay here.
   //
   // `generateIndividualTrainingPlan` above is a PROPOSAL: recomputed on every
   // render, never stored. These methods turn a proposal into a record — agreed,
@@ -2117,52 +1946,10 @@ export class DataService {
     return plans.find(p => p.status === 'ACTIVE') || plans.find(p => p.status === 'DRAFT') || null;
   }
 
-  /**
-   * Turn today's live gap analysis into plan items WITHOUT saving anything —
-   * the "propose" step of propose → save → assign → track. Each item freezes
-   * the level and its source at planning time, which is what later makes
-   * "did the training work" answerable.
-   *
-   * A never-assessed skill is deliberately EXCLUDED: it is an assessment need,
-   * not a training gap (see the TNA engine and CLAUDE.md's coverage rule).
-   */
   proposeDevelopmentPlanItems(userId: string): DevelopmentPlanItem[] {
-    const proposal = this.generateIndividualTrainingPlan(userId);
-    if (!proposal) return [];
-
-    return proposal.recommendations
-      .map(rec => {
-        const detail = this.getUserSkillScoreDetail(userId, rec.skillId);
-        if (detail.source === 'NONE') return null; // unknown ≠ gap
-        const course = rec.courseId ? this.getTrainingCourse(rec.courseId) : undefined;
-        const item: DevelopmentPlanItem = {
-          id: newId(),
-          skillId: rec.skillId,
-          skillName: rec.skillName,
-          requiredLevel: detail.score + rec.gap,
-          levelAtPlanning: detail.score,
-          gapAtPlanning: rec.gap,
-          sourceAtPlanning: detail.source,
-          recommendation: rec.recommendation,
-          priority: rec.priority,
-          status: 'NOT_STARTED',
-          targetDate: rec.targetDate,
-          supervisorSignOff: false,
-        };
-        if (course) {
-          item.courseId = course.id;
-          item.courseTitle = course.title;
-        }
-        return item;
-      })
-      .filter((i): i is DevelopmentPlanItem => i !== null);
+    return writes.proposeDevelopmentPlanItems(this.writeCtx, userId);
   }
 
-  /**
-   * Save a plan. `createdBy` is the acting user — an employee writing their own
-   * plan (DRAFT by default) or a manager/admin assigning one, which starts
-   * ACTIVE and notifies the employee that work has been assigned to them.
-   */
   async createDevelopmentPlan(
     userId: string,
     options: {
@@ -2173,231 +1960,41 @@ export class DataService {
       notes?: string;
     },
   ): Promise<DevelopmentPlan> {
-    const user = this.getUserById(userId);
-    const now = new Date().toISOString();
-    const items = options.items ?? this.proposeDevelopmentPlanItems(userId);
-    const coverage = this.getUserCoverage(userId);
-    const status: DevelopmentPlanStatus = options.status ?? 'DRAFT';
-
-    const plan: DevelopmentPlan = {
-      id: doc(collection(db, 'developmentPlans')).id,
-      userId,
-      title: options.title?.trim() || `Development Plan ${new Date().getFullYear()}`,
-      status,
-      items,
-      createdAt: now,
-      createdBy: options.createdBy,
-      updatedAt: now,
-      // The base behind every figure this plan will later be read against.
-      coverageAtPlanning: {
-        required: coverage.required,
-        measured: coverage.measured,
-        provisional: coverage.provisional,
-        unknown: coverage.unknown,
-      },
-    };
-    if (user?.jobProfileId) plan.jobProfileId = user.jobProfileId;
-    if (status === 'ACTIVE') plan.activatedAt = now;
-    if (options.notes?.trim()) plan.notes = options.notes.trim();
-
-    await this.persistItem('developmentPlans', plan);
-
-    // Only tell the employee when somebody ELSE assigned it — a draft you wrote
-    // yourself does not need an alert about itself.
-    if (options.createdBy !== userId && status === 'ACTIVE') {
-      await this.addNotification({
-        userId,
-        title: 'Development Plan Assigned',
-        message: `A development plan with ${items.length} item${items.length === 1 ? '' : 's'} has been assigned to you.`,
-        type: 'INFO',
-        actionLink: 'emp-dashboard',
-      });
-    }
-    await this.logActivity('Created Development Plan', `${user?.name || userId} — ${items.length} items`, {
-      entity: 'developmentPlan',
-      entityId: plan.id,
-    });
-    return plan;
+    return writes.createDevelopmentPlan(this.writeCtx, userId, options);
   }
 
-  private async saveDevelopmentPlan(plan: DevelopmentPlan): Promise<DevelopmentPlan> {
-    const updated = { ...plan, updatedAt: new Date().toISOString() };
-    await this.updateItem('developmentPlans', updated);
-    return updated;
-  }
-
-  /** Move the whole plan through its lifecycle (draft → active → completed/archived). */
   async setDevelopmentPlanStatus(planId: string, status: DevelopmentPlanStatus): Promise<void> {
-    const plan = this.getDevelopmentPlan(planId);
-    if (!plan || plan.status === status) return;
-    const now = new Date().toISOString();
-
-    const updated: DevelopmentPlan = { ...plan, status };
-    if (status === 'ACTIVE' && !plan.activatedAt) updated.activatedAt = now;
-    if (status === 'COMPLETED') updated.completedAt = now;
-    if (status === 'ARCHIVED') updated.archivedAt = now;
-    await this.saveDevelopmentPlan(updated);
-
-    if (status === 'ACTIVE') {
-      await this.addNotification({
-        userId: plan.userId,
-        title: 'Development Plan Activated',
-        message: `Your development plan "${plan.title}" is now active.`,
-        type: 'INFO',
-        actionLink: 'emp-dashboard',
-      });
-    }
-    await this.logActivity(`Development Plan ${status}`, plan.title, {
-      entity: 'developmentPlan',
-      entityId: plan.id,
-      before: plan.status,
-      after: status,
-    });
+    return writes.setDevelopmentPlanStatus(this.writeCtx, planId, status);
   }
 
-  /** Delete — only ever a DRAFT; an agreed plan is archived, not erased. */
   async deleteDevelopmentPlan(planId: string): Promise<void> {
-    const plan = this.getDevelopmentPlan(planId);
-    if (!plan) return;
-    if (plan.status !== 'DRAFT') {
-      throw new Error('Only a draft plan can be deleted. Archive the plan instead.');
-    }
-    await this.deleteItem('developmentPlans', planId);
-    await this.logActivity('Deleted Development Plan', plan.title, {
-      entity: 'developmentPlan',
-      entityId: planId,
-    });
+    return writes.deleteDevelopmentPlan(this.writeCtx, planId);
   }
 
-  private replaceItem(
-    plan: DevelopmentPlan,
-    itemId: string,
-    change: (item: DevelopmentPlanItem) => DevelopmentPlanItem,
-  ): DevelopmentPlan | null {
-    const idx = plan.items.findIndex(i => i.id === itemId);
-    if (idx === -1) return null;
-    const items = [...plan.items];
-    items[idx] = change(items[idx]);
-    return { ...plan, items };
-  }
-
-  /** Edit an item's plan-side fields (target date, course, recommendation, priority). */
   async updateDevelopmentPlanItem(
     planId: string,
     itemId: string,
     updates: Partial<Pick<DevelopmentPlanItem, 'targetDate' | 'recommendation' | 'priority' | 'courseId' | 'courseTitle'>>,
   ): Promise<void> {
-    const plan = this.getDevelopmentPlan(planId);
-    if (!plan) return;
-    const next = this.replaceItem(plan, itemId, item => ({ ...item, ...updates }));
-    if (!next) return;
-    await this.saveDevelopmentPlan(next);
+    return writes.updateDevelopmentPlanItem(this.writeCtx, planId, itemId, updates);
   }
 
-  /**
-   * Progress an item. Completing it notifies the employee's manager that a
-   * sign-off is waiting — the plan is what makes that chase possible at all.
-   */
   async setDevelopmentPlanItemStatus(
     planId: string,
     itemId: string,
     status: DevelopmentItemStatus,
     note?: string,
   ): Promise<void> {
-    const plan = this.getDevelopmentPlan(planId);
-    if (!plan) return;
-    const now = new Date().toISOString();
-
-    const next = this.replaceItem(plan, itemId, item => {
-      const updated: DevelopmentPlanItem = { ...item, status };
-      if (status === 'IN_PROGRESS' && !item.startedAt) updated.startedAt = now;
-      if (status === 'COMPLETED') {
-        updated.completedAt = now;
-        if (!updated.startedAt) updated.startedAt = now;
-      } else {
-        // Re-opening drops the completion stamp and any sign-off with it: a
-        // sign-off must always refer to work that is actually finished.
-        updated.completedAt = undefined;
-        updated.supervisorSignOff = false;
-        updated.signedOffBy = undefined;
-        updated.signedOffAt = undefined;
-        updated.levelAtSignOff = undefined;
-      }
-      if (note !== undefined) updated.completionNote = note.trim() || undefined;
-      return updated;
-    });
-    if (!next) return;
-    await this.saveDevelopmentPlan(next);
-
-    const item = next.items.find(i => i.id === itemId)!;
-    const employee = this.getUserById(plan.userId);
-    if (status === 'COMPLETED' && employee?.managerId) {
-      await this.addNotification({
-        userId: employee.managerId,
-        title: 'Development Item Awaiting Sign-Off',
-        message: `${employee.name} marked "${item.skillName}" complete on their development plan.`,
-        type: 'INFO',
-        actionLink: 'manager-approvals',
-      });
-    }
+    return writes.setDevelopmentPlanItemStatus(this.writeCtx, planId, itemId, status, note);
   }
 
-  /**
-   * Manager sign-off. This is where the loop closes: the current score is read
-   * again and STORED as `levelAtSignOff`, so the plan itself carries the
-   * before/after evidence instead of the UI having to guess later. When every
-   * item that is still in play is signed off, the plan completes itself.
-   */
   async signOffDevelopmentPlanItem(
     planId: string,
     itemId: string,
     reviewerId: string,
     comment?: string,
   ): Promise<void> {
-    const plan = this.getDevelopmentPlan(planId);
-    if (!plan) return;
-    const now = new Date().toISOString();
-
-    const next = this.replaceItem(plan, itemId, item => {
-      const level = this.getUserSkillScore(plan.userId, item.skillId);
-      return {
-        ...item,
-        status: 'COMPLETED',
-        completedAt: item.completedAt || now,
-        supervisorSignOff: true,
-        signedOffBy: reviewerId,
-        signedOffAt: now,
-        signOffComment: comment?.trim() || undefined,
-        levelAtSignOff: level,
-      };
-    });
-    if (!next) return;
-
-    // A plan whose remaining items are all signed off is finished — recording
-    // that here means "was it delivered" is answerable without re-deriving it.
-    const live = next.items.filter(i => i.status !== 'CANCELLED');
-    const allDone = live.length > 0 && live.every(i => i.supervisorSignOff);
-    if (allDone) {
-      next.status = 'COMPLETED';
-      next.completedAt = now;
-    }
-    const saved = await this.saveDevelopmentPlan(next);
-
-    const item = saved.items.find(i => i.id === itemId)!;
-    const gained = (item.levelAtSignOff ?? 0) - item.levelAtPlanning;
-    await this.addNotification({
-      userId: plan.userId,
-      title: 'Development Item Signed Off',
-      message: `"${item.skillName}" was signed off${gained > 0 ? ` — your level moved from ${item.levelAtPlanning} to ${item.levelAtSignOff}.` : '.'}`,
-      type: 'SUCCESS',
-      actionLink: 'emp-dashboard',
-    });
-    await this.logActivity('Signed Off Development Item', `${item.skillName} — ${this.getUserById(plan.userId)?.name || plan.userId}`, {
-      entity: 'developmentPlan',
-      entityId: plan.id,
-      before: `L${item.levelAtPlanning}`,
-      after: `L${item.levelAtSignOff}`,
-    });
+    return writes.signOffDevelopmentPlanItem(this.writeCtx, planId, itemId, reviewerId, comment);
   }
 
   /**
@@ -2478,20 +2075,8 @@ export class DataService {
     return this.getSubordinatesRecursive(managerId).some(u => u.id === userId);
   }
 
-  /**
-   * Append newly-appeared gaps to a live plan. The requirements or the scores
-   * can move after a plan is agreed; without this the plan silently goes stale
-   * and people re-generate instead of tracking. Items already on the plan (by
-   * skill) are never duplicated.
-   */
   async addDevelopmentPlanItems(planId: string, items: DevelopmentPlanItem[]): Promise<number> {
-    const plan = this.getDevelopmentPlan(planId);
-    if (!plan || items.length === 0) return 0;
-    const present = new Set(plan.items.map(i => i.skillId));
-    const additions = items.filter(i => !present.has(i.skillId));
-    if (additions.length === 0) return 0;
-    await this.saveDevelopmentPlan({ ...plan, items: [...plan.items, ...additions] });
-    return additions.length;
+    return writes.addDevelopmentPlanItems(this.writeCtx, planId, items);
   }
 
   /** Gap items that are NOT yet on the given plan — what "add current gaps" would add. */
@@ -2711,7 +2296,6 @@ export class DataService {
   }
   getAllProjects() { return this.projects; }
   getProjectById(id: string) { return this.projects.find(p => p.id === id); }
-
 
   getGeneralDeptId(deptId: string | undefined, _visited: Set<string> = new Set()): string | undefined {
     if (!deptId) return undefined;
@@ -3030,7 +2614,6 @@ export class DataService {
     return engine.getSkillAssessmentQuestion(this.engineCtx, skillId);
   }
 
-
   // One-time, idempotent migration of the deprecated assessment model
   // (AssessmentInstruction "how" + AssessmentPlan "when" + legacy per-skill
   // fields) into inline Skill.assessmentMethods blocks. Admin-only screens call
@@ -3151,37 +2734,16 @@ export class DataService {
   }
 
   async markNotificationAsRead(notificationId: string) {
-    const notification = this.notifications.find(n => n.id === notificationId);
-    if (notification) {
-      await this.updateItem('notifications', { ...notification, isRead: true });
-    }
+    return writes.markNotificationAsRead(this.writeCtx, notificationId);
   }
 
   async markAllNotificationsAsRead(userId: string) {
-    const unread = this.notifications.filter(n => n.userId === userId && !n.isRead);
-    for (const n of unread) {
-      await this.updateItem('notifications', { ...n, isRead: true });
-    }
+    return writes.markAllNotificationsAsRead(this.writeCtx, userId);
   }
 
-  // A5.4: Retried up to 3× with exponential backoff so transient Firestore
-  // hiccups don't silently drop notification writes.
+  // The write half of notifications is `./writes/notifications.ts`.
   async addNotification(notification: Omit<Notification, 'id' | 'createdAt' | 'isRead'>) {
-    const id = doc(collection(db, 'notifications')).id;
-    // Attribution is mandatory on a client write (hole H7): the API refuses a
-    // notification that does not name its sender, so nothing sent from a browser
-    // can impersonate the system. Only the nightly sweep writes unattributed.
-    const { actorId } = this.resolveActor();
-    const newNotification: Notification = {
-      ...notification,
-      // Falls back to the raw auth uid — the API accepts either id shape — so a
-      // notification written before the user roster has loaded still attributes.
-      createdBy: notification.createdBy ?? actorId ?? auth.currentUser?.uid,
-      id,
-      createdAt: new Date().toISOString(),
-      isRead: false
-    };
-    await this.withRetry(() => this.persistItem('notifications', newNotification));
+    return writes.addNotification(this.writeCtx, notification);
   }
 
   // --- ACTIONS (Async Write-Behind) ---
@@ -3222,111 +2784,14 @@ export class DataService {
     await this.persistItem('activityLogs', newLog);
   }
 
-  // The evaluation "period" an assessment belongs to, used to dedupe a rater's
-  // re-submissions: the explicit cycleId when present, otherwise the calendar
-  // year of the record's date (or the current year for an unsaved record).
-  // Same bucket ⇒ an update-in-place; a new bucket ⇒ a new historical record.
-  private assessmentCycleBucket(a: { cycleId?: string; date?: string }): string {
-    if (a.cycleId) return `cycle:${a.cycleId}`;
-    const year = a.date ? new Date(a.date).getFullYear() : new Date().getFullYear();
-    return `year:${year}`;
-  }
-
+  // Assessment writes live in `./writes/assessments.ts` (the cycle-bucket
+  // upsert rule with them).
   async addAssessment(assessment: Omit<Assessment, 'id' | 'date'>) {
-    const subject = this.users.find(u => u.id === assessment.subjectId)?.name || 'Employee';
-    const skillName = assessment.skillId === 'annual-appraisal'
-      ? 'Annual Appraisal'
-      : (this.skills.find(s => s.id === assessment.skillId)?.name || assessment.skillId);
-
-    // Upsert: a rater holds at most one live evaluation per subject+skill
-    // *within a cycle*. Re-submitting in the same period UPDATES that record in
-    // place rather than appending a duplicate — otherwise the History Ledger
-    // fills with duplicate rows and the score double-counts the same rater.
-    // The period is the explicit cycleId when set, else the calendar year, so a
-    // fresh evaluation in a new year keeps the prior year as its own historical
-    // record (e.g. the Annual Appraisal Historical Record grows one row/year)
-    // instead of overwriting it. Mirrors the `existingAssessment` form lookup.
-    const incomingBucket = this.assessmentCycleBucket(assessment);
-    const existing = this.assessments.find(a =>
-      !a.isArchived &&
-      a.raterId === assessment.raterId &&
-      a.subjectId === assessment.subjectId &&
-      a.skillId === assessment.skillId &&
-      this.assessmentCycleBucket(a) === incomingBucket
-    );
-
-    if (existing) {
-      const updated: Assessment = {
-        ...existing,
-        ...assessment,
-        id: existing.id,
-        date: new Date().toISOString(),
-      };
-      await this.updateItem('assessments', updated);
-
-      await this.logActivity('Updated Assessment', `For ${subject}`, {
-        entity: 'assessment',
-        entityId: existing.id,
-        before: `${skillName} (${existing.type}) → ${existing.score}`,
-        after: `${skillName} (${updated.type}) → ${updated.score}`,
-      });
-
-      if (assessment.raterId !== assessment.subjectId) {
-        await this.addNotification({
-          userId: assessment.subjectId,
-          title: 'Evaluation Updated',
-          message: `An existing ${assessment.method} evaluation on your profile was updated.`,
-          type: 'INFO',
-          actionLink: 'emp-dashboard'
-        });
-      }
-      return;
-    }
-
-    const id = doc(collection(db, 'assessments')).id;
-    const newAssessment: Assessment = {
-      ...assessment,
-      id,
-      date: new Date().toISOString(),
-    };
-    await this.persistItem('assessments', newAssessment);
-
-    // Auto-update notification for the subject
-    await this.addNotification({
-      userId: assessment.subjectId,
-      title: 'New Evaluation Result',
-      message: `A new ${assessment.method} evaluation has been registered for your profile.`,
-      type: 'INFO',
-      actionLink: 'emp-dashboard'
-    });
-
-    await this.logActivity('Submitted Assessment', `For ${subject}`, {
-      entity: 'assessment',
-      entityId: id,
-      after: `${skillName} (${assessment.type}) → ${assessment.score}`,
-    });
-
-    if (assessment.raterId !== assessment.subjectId) {
-      await this.addNotification({
-        userId: assessment.subjectId,
-        title: 'New Assessment Received',
-        message: `You received a new assessment.`,
-        type: 'INFO',
-        actionLink: 'emp-dashboard'
-      });
-    }
+    return writes.addAssessment(this.writeCtx, assessment);
   }
 
   async updateAssessment(assessment: Assessment) {
-    const prior = this.assessments.find(a => a.id === assessment.id);
-    await this.updateItem('assessments', assessment);
-    const subject = this.users.find(u => u.id === assessment.subjectId)?.name || 'Employee';
-    await this.logActivity('Updated Assessment', `For ${subject}`, {
-      entity: 'assessment',
-      entityId: assessment.id,
-      before: prior ? `score ${prior.score}` : undefined,
-      after: `score ${assessment.score}`,
-    });
+    return writes.updateAssessment(this.writeCtx, assessment);
   }
 
   async addSkill(skill: Skill) { 
@@ -3436,69 +2901,29 @@ export class DataService {
   }
 
   // --- TRAINING CATALOGUE ---------------------------------------------------
+  // The writes live in `./writes/trainingCourses.ts`.
   // The cure side of the engine: a course linked to a skill is what turns a gap
   // into a named recommendation (see generateIndividualTrainingPlan / TNA).
 
-  /** Sequential reference like TRN-WELD-01, unique across the catalogue. */
   generateTrainingCourseCode(course: Pick<TrainingCourse, 'title'>): string {
-    const base = (course.title || 'COURSE')
-      .replace(/[^A-Za-z0-9\s]/g, '')
-      .trim()
-      .split(/\s+/)
-      .map(w => w.toUpperCase())
-      .join('')
-      .substring(0, 5) || 'CRS';
-    const used = new Set(this.trainingCourses.map(c => c.code).filter(Boolean));
-    let n = 1;
-    let code = `TRN-${base}-01`;
-    while (used.has(code)) code = `TRN-${base}-${String(++n).padStart(2, '0')}`;
-    return code;
+    return writes.generateTrainingCourseCode(this.writeCtx, course);
   }
 
   async addTrainingCourse(course: Omit<TrainingCourse, 'id'> & { id?: string }) {
-    const id = course.id || newId();
-    const newCourse: TrainingCourse = {
-      ...course,
-      id,
-      linkedSkillIds: course.linkedSkillIds || [],
-      code: course.code || this.generateTrainingCourseCode(course),
-      createdAt: course.createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    await this.persistItem('trainingCourses', newCourse);
-    await this.logActivity('Added Training Course', newCourse.title);
-    return newCourse;
+    return writes.addTrainingCourse(this.writeCtx, course);
   }
 
   async updateTrainingCourse(course: TrainingCourse) {
-    const updated: TrainingCourse = {
-      ...course,
-      linkedSkillIds: course.linkedSkillIds || [],
-      updatedAt: new Date().toISOString(),
-    };
-    await this.updateItem('trainingCourses', updated);
-    await this.logActivity('Updated Training Course', updated.title);
-    return updated;
+    return writes.updateTrainingCourse(this.writeCtx, course);
   }
 
-  /**
-   * Soft-delete, like skills: an ITP generated last year may still reference the
-   * course by id, so the record stays and is only hidden from recommendations.
-   */
   async removeTrainingCourse(id: string) {
-    const course = this.trainingCourses.find(c => c.id === id);
-    if (!course) return;
-    await this.updateItem('trainingCourses', { ...course, isArchived: true, updatedAt: new Date().toISOString() });
-    await this.logActivity('Archived Training Course', course.title);
+    return writes.removeTrainingCourse(this.writeCtx, id);
   }
 
   async restoreTrainingCourse(id: string) {
-    const course = this.trainingCourses.find(c => c.id === id);
-    if (!course) return;
-    await this.updateItem('trainingCourses', { ...course, isArchived: false, updatedAt: new Date().toISOString() });
-    await this.logActivity('Restored Training Course', course.title);
+    return writes.restoreTrainingCourse(this.writeCtx, id);
   }
-
 
   async updateDepartment(dept: Department) {
     await this.updateItem('departments', dept);
@@ -3635,7 +3060,6 @@ export class DataService {
       await this.logActivity('Delete Project', project.name);
     }
   }
-
 
   getAssessmentHistory(viewer: User, targetSubjectId?: string) {
     const effectiveTargetId = (viewer.role === Role.ADMIN || viewer.role === Role.CEO) 

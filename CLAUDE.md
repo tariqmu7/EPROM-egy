@@ -110,9 +110,25 @@ A job profile's `orgLevel` is **derived from the org-chart node's structural typ
 > ([`src/services/competency/__tests__/engine.test.ts`](src/services/competency/__tests__/engine.test.ts)).
 > `DataService` implements that context and keeps thin delegating methods, so **every method named
 > below still exists on `dataService` with the same signature** — call it exactly as before.
-> Two things stay on the service on purpose: the **score cache** (only the service knows when a write
-> invalidates a score, so the context points at the cached wrappers), and everything that **writes**
-> (development plans, evidence, work experience, courses, notifications).
+> The **score cache** stays on the service on purpose (only the service knows when a write
+> invalidates a score, so the context points at the cached wrappers).
+>
+> **Where the writes live.** The other half — evidence, work experience, development plans, the
+> training catalogue, notifications and assessment records — moved out the same way, into
+> [`src/services/writes/`](src/services/writes/) (one file per feature). These *change* data, so
+> instead of a read-only context each function takes a **`WriteHost`**
+> ([`writes/host.ts`](src/services/writes/host.ts)): the named set of service capabilities a write
+> may use — persist / update / remove, `preparePayload`, the audit log, the attributed notification
+> path, the score cache and a short list of reads — and nothing else. `DataService` builds it once
+> (`writeCtx`, beside `engineCtx`) and keeps thin delegating methods, so **every write method still
+> exists on `dataService` with the same signature**. Tested from a hand-built host with no store at
+> all ([`writes/__tests__/writes.test.ts`](src/services/writes/__tests__/writes.test.ts)).
+>
+> Three rules the split leaves behind: a new feature write goes in **its own file** under
+> `writes/` and gets a delegating method; anything that can move a score **must call
+> `host.clearScoreCache()`** (the listener clears it too, but a poll later, and a same-tick
+> re-render would show the old number); and the **readers stay on `DataService`** — pulling the
+> matching getters across would just rebuild the god object one feature at a time.
 
 ### Skill Scoring (`getUserSkillScore`)
 - **360° / OJT skills**: Weighted average — Self 10% + Peer 30% + Manager 60%
