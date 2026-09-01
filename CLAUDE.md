@@ -599,6 +599,20 @@ and returns it in the `500` body. Zero-dependency logger in [`server/src/logger.
   stamps `createdBy` from the live session; the sweep writes straight to SQL with none, and
   [`NotificationBell`](src/components/NotificationBell.tsx) shows "From <name>" or "System" on every
   row — so nothing a colleague wrote can pass itself off as the system.
+- **An uploaded file is decided by its BYTES, on both sides.** ECMS has no object storage: a
+  certificate scan, an evidence file, an exam sheet and an avatar are all base64 `data:` URLs
+  stored inside the document, so `accept=".pdf,image/*"` is a picker hint and nothing more. The
+  browser half is [`src/utils/fileUpload.ts`](src/utils/fileUpload.ts) — a size cap enforced before
+  the read, a **magic-byte** allowlist (PNG · JPG · WebP · GIF · PDF), a data URL rebuilt with the
+  DETECTED type, and `safeFileName` for the display name. The server half is independent, in
+  [`server/src/collections/schemas.ts`](server/src/collections/schemas.ts): `users.avatarUrl`,
+  `evidences.fileUrl` and every `fileUrl` inside the stringified `users.certificates` must be
+  empty, an https link, or a data URL of an allowlisted type under ~4.5 MB — so `javascript:` and
+  `data:text/html` can never be stored, whatever the browser did. **SVG is not an attachment type**
+  (it can carry script); it is allowed for an avatar only because the generated initials avatar is
+  one, and an avatar is only ever rendered in an `<img>`. Bulk import caps the workbook at 10 MB and
+  5,000 rows, and **every exported Excel cell** goes through `safeExportCell` — a value starting
+  `= + - @` is a formula on the recipient's machine.
 - `BOOTSTRAP_ADMIN_EMAIL` is treated as ADMIN before any user holds the `ADMIN` role
   (first-run / recovery only); normal admin access is role-driven (`users` doc `role == 'ADMIN'`).
 

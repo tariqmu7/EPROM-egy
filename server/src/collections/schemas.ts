@@ -44,8 +44,91 @@ const id = z.string();
 // `.passthrough()` so unrecognised fields are preserved untouched.
 const baseDoc = z.object({ id: z.string().min(1).optional() }).passthrough();
 
+// ---------------------------------------------------------------------------
+// Stored files. ECMS has no object storage: a certificate scan, an evidence
+// file and an avatar are all base64 `data:` URLs living INSIDE the document.
+// So the only place a file's type can be policed on the server is here, and it
+// must be policed independently of the browser — the client-side magic-byte
+// check in `src/utils/fileUpload.ts` is a courtesy to the user, not a control:
+// a scripted caller talks straight to `/col`.
+//
+// What this refuses: `javascript:` and other schemes, `data:text/html` (a
+// stored XSS payload waiting for whoever opens the attachment), and a payload
+// past the cap. What it allows: the empty string (no file), an http(s) link
+// (legacy Firebase-era records), and a base64 data URL of an allowlisted type.
+const ATTACHMENT_MIME = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'application/pdf'];
+// SVG is NOT an attachment type — it can carry script. It is allowed for an
+// avatar only because the generated initials avatar (`utils/localAvatar.ts`) is
+// an `image/svg+xml` data URL we build ourselves, and an avatar is only ever
+// rendered inside an <img>, where script does not run.
+const AVATAR_MIME = [...ATTACHMENT_MIME, 'image/svg+xml'];
+
+// ~4.5 MB of characters. The 5 MB JSON body limit in app.ts is the real
+// backstop; this keeps ONE field from being the whole budget.
+const MAX_DATA_URL_CHARS = 4_718_592;
+
+// Both data-URL forms are accepted, because the app writes both: an uploaded
+// file is `;base64,`, while the generated initials avatar is a percent-encoded
+// `data:image/svg+xml,<svg …>`. What is checked in either case is the MIME type
+// — the payload after the comma is opaque bytes either way.
+const DATA_URL_RE = /^data:([a-z0-9.+/-]+)((?:;[a-z0-9.=+-]+)*),/i;
+
+function storedFileUrl(allowedMime: string[], label: string) {
+  return z.string().superRefine((value, ctx) => {
+    if (value === '') return;
+    if (value.length > MAX_DATA_URL_CHARS) {
+      ctx.addIssue({ code: 'custom', message: `${label} is too large (max ${Math.round(MAX_DATA_URL_CHARS / (1024 * 1024))} MB)` });
+      return;
+    }
+    if (/^https?:\/\//i.test(value)) return;
+    const match = DATA_URL_RE.exec(value);
+    if (!match) {
+      ctx.addIssue({ code: 'custom', message: `${label} must be an https link or a base64 data URL` });
+      return;
+    }
+    if (!allowedMime.includes(match[1].toLowerCase())) {
+      ctx.addIssue({ code: 'custom', message: `${label} type "${match[1]}" is not allowed (${allowedMime.join(', ')})` });
+    }
+  });
+}
+
+const attachmentUrl = storedFileUrl(ATTACHMENT_MIME, 'file');
+const avatarUrl = storedFileUrl(AVATAR_MIME, 'avatar');
+
+// `users.certificates` arrives as a JSON STRING (preparePayload stringifies it),
+// so the same rule has to be applied through the parse. Only the file field is
+// policed — the rest of a certificate's shape still belongs to the frontend —
+// and a value that is not parseable JSON is left alone rather than guessed at,
+// exactly as `workExperiences.skills` is.
+const certificatesField = z.union([z.string(), z.array(z.any())]).superRefine((value, ctx) => {
+  let list: unknown = value;
+  if (typeof value === 'string') {
+    if (value.trim() === '') return;
+    try {
+      list = JSON.parse(value);
+    } catch {
+      return;
+    }
+  }
+  if (!Array.isArray(list)) return;
+  list.forEach((cert, i) => {
+    const url = (cert as { fileUrl?: unknown } | null)?.fileUrl;
+    if (url === undefined || url === null) return;
+    if (typeof url !== 'string') {
+      ctx.addIssue({ code: 'custom', message: `certificate ${i + 1}: fileUrl must be a string` });
+      return;
+    }
+    const result = attachmentUrl.safeParse(url);
+    if (!result.success) {
+      ctx.addIssue({ code: 'custom', message: `certificate ${i + 1}: ${result.error.issues[0].message}` });
+    }
+  });
+});
+
 const usersSchema = baseDoc.extend({
   email: z.string().email().optional(),
+  avatarUrl: avatarUrl.optional(),
+  certificates: certificatesField.optional(),
   role: z.enum(ROLE).optional(),
   status: z.enum(USER_STATUS).optional(),
   orgLevel: z.enum(ORG_LEVEL).optional(),
@@ -69,6 +152,10 @@ const evidencesSchema = baseDoc.extend({
   userId: id.optional(),
   skillId: id.optional(),
   status: z.string().optional(),
+  fileUrl: attachmentUrl.optional(),
+  // Display metadata only — nothing is ever named from it on disk — but it is
+  // rendered and handed to `<a download=…>`, so bound it.
+  fileName: z.string().max(200).optional(),
 });
 
 const jobProfilesSchema = baseDoc.extend({

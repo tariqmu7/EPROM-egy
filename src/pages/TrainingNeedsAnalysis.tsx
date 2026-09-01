@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import ExcelJS from 'exceljs';
+import { safeExportRow } from '../utils/fileUpload';
 import {
   GraduationCap, Download, Users, AlertTriangle, TrendingDown, Search, BookOpen, Layers, Wallet,
 } from 'lucide-react';
@@ -12,6 +13,13 @@ import {
 } from '../types';
 import { CoverageMeter, CoverageNote, CompliancePercent } from '../components/CoverageIndicator';
 import { CriticalityBadge } from '../components/CriticalityBadge';
+
+// Every exported cell goes through `safeExportCell`: a value that begins with
+// = + - @ is executed as a FORMULA when the file is opened in Excel or Sheets,
+// on the recipient's machine. Skill names, course titles and notes are all free
+// text somebody typed into this app, so the export is the injection point.
+const addSafeRow = (ws: ExcelJS.Worksheet, values: unknown[]) => ws.addRow(safeExportRow(values));
+
 
 /**
  * TRAINING NEEDS ANALYSIS — the departmental answer to "what training do we
@@ -179,23 +187,23 @@ export const TrainingNeedsAnalysis: React.FC<{ user: User }> = ({ user }) => {
       const wb = new ExcelJS.Workbook();
       const ws = wb.addWorksheet('Training Needs');
       const c = analysis.coverage;
-      ws.addRow(['Training Needs Analysis']);
-      ws.addRow(['Scope', scopeLabel]);
-      ws.addRow(['Generated', new Date().toLocaleString()]);
-      ws.addRow(['Employees in scope', analysis.headcount]);
-      ws.addRow(['Employees with a job profile', analysis.withRequirements]);
-      ws.addRow(['Requirements measured', `${c.measured} of ${c.required}`]);
-      ws.addRow(['Never assessed', c.unknown]);
+      addSafeRow(ws, ['Training Needs Analysis']);
+      addSafeRow(ws, ['Scope', scopeLabel]);
+      addSafeRow(ws, ['Generated', new Date().toLocaleString()]);
+      addSafeRow(ws, ['Employees in scope', analysis.headcount]);
+      addSafeRow(ws, ['Employees with a job profile', analysis.withRequirements]);
+      addSafeRow(ws, ['Requirements measured', `${c.measured} of ${c.required}`]);
+      addSafeRow(ws, ['Never assessed', c.unknown]);
       // The bill, always beside what it does NOT cover.
-      ws.addRow([
+      addSafeRow(ws, [
         'Estimated cost',
         budget.estimatedCost === null ? 'not priced' : budget.estimatedCost,
         budget.skillsUncosted > 0
           ? `covers ${budget.skillsCosted} of ${budget.skillsCosted + budget.skillsUncosted} skills with a gap (${budget.seatsUncosted} seats unpriced)`
           : 'covers every skill with a gap',
       ]);
-      ws.addRow([]);
-      ws.addRow([
+      addSafeRow(ws, []);
+      addSafeRow(ws, [
         'Skill', 'Category', 'Criticality', 'Gap weight', 'Employees requiring', 'Measured', 'Provisional',
         'Never assessed', 'With a gap', 'Share of measured with a gap (%)',
         'Average gap (levels)', 'Total gap (levels)', 'Weighted gap', 'Highest level required',
@@ -206,7 +214,7 @@ export const TrainingNeedsAnalysis: React.FC<{ user: User }> = ({ user }) => {
       ws.getRow(10).font = { bold: true };
       for (const n of analysis.needs) {
         const criticality = skillCriticalityOf(n.criticality);
-        ws.addRow([
+        addSafeRow(ws, [
           n.skillName, n.skillCategory || '', SKILL_CRITICALITY_LABELS[criticality], n.criticalityWeight,
           n.employeesRequiring, n.measured, n.provisional,
           n.unknown, n.gapCount, n.affectedPct === null ? 'n/a' : n.affectedPct,

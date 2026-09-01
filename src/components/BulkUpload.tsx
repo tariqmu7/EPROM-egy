@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import ExcelJS from 'exceljs';
 import { Download, Upload, X, AlertCircle, CheckCircle, FileSpreadsheet, Loader2, Lock } from 'lucide-react';
 import { dataService } from '../services/store';
+import { assertSpreadsheetSize, ACCEPT_SPREADSHEET, MAX_IMPORT_ROWS, UploadRejectedError } from '../utils/fileUpload';
 import { User, Role, JobProfile, Skill, Department, OrgLevel, TrainingCourse, SkillCategory, SkillCriticality, normalizeSkillCategory, skillCriticalityOf } from '../types';
 
 interface BulkUploadProps {
@@ -458,6 +459,9 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, user, onComplete, 
     setError(null);
 
     try {
+      // A workbook is parsed IN THE BROWSER, so an oversized one is a frozen
+      // tab rather than a server problem — refuse it before ExcelJS sees it.
+      assertSpreadsheetSize(file);
       const buffer = await file.arrayBuffer();
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
@@ -501,6 +505,14 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, user, onComplete, 
 
       if (jsonData.length === 0) {
         setError('The file is empty.');
+        setLoading(false);
+        return;
+      }
+      // Each row is a write. A sheet longer than this is a mistake or a paste
+      // accident, not an import — refusing it beats half-applying thousands of
+      // rows and leaving the admin to work out where it stopped.
+      if (jsonData.length > MAX_IMPORT_ROWS) {
+        setError(`That sheet has ${jsonData.length.toLocaleString()} rows. The limit is ${MAX_IMPORT_ROWS.toLocaleString()} per import — split it into smaller files. Nothing has been written.`);
         setLoading(false);
         return;
       }
@@ -962,7 +974,11 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, user, onComplete, 
       setTimeout(() => onComplete(), failed.length > 0 ? 6000 : 2500);
     } catch (err) {
       console.error(err);
-      setError('The import failed part-way through. Re-check the department under Admin > Job Profiles before re-running.');
+      // A refused file never reached the writing stage, so say so plainly rather
+      // than sending the admin to check a department that was never touched.
+      setError(err instanceof UploadRejectedError
+        ? `${err.message} Nothing has been written.`
+        : 'The import failed part-way through. Re-check the department under Admin > Job Profiles before re-running.');
       setLoading(false);
     }
   };
@@ -1044,7 +1060,7 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, user, onComplete, 
             <div className="border-2 border-dashed border-slate-300 p-8 text-center rounded-none hover:border-blue-500 transition-colors relative group">
               <input 
                 type="file" 
-                accept=".xlsx, .xls" 
+                accept={ACCEPT_SPREADSHEET} 
                 onChange={handleFileChange}
                 className="absolute inset-0 opacity-0 cursor-pointer"
               />

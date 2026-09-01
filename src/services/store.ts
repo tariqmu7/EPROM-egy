@@ -34,6 +34,7 @@ import {
 } from './auth-compat';
 import { api } from './api-client';
 import { localAvatar } from '../utils/localAvatar';
+import { assertUploadableImage } from '../utils/fileUpload';
 import { newId } from '../utils/uuid';
 
 // Temporary password an admin hands to a locked-out user. Cryptographically
@@ -1861,6 +1862,11 @@ export class DataService {
   }
 
   async uploadAvatar(userId: string, file: File): Promise<string> {
+    // Refuse it before reading: size cap + magic bytes (utils/fileUpload.ts).
+    // The canvas re-encode below already strips EXIF and any embedded payload,
+    // but only for something the browser will decode as an image at all —
+    // this is what keeps a 40 MB file out of the tab in the first place.
+    await assertUploadableImage(file);
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = (e) => {

@@ -3,14 +3,7 @@ import { dataService } from '../services/store';
 import { useStoreData } from '../hooks/useStoreData';
 import { User, Skill, Evidence } from '../types';
 import { Upload, FileText, CheckCircle, Clock, AlertCircle, ExternalLink, Pencil, Trash2, XCircle, RefreshCw } from 'lucide-react';
-
-const readFileAsDataURL = (file: File): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result as string);
-    reader.onerror = () => reject(reader.error ?? new Error('Failed to read file'));
-    reader.readAsDataURL(file);
-  });
+import { readValidatedUpload, safeFileName, UploadRejectedError, MAX_ATTACHMENT_BYTES, ACCEPT_ATTACHMENT } from '../utils/fileUpload';
 
 export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser }) => {
   const [selectedSkillId, setSelectedSkillId] = useState<string>('');
@@ -70,8 +63,9 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
     setErrorMessage('');
 
     try {
-      // Simulate file upload by reading as data URL
-      const base64String = await readFileAsDataURL(file);
+      // Size- and magic-byte-checked; the data URL carries the DETECTED type,
+      // not whatever the browser claimed from the file's name.
+      const upload = await readValidatedUpload(file, { maxBytes: MAX_ATTACHMENT_BYTES });
 
       let finalSkillId = selectedSkillId;
 
@@ -103,8 +97,8 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
       await dataService.addEvidence({
         userId: currentUser.id,
         skillId: finalSkillId,
-        fileUrl: base64String,
-        fileName: file.name,
+        fileUrl: upload.dataUrl,
+        fileName: safeFileName(file.name),
         notes: notes,
         ...(dataService.isSkillCertificateBasedForUser(currentUser.id, finalSkillId) && expiryDate ? { expiryDate } : {})
       });
@@ -118,7 +112,9 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {
       console.error('Failed to submit evidence:', err);
-      setErrorMessage('Could not submit evidence. Please check your file and try again.');
+      setErrorMessage(err instanceof UploadRejectedError
+        ? err.message
+        : 'Could not submit evidence. Please check your file and try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -145,12 +141,19 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
       setTimeout(() => setSuccessMessage(''), 4000);
       setIsActioning(false);
     };
-    if (editFile) {
-      const reader = new FileReader();
-      reader.onloadend = () => apply(reader.result as string, editFile.name);
-      reader.readAsDataURL(editFile);
-    } else {
-      await apply();
+    try {
+      if (editFile) {
+        const upload = await readValidatedUpload(editFile, { maxBytes: MAX_ATTACHMENT_BYTES });
+        await apply(upload.dataUrl, safeFileName(editFile.name));
+      } else {
+        await apply();
+      }
+    } catch (err) {
+      console.error('Failed to update evidence:', err);
+      setErrorMessage(err instanceof UploadRejectedError
+        ? err.message
+        : 'Could not update the evidence. Please check your file and try again.');
+      setIsActioning(false);
     }
   };
 
@@ -209,7 +212,7 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
               </div>
               <div>
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Replace File <span className="font-normal text-slate-400">(optional)</span></label>
-                <input type="file" accept="image/*,.pdf" onChange={e => setEditFile(e.target.files?.[0] ?? null)}
+                <input type="file" accept={ACCEPT_ATTACHMENT} onChange={e => setEditFile(e.target.files?.[0] ?? null)}
                   className="text-sm text-slate-700" />
                 {!editFile && <p className="text-xs text-slate-400 mt-1">Leave empty to keep existing file: <span className="font-medium">{editEvidence.fileName}</span></p>}
               </div>
@@ -395,7 +398,7 @@ export const EvidencePortal: React.FC<{ currentUser: User }> = ({ currentUser })
                       <p className="mb-2 text-sm text-slate-500"><span className="font-semibold">Click to upload</span> or drag and drop</p>
                       <p className="text-xs text-slate-500">PNG, JPG, PDF (MAX. 5MB)</p>
                     </div>
-                    <input id="dropzone-file" type="file" className="hidden" onChange={handleFileChange} accept="image/*,.pdf" required />
+                    <input id="dropzone-file" type="file" className="hidden" onChange={handleFileChange} accept={ACCEPT_ATTACHMENT} required />
                   </label>
                 </div>
                 {file && <p className="mt-2 text-sm text-slate-800 font-medium flex items-center gap-2"><CheckCircle size={16}/> Selected: {file.name}</p>}

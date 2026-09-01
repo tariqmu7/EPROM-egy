@@ -7,6 +7,7 @@ import { useStoreData } from '../hooks/useStoreData';
 import { usePersistentView } from '../hooks/usePersistentView';
 import { AssessmentHistoryLog } from '../components/AssessmentHistoryLog';
 import { CompliancePercent, CoverageNote } from '../components/CoverageIndicator';
+import { readValidatedUpload, safeFileName, UploadRejectedError, MAX_ATTACHMENT_BYTES, ACCEPT_ATTACHMENT } from '../utils/fileUpload';
 import { 
   AlertCircle, 
   CheckCircle, 
@@ -91,24 +92,35 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
   // Certificate Management State
   const [editingCert, setEditingCert] = useState<Partial<Certificate> | null>(null);
   const [certDeleteId, setCertDeleteId] = useState<string | null>(null);
+  // Why a rejected upload needs its own message: the certificate form's only
+  // other feedback is the green filename line, so a silently ignored file would
+  // read as "saved".
+  const [certFileError, setCertFileError] = useState<string>('');
   const [certDetailView, setCertDetailView] = useState<any | null>(null);
   const [skillDetailView, setSkillDetailView] = useState<{ skill?: Skill; required: number; current: number; gap: number } | null>(null);
   // Personal/contact details moved out of the page body into an on-demand modal
   // so the profile header can carry the CV-style professional summary instead.
   const [showPersonalDetails, setShowPersonalDetails] = useState(false);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setEditingCert({
-          ...editingCert,
-          fileUrl: reader.result as string,
-          fileName: file.name
-        });
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+    setCertFileError('');
+    try {
+      // Size- and magic-byte-checked (see utils/fileUpload.ts): the stored data
+      // URL carries the DETECTED type, and the filename is display metadata.
+      const upload = await readValidatedUpload(file, { maxBytes: MAX_ATTACHMENT_BYTES });
+      setEditingCert(prev => ({
+        ...prev,
+        fileUrl: upload.dataUrl,
+        fileName: safeFileName(file.name),
+      }));
+    } catch (err) {
+      console.error('Certificate upload rejected:', err);
+      setCertFileError(err instanceof UploadRejectedError
+        ? err.message
+        : 'That file could not be read. Please try another one.');
+      e.target.value = '';
     }
   };
 
@@ -1602,10 +1614,15 @@ export const EmployeeDashboard: React.FC<EmployeeDashboardProps> = React.memo(({
                                         <input
                                             type="file"
                                             onChange={handleFileUpload}
-                                            accept=".pdf,image/*"
+                                            accept={ACCEPT_ATTACHMENT}
                                             className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                                         />
-                                        {editingCert.fileName && (
+                                        {certFileError && (
+                                            <p className="text-xs text-rose-600 font-medium mt-2 flex items-start gap-1">
+                                                <AlertCircle size={12} className="shrink-0 mt-0.5" /> {certFileError}
+                                            </p>
+                                        )}
+                                        {editingCert.fileName && !certFileError && (
                                             <p className="text-xs text-emerald-600 font-medium mt-2 flex items-center gap-1">
                                                 <CheckCircle size={12} /> {editingCert.fileName}
                                             </p>

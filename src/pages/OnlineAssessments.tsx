@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { User, Skill, Evidence, ASSESSOR_ROLE_LABELS } from '../types';
 import { dataService } from '../services/store';
 import { useStoreData } from '../hooks/useStoreData';
+import { readValidatedUpload, safeFileName, UploadRejectedError, MAX_ATTACHMENT_BYTES, ACCEPT_ATTACHMENT } from '../utils/fileUpload';
 import {
   ExternalLink,
   CheckCircle,
@@ -18,14 +19,6 @@ import {
 interface OnlineAssessmentsProps {
   currentUser: User;
 }
-
-const readFileAsDataURL = (file: File): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result as string);
-    reader.onerror = () => reject(reader.error ?? new Error('Failed to read file'));
-    reader.readAsDataURL(file);
-  });
 
 export const OnlineAssessments: React.FC<OnlineAssessmentsProps> = ({ currentUser }) => {
   const [successMessage, setSuccessMessage] = useState('');
@@ -84,13 +77,14 @@ export const OnlineAssessments: React.FC<OnlineAssessmentsProps> = ({ currentUse
     setIsSubmitting(true);
     setErrorMessage('');
     try {
-      const base64String = await readFileAsDataURL(file);
+      // Size- and magic-byte-checked (see utils/fileUpload.ts).
+      const upload = await readValidatedUpload(file, { maxBytes: MAX_ATTACHMENT_BYTES });
       const isCertBased = dataService.isSkillCertificateBasedForUser(currentUser.id, skillId);
       await dataService.addEvidence({
         userId: currentUser.id,
         skillId,
-        fileUrl: base64String,
-        fileName: file.name,
+        fileUrl: upload.dataUrl,
+        fileName: safeFileName(file.name),
         notes: notes.trim() || 'Written examination result submitted for verification.',
         ...(isCertBased && expiryDate ? { expiryDate } : {})
       });
@@ -99,7 +93,9 @@ export const OnlineAssessments: React.FC<OnlineAssessmentsProps> = ({ currentUse
       setTimeout(() => setSuccessMessage(''), 4000);
     } catch (err) {
       console.error('Failed to submit exam result:', err);
-      setErrorMessage('Could not submit your result. Please check the file and try again.');
+      setErrorMessage(err instanceof UploadRejectedError
+        ? err.message
+        : 'Could not submit your result. Please check the file and try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -321,7 +317,7 @@ export const OnlineAssessments: React.FC<OnlineAssessmentsProps> = ({ currentUse
                         <label htmlFor={`file-${skill.id}`} className="flex flex-col items-center justify-center w-full h-24 border-2 border-slate-300 border-dashed cursor-pointer bg-white hover:bg-slate-50">
                           <FileText className="w-6 h-6 mb-1 text-slate-400" />
                           <p className="text-xs text-slate-500"><span className="font-semibold">Click to upload</span> screenshot / PDF</p>
-                          <input id={`file-${skill.id}`} type="file" className="hidden" accept="image/*,.pdf" onChange={e => setFile(e.target.files?.[0] ?? null)} />
+                          <input id={`file-${skill.id}`} type="file" className="hidden" accept={ACCEPT_ATTACHMENT} onChange={e => setFile(e.target.files?.[0] ?? null)} />
                         </label>
                         {file && <p className="text-xs text-slate-800 font-medium flex items-center gap-1.5"><CheckCircle size={13} className="text-emerald-500" /> {file.name}</p>}
 

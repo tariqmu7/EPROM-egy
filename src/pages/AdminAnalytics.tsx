@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import ExcelJS from 'exceljs';
+import { safeExportRow } from '../utils/fileUpload';
 import { dataService } from '../services/store';
 import { useStoreData } from '../hooks/useStoreData';
 import {
@@ -13,6 +14,13 @@ import {
 } from 'lucide-react';
 import { CoverageMeter, CoverageNote, CompliancePercent } from '../components/CoverageIndicator';
 import { CriticalityBadge } from '../components/CriticalityBadge';
+
+// Every exported cell goes through `safeExportCell`: a value that begins with
+// = + - @ is executed as a FORMULA when the file is opened in Excel or Sheets,
+// on the recipient's machine. Skill names, course titles and notes are all free
+// text somebody typed into this app, so the export is the injection point.
+const addSafeRow = (ws: ExcelJS.Worksheet, values: unknown[]) => ws.addRow(safeExportRow(values));
+
 
 // ============================================================================
 // Organization Analytics — the executive read of the competency position:
@@ -221,33 +229,33 @@ export const AdminAnalytics: React.FC = () => {
       const c = overview.coverage;
 
       const summary = wb.addWorksheet('Summary');
-      summary.addRow(['Organization Analytics']);
-      summary.addRow(['Scope', scopeLabel]);
-      summary.addRow(['Generated', new Date().toLocaleString()]);
-      summary.addRow([]);
-      summary.addRow(['Employees in scope', overview.headcount]);
-      summary.addRow(['With a job profile', overview.withRequirements]);
-      summary.addRow(['Without a job profile', overview.withoutProfile]);
-      summary.addRow(['Assessments recorded', assessmentCount ?? 'n/a']);
-      summary.addRow([]);
-      summary.addRow(['Requirements', c.required]);
-      summary.addRow(['Measured', c.measured]);
-      summary.addRow(['Provisional (work experience)', c.provisional]);
-      summary.addRow(['Never assessed', c.unknown]);
-      summary.addRow(['Assessment coverage (%)', c.measuredPct]);
-      summary.addRow(['Compliance over measured (%)', c.compliancePct === null ? 'n/a — nothing measured' : c.compliancePct]);
-      summary.addRow(['Average gap over measured (levels)', c.avgGap === null ? 'n/a — nothing measured' : Number(c.avgGap.toFixed(2))]);
-      summary.addRow(['Total gap (levels, measured only)', Number(c.totalGap.toFixed(2))]);
+      addSafeRow(summary, ['Organization Analytics']);
+      addSafeRow(summary, ['Scope', scopeLabel]);
+      addSafeRow(summary, ['Generated', new Date().toLocaleString()]);
+      addSafeRow(summary, []);
+      addSafeRow(summary, ['Employees in scope', overview.headcount]);
+      addSafeRow(summary, ['With a job profile', overview.withRequirements]);
+      addSafeRow(summary, ['Without a job profile', overview.withoutProfile]);
+      addSafeRow(summary, ['Assessments recorded', assessmentCount ?? 'n/a']);
+      addSafeRow(summary, []);
+      addSafeRow(summary, ['Requirements', c.required]);
+      addSafeRow(summary, ['Measured', c.measured]);
+      addSafeRow(summary, ['Provisional (work experience)', c.provisional]);
+      addSafeRow(summary, ['Never assessed', c.unknown]);
+      addSafeRow(summary, ['Assessment coverage (%)', c.measuredPct]);
+      addSafeRow(summary, ['Compliance over measured (%)', c.compliancePct === null ? 'n/a — nothing measured' : c.compliancePct]);
+      addSafeRow(summary, ['Average gap over measured (levels)', c.avgGap === null ? 'n/a — nothing measured' : Number(c.avgGap.toFixed(2))]);
+      addSafeRow(summary, ['Total gap (levels, measured only)', Number(c.totalGap.toFixed(2))]);
       summary.getRow(1).font = { bold: true, size: 14 };
 
       const hot = wb.addWorksheet('Skill hotspots');
-      hot.addRow([
+      addSafeRow(hot, [
         'Skill', 'Category', 'Criticality', 'Gap weight', 'Employees requiring', 'Measured',
         'Provisional', 'Never assessed', 'With a gap', 'Share of measured with a gap (%)',
         'Average gap (levels)', 'Total gap (levels)', 'Weighted gap',
       ]);
       for (const s of hotspots) {
-        hot.addRow([
+        addSafeRow(hot, [
           s.skillName, s.skillCategory || '', SKILL_CRITICALITY_LABELS[skillCriticalityOf(s.criticality)],
           s.criticalityWeight, s.employeesRequiring, s.measured, s.provisional, s.unknown, s.gapCount,
           s.affectedPct === null ? 'n/a' : s.affectedPct,
@@ -258,13 +266,13 @@ export const AdminAnalytics: React.FC = () => {
       hot.getRow(1).font = { bold: true };
 
       const units = wb.addWorksheet('Departments');
-      units.addRow([
+      addSafeRow(units, [
         'Unit', 'Parent unit', 'People (incl. sub-units)', 'With a job profile', 'Requirements',
         'Measured', 'Provisional', 'Never assessed', 'Assessment coverage (%)',
         'Compliance over measured (%)', 'Average gap (levels)', 'Total gap (levels)',
       ]);
       for (const d of sortedDepartments) {
-        units.addRow([
+        addSafeRow(units, [
           d.name, d.parentId ? deptNames.get(d.parentId) ?? d.parentId : '', d.headcount, d.withRequirements,
           d.coverage.required, d.coverage.measured, d.coverage.provisional, d.coverage.unknown,
           d.coverage.measuredPct,
@@ -276,12 +284,12 @@ export const AdminAnalytics: React.FC = () => {
       units.getRow(1).font = { bold: true };
 
       const people = wb.addWorksheet('People');
-      people.addRow([
+      addSafeRow(people, [
         'Employee', 'Unit', 'Org level', 'Requirements', 'Measured', 'Provisional', 'Never assessed',
         'Compliance over measured (%)', 'Average gap (levels)',
       ]);
       for (const p of overview.people) {
-        people.addRow([
+        addSafeRow(people, [
           p.name, p.departmentId ? deptNames.get(p.departmentId) ?? p.departmentId : '', p.orgLevel || '',
           p.coverage.required, p.coverage.measured, p.coverage.provisional, p.coverage.unknown,
           p.coverage.compliancePct === null ? 'n/a' : p.coverage.compliancePct,
@@ -291,13 +299,13 @@ export const AdminAnalytics: React.FC = () => {
       people.getRow(1).font = { bold: true };
 
       const history = wb.addWorksheet('History');
-      history.addRow(['Reading taken from the monthly snapshots. Nothing is back-filled — history starts at the first snapshot.']);
-      history.addRow([
+      addSafeRow(history, ['Reading taken from the monthly snapshots. Nothing is back-filled — history starts at the first snapshot.']);
+      addSafeRow(history, [
         'Month', 'Taken', 'Employees', 'Requirements', 'Measured', 'Never assessed',
         'Assessment coverage (%)', 'Compliance over measured (%)', 'Average gap (levels)',
       ]);
       for (const s of snapshots || []) {
-        history.addRow([
+        addSafeRow(history, [
           s.period, new Date(s.takenAt).toLocaleDateString(), s.headcount, s.required, s.measured, s.unknown,
           s.measuredPct,
           s.compliancePct === null ? 'n/a' : s.compliancePct,
