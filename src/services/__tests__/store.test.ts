@@ -1134,10 +1134,26 @@ describe('orgLevel reconciliation', () => {
     expect(user.orgLevel).toBe('JP');
   });
 
-  it('updateUser keeps the user orgLevel pinned to the profile level', async () => {
+  it('updateUser keeps the user orgLevel pinned to the profile level FOR AN ADMIN', async () => {
+    const auth = await import('../auth-compat');
+    const admin = makeUser({ id: 'admin-1', role: Role.ADMIN });
+    inject(svc, { jobs: [JOB], users: [admin], departments: [] });
+    (auth.compatAuth as { currentUser: unknown }).currentUser = { uid: 'admin-1', email: 'admin@x' };
+
     const user = makeUser({ jobProfileId: 'job1', orgLevel: 'GM' });
     await svc.updateUser(user);
     expect(user.orgLevel).toBe('JP');
+
+    (auth.compatAuth as { currentUser: unknown }).currentUser = null;
+  });
+
+  // The API treats orgLevel/jobProfileId as admin-only fields (authz hole H1),
+  // so a non-admin save — an employee adding a certificate, a manager approving
+  // one — must leave them exactly as stored or the whole write is refused 403.
+  it('updateUser does NOT re-derive orgLevel for a non-admin', async () => {
+    const user = makeUser({ jobProfileId: 'job1', orgLevel: 'GM' });
+    await svc.updateUser(user);
+    expect(user.orgLevel).toBe('GM');
   });
 
   it('leaves orgLevel untouched when no job profile is assigned', async () => {

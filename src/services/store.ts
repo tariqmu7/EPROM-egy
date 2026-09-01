@@ -3893,9 +3893,23 @@ export class DataService {
   }
 
   async updateUser(user: User) {
-    this.autoAssignJobProfile(user);
+    // Auto-assignment writes `jobProfileId` / `orgLevel`, which the API treats
+    // as ADMIN-only privilege fields (an employee saving a certificate, or a
+    // manager approving one, must not silently move somebody in the org chart —
+    // that was authz hole H1). For everyone else the profile is left exactly as
+    // stored, so the write stays inside what the server will accept.
+    if (this.isViewerAdmin()) this.autoAssignJobProfile(user);
     await this.updateItem('users', user);
     await this.logActivity('Updated Profile', user.name);
+  }
+
+  // Is the signed-in user an admin? Used for writes that only an admin may
+  // make; the server enforces the same rule, this only keeps the client from
+  // sending a doomed request.
+  private isViewerAdmin(): boolean {
+    if (isBootstrapAdminEmail(auth.currentUser?.email)) return true;
+    const uid = auth.currentUser?.uid;
+    return !!uid && this.users.find(u => u.id === uid)?.role === Role.ADMIN;
   }
   
   async updateJobProfile(job: JobProfile) {

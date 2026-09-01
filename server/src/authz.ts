@@ -11,7 +11,7 @@ import type { Filter, ScopeFilter } from './collections/query.js';
 import type { AuthedUser } from './types.js';
 // Org-level value sets come from the shared enum module so authz can never drift
 // from the zod schemas / migration CHECKs again (was the root cause of F-1).
-import { ORG_LEVEL, ORG_MANAGER_LEVELS } from './domain/enums.js';
+import { ORG_LEVEL } from './domain/enums.js';
 
 export type Action = 'read' | 'create' | 'update' | 'delete';
 
@@ -30,7 +30,11 @@ export interface PolicyCtx {
 
 export function isAdmin(user: AuthedUser): boolean {
   if (user.role === 'ADMIN') return true;
-  return config.bootstrapAdminEmail !== '' && user.email.toLowerCase() === config.bootstrapAdminEmail;
+  // The bootstrap grant is keyed on the address the session SIGNED IN with
+  // (`auth_credentials`), never on the users document's `email` field. The
+  // document is user-writable, so comparing it here let any employee become
+  // admin by PATCHing their own email to the bootstrap address (hole H2).
+  return config.bootstrapAdminEmail !== '' && user.authEmail.toLowerCase() === config.bootstrapAdminEmail;
 }
 
 // Org-wide readers: admins + the CEO. These roles legitimately see everyone's
@@ -69,9 +73,9 @@ async function isAncestorManager(ctx: PolicyCtx, targetUserId?: string): Promise
   return false;
 }
 
-function isManagerLevel(user: AuthedUser): boolean {
-  return !!user.orgLevel && (ORG_MANAGER_LEVELS as readonly string[]).includes(user.orgLevel);
-}
+// NOTE: there is deliberately no "holds a manager-grade org level" predicate any
+// more. Being senior is not the same as managing THIS person — use
+// isAncestorManager, which follows the actual management chain (hole H3).
 
 async function isManagerOf(ctx: PolicyCtx, targetUserId?: string): Promise<boolean> {
   if (!targetUserId) return false;
@@ -135,6 +139,40 @@ export async function can(collection: CollectionName, action: Action, ctx: Polic
 
 // ── Per-collection policies ─────────────────────────────────────────────────
 
+// Fields of a users document that decide privilege, identity or org position.
+// Only an admin may change them. Everything else on the document (name, avatar,
+// phone, certificates, …) stays writable by the owner and by their managers.
+//
+// Pinning `role` alone was not enough: an employee could raise their own
+// `orgLevel` (H1), hand themselves the bootstrap admin address (H2), re-point
+// `managerId` at themselves to gain read access to another person's records, or
+// flip `status`/`isArchived` to lock someone out.
+const PROTECTED_USER_FIELDS = [
+  'id',
+  'email',
+  'role',
+  'status',
+  'orgLevel',
+  'managerId',
+  'departmentId',
+  'jobProfileId',
+  'isArchived',
+] as const;
+
+// Absent / null / undefined are ONE state here: a PATCH that never mentions a
+// field must not read as "cleared it". Objects/arrays compare structurally.
+function sameFieldValue(a: unknown, b: unknown): boolean {
+  if (a == null && b == null) return true;
+  if (a == null || b == null) return false;
+  if (typeof a === 'object' || typeof b === 'object') return JSON.stringify(a) === JSON.stringify(b);
+  return a === b;
+}
+
+function privilegedUserFieldsUnchanged(existing?: Doc | null, incoming?: Doc | null): boolean {
+  if (!existing || !incoming) return false;
+  return PROTECTED_USER_FIELDS.every((f) => sameFieldValue(existing[f], incoming[f]));
+}
+
 function usersPolicy(action: Action, ctx: PolicyCtx, admin: boolean): boolean | Promise<boolean> {
   const { user, docId, existing, incoming } = ctx;
   switch (action) {
@@ -151,22 +189,24 @@ function usersPolicy(action: Action, ctx: PolicyCtx, admin: boolean): boolean | 
       return (isOwner(user, docId) || admin) && isValidOrgLevel(incoming);
     case 'update': {
       if (!isValidOrgLevel(incoming)) return false;
-      const roleUnchanged = !!existing && !!incoming && incoming.role === existing.role;
-      if (isOwner(user, docId) && roleUnchanged) return true;
       if (admin) return true;
-      // manager updating a subordinate (may not change role)
-      const managesTarget = !!existing && existing.managerId === user.id;
-      return (managesTarget || isManagerLevel(user)) && roleUnchanged;
+      // Nobody but an admin may touch the privilege/identity fields, whether the
+      // document is their own or a subordinate's.
+      if (!privilegedUserFieldsUnchanged(existing, incoming)) return false;
+      if (isOwner(user, docId)) return true; // own profile: name, avatar, certificates…
+      // A manager maintaining one of their own people (e.g. approving a
+      // subordinate's certificate). It must be a REAL management relationship —
+      // holding a manager-grade org level used to be enough to rewrite any
+      // stranger's document, including the CEO's (H3). isAncestorManager walks
+      // the chain by canonical id, which is what `managerId` actually holds.
+      return isAncestorManager(ctx, existing?.id ? String(existing.id) : docId);
     }
-    case 'delete': {
-      if (admin) return true;
-      // A user may delete their own profile (matched by email), used in migration.
-      return (
-        !!existing &&
-        typeof existing.email === 'string' &&
-        existing.email.toLowerCase() === user.email.toLowerCase()
-      );
-    }
+    case 'delete':
+      // Admin only. The old self-delete-by-email carve-out was a leftover of the
+      // Firebase migration: it let anyone erase their own account while their
+      // assessment history stayed behind, orphaned (H8). Removing a person is
+      // Admin → Employees, which soft-deletes and reassigns their reports.
+      return admin;
   }
 }
 

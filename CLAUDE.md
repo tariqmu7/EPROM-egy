@@ -561,7 +561,15 @@ and returns it in the `500` body. Zero-dependency logger in [`server/src/logger.
   reloads the fresh user doc so role/status is never stale, and non-`ACTIVE` accounts are locked out.
 - **Authorization** is enforced server-side in [`server/src/authz.ts`](server/src/authz.ts) +
   [`server/src/middleware/authenticate.ts`](server/src/middleware/authenticate.ts) — a port of the
-  old `firestore.rules` (self-update cannot change `role`, owner/manager scoping, admin-write allowlist).
+  old `firestore.rules` (owner/manager scoping, admin-write allowlist). On a `users` document the
+  **privilege fields are admin-only** — `id`, `email`, `role`, `status`, `orgLevel`, `managerId`,
+  `departmentId`, `jobProfileId`, `isArchived` (`PROTECTED_USER_FIELDS`): the owner and the person's
+  managers may write everything else (name, avatar, certificates) but may not move anyone in the org
+  chart, and a users document can only be deleted by an admin. "Their managers" means a real
+  ancestor in the management chain (`isAncestorManager`), not merely somebody holding a
+  manager-grade org level. The **bootstrap-admin grant keys off the address the session signed in
+  with** (`auth_credentials`, carried as `AuthedUser.authEmail`), never the users document's
+  user-writable `email` field.
 - `BOOTSTRAP_ADMIN_EMAIL` is treated as ADMIN before any user holds the `ADMIN` role
   (first-run / recovery only); normal admin access is role-driven (`users` doc `role == 'ADMIN'`).
 

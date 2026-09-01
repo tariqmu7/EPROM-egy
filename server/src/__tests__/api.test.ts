@@ -13,6 +13,8 @@ const EMP = { id: 'emp-1', email: 'emp@eprom.local' };
 const OTHER = { id: 'emp-2', email: 'other@eprom.local' };
 const MGR = { id: 'mgr-1', email: 'mgr@eprom.local' }; // manages sub-1 → sub-2 (subtree)
 const CEO = { id: 'ceo-1', email: 'ceo@eprom.local' };
+// The recovery address BOOTSTRAP_ADMIN_EMAIL points at — nobody is seeded with it.
+const BOOTSTRAP_EMAIL = 'bootstrap@eprom.local';
 
 async function seedUser(u: { id: string; email: string }, role: string, password: string, extra: any = {}) {
   const pw = await import('../auth/password.js');
@@ -37,7 +39,10 @@ beforeAll(async () => {
   process.env.NODE_ENV = 'test';
   process.env.JWT_SECRET = 'test-secret';
   process.env.BCRYPT_ROUNDS = '4';
-  process.env.BOOTSTRAP_ADMIN_EMAIL = '';
+  // A REAL bootstrap address here (the other suites use ''): the escalation
+  // tests below need the recovery grant to be live, because that grant is what
+  // hole H2 abused.
+  process.env.BOOTSTRAP_ADMIN_EMAIL = BOOTSTRAP_EMAIL;
 
   const { newDb } = await import('pg-mem');
   const mem = newDb();
@@ -821,6 +826,110 @@ describe('self-registration is off by default', () => {
     const res = await request(app).get('/auth/config');
     expect(res.status).toBe(200);
     expect(res.body.allowSignup).toBe(false);
+  });
+});
+
+// ── The users-table escalation chain (holes H1, H2, H3, H8) ─────────────────
+// Every test here is a plain employee (or a merely-senior one) attacking the
+// real app over HTTP. Each one SUCCEEDED before this was fixed.
+describe('users: privilege escalation is closed', () => {
+  // Its own employee, not EMP: the admin-reset suite above rotates EMP's
+  // password, and these tests must not depend on where they sit in the file.
+  const ESC = { id: 'esc-1', email: 'escalator@eprom.local' };
+  beforeAll(async () => {
+    await seedUser(ESC, 'EMPLOYEE', 'esc-pass', { managerId: 'mgr-x', orgLevel: 'JP' });
+  });
+
+  it('H1 — an employee cannot raise their own org level (or move themselves in the org chart)', async () => {
+    const empTok = await login(ESC.email, 'esc-pass');
+
+    for (const patch of [{ orgLevel: 'GM' }, { status: 'PENDING' }, { managerId: ESC.id }, { departmentId: 'd-x' }]) {
+      const res = await request(app)
+        .patch(`/col/users/${ESC.id}`)
+        .set('Authorization', `Bearer ${empTok}`)
+        .send({ data: patch });
+      expect([res.status, JSON.stringify(patch)]).toEqual([403, JSON.stringify(patch)]);
+    }
+
+    const row = (await query('SELECT data FROM users WHERE id = $1', [ESC.id])).rows[0];
+    expect(row.data.orgLevel).toBe('JP');
+    expect(row.data.status).toBe('ACTIVE');
+    expect(row.data.managerId).toBe('mgr-x');
+
+    // The ordinary profile edit still works — this is a field lock, not a freeze.
+    const ok = await request(app)
+      .patch(`/col/users/${ESC.id}`)
+      .set('Authorization', `Bearer ${empTok}`)
+      .send({ data: { name: 'Renamed Again', certificates: [] } });
+    expect(ok.status).toBe(200);
+  });
+
+  it('H2 — an employee cannot take the bootstrap admin address', async () => {
+    const empTok = await login(ESC.email, 'esc-pass');
+    const res = await request(app)
+      .patch(`/col/users/${ESC.id}`)
+      .set('Authorization', `Bearer ${empTok}`)
+      .send({ data: { email: BOOTSTRAP_EMAIL } });
+    expect(res.status).toBe(403);
+  });
+
+  it('H2 — and even holding that address in the DOCUMENT grants nothing: the grant follows the login', async () => {
+    // Straight into the DB, so this stands even if the field lock above ever
+    // regresses: what must not confer admin is the users document's `email`.
+    const IMPOSTOR = { id: 'impostor-1', email: 'impostor@eprom.local' };
+    await seedUser(IMPOSTOR, 'EMPLOYEE', 'impostor-pass');
+    const before = (await query('SELECT data FROM users WHERE id = $1', [IMPOSTOR.id])).rows[0].data;
+    await query('UPDATE users SET data = $2 WHERE id = $1', [IMPOSTOR.id, { ...before, email: BOOTSTRAP_EMAIL }]);
+
+    const tok = await login(IMPOSTOR.email, 'impostor-pass');
+    const write = await request(app)
+      .put('/col/skills/impostor-skill')
+      .set('Authorization', `Bearer ${tok}`)
+      .send({ data: { name: 'Forged', category: 'X' } });
+    expect(write.status).toBe(403); // admin-write collection
+
+    const promote = await request(app)
+      .patch(`/col/users/${ESC.id}`)
+      .set('Authorization', `Bearer ${tok}`)
+      .send({ data: { role: 'ADMIN' } });
+    expect(promote.status).toBe(403);
+  });
+
+  it('H3 — a senior employee cannot edit someone they do not manage', async () => {
+    const mgrTok = await login(MGR.email, 'mgr-pass'); // orgLevel SH, manages sub-1 → sub-2
+
+    const stranger = await request(app)
+      .patch(`/col/users/${OTHER.id}`)
+      .set('Authorization', `Bearer ${mgrTok}`)
+      .send({ data: { name: 'Hijacked' } });
+    expect(stranger.status).toBe(403);
+
+    const boss = await request(app)
+      .patch(`/col/users/${CEO.id}`)
+      .set('Authorization', `Bearer ${mgrTok}`)
+      .send({ data: { name: 'Hijacked' } });
+    expect(boss.status).toBe(403);
+
+    // Their OWN people stay editable, transitively (certificate approval).
+    const own = await request(app)
+      .patch('/col/users/sub-2')
+      .set('Authorization', `Bearer ${mgrTok}`)
+      .send({ data: { certificates: [] } });
+    expect(own.status).toBe(200);
+
+    // But not their people's privilege fields.
+    const promoteReport = await request(app)
+      .patch('/col/users/sub-2')
+      .set('Authorization', `Bearer ${mgrTok}`)
+      .send({ data: { orgLevel: 'GM' } });
+    expect(promoteReport.status).toBe(403);
+  });
+
+  it('H8 — an employee cannot delete their own account, nor anyone else’s', async () => {
+    const empTok = await login(ESC.email, 'esc-pass');
+    const res = await request(app).delete(`/col/users/${ESC.id}`).set('Authorization', `Bearer ${empTok}`);
+    expect(res.status).toBe(403);
+    expect((await query('SELECT 1 FROM users WHERE id = $1', [ESC.id])).rows.length).toBe(1);
   });
 });
 

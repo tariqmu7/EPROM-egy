@@ -19,7 +19,17 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
     return;
   }
 
-  const { rows } = await query('SELECT id, data FROM users WHERE id = $1', [claims.sub]);
+  // The credential email comes from `auth_credentials`, joined here rather than
+  // taken from the users document: the document's `email` is writable by the
+  // user, and isAdmin() grants the bootstrap admin by address (was H2 — an
+  // employee who set their own document email to the bootstrap address became
+  // admin). The credential row is only ever written by the auth routes.
+  const { rows } = await query(
+    `SELECT u.id, u.data, c.email AS auth_email
+       FROM users u LEFT JOIN auth_credentials c ON c.user_id = u.id
+      WHERE u.id = $1`,
+    [claims.sub],
+  );
   if (rows.length === 0) {
     res.status(401).json({ error: 'user no longer exists' });
     return;
@@ -35,6 +45,7 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
   const user: AuthedUser = {
     id: rows[0].id,
     email: String(data.email ?? claims.email ?? ''),
+    authEmail: String(rows[0].auth_email ?? ''),
     role: String(data.role ?? 'EMPLOYEE'),
     orgLevel: data.orgLevel as string | undefined,
     managerId: data.managerId as string | undefined,
