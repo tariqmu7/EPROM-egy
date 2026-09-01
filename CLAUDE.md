@@ -570,6 +570,15 @@ and returns it in the `500` body. Zero-dependency logger in [`server/src/logger.
   manager-grade org level. The **bootstrap-admin grant keys off the address the session signed in
   with** (`auth_credentials`, carried as `AuthedUser.authEmail`), never the users document's
   user-writable `email` field.
+- **A submission never carries its own verdict.** `evidences` and `workExperiences` are claims the
+  employee makes and somebody else judges, and the judgement is what feeds a score — so a write by
+  the **subject** of the record (create or update, any non-admin) must arrive/stay `PENDING` with
+  the reviewer's fields unchanged: `assignedScore` / `reviewedAt` / `reviewedBy` / `reviewerComment`,
+  plus no per-skill `verifiedLevel` on a work experience. Clearing them is fine (that is what
+  re-submitting an edited record does); adding them is a 403. Only the person's **direct manager**
+  (`isManagerOf`) or an admin writes the verdict, and never on their own record. Without this an
+  employee could POST an already-`APPROVED`, self-scored evidence, or an already-`VERIFIED`
+  experience, and award themselves a competency level over the API in one call.
 - `BOOTSTRAP_ADMIN_EMAIL` is treated as ADMIN before any user holds the `ADMIN` role
   (first-run / recovery only); normal admin access is role-driven (`users` doc `role == 'ADMIN'`).
 

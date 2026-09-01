@@ -230,6 +230,68 @@ async function assessmentsPolicy(action: Action, ctx: PolicyCtx, admin: boolean)
   }
 }
 
+// ── The verdict rule (holes H4 + H5) ───────────────────────────────────────
+//
+// Evidence and work experience are both SUBMISSIONS: the employee sends a
+// claim, somebody else judges it, and the judgement is what feeds a score.
+// Nothing used to separate the two halves, so a plain employee could POST an
+// evidence record already `APPROVED` with `assignedScore: 5` (H4), or a work
+// experience already `VERIFIED` with a `verifiedLevel` (H5) — a self-awarded
+// competency level, over the API, in one call.
+//
+// The rule below is the whole fix and it is deliberately one rule for both
+// collections: **a write by the SUBJECT of the record may never carry a
+// verdict.** It must arrive/stay PENDING, and the reviewer's fields must be
+// exactly what they already were (absent, on a create). Clearing them is
+// allowed — that is what re-submitting an edited record does. Only somebody
+// else (the person's manager, via the existing manager branch) or an admin can
+// write the verdict, which is what the manager review screens already do.
+
+const EVIDENCE_VERDICT_FIELDS = ['assignedScore', 'reviewedAt', 'reviewedBy', 'reviewerComment'] as const;
+const EXPERIENCE_VERDICT_FIELDS = ['reviewedAt', 'reviewedBy', 'reviewerComment'] as const;
+
+// Is this write by the person the record is ABOUT? Matches on both id shapes:
+// create/update compare the raw auth uid while stored activity docs key on the
+// canonical id, and post-migration the two legitimately differ. Either match
+// counts, which is the safe direction — it can only pull MORE writes into the
+// stricter branch, never fewer.
+function isSubjectOfRecord(user: AuthedUser, doc?: Doc | null): boolean {
+  const owner = doc?.userId;
+  if (!owner) return false;
+  return owner === user.id || owner === canonicalId(user);
+}
+
+// `workExperiences.skills` arrives as a JSON STRING (store.ts's preparePayload
+// stringifies it, which is also why the zod schema leaves it undeclared), so
+// parse before looking for a level. An unparseable value is treated as
+// "carries a level" — refuse rather than guess.
+function experienceSkillsCarryVerifiedLevel(value: unknown): boolean {
+  if (value == null) return false;
+  let skills: unknown = value;
+  if (typeof value === 'string') {
+    try {
+      skills = JSON.parse(value);
+    } catch {
+      return true;
+    }
+  }
+  if (!Array.isArray(skills)) return true;
+  return skills.some((s) => s && typeof s === 'object' && (s as Doc).verifiedLevel != null);
+}
+
+// Shared by both policies. `existing` is absent on a create, which makes every
+// verdict field "must be absent" — exactly what is wanted.
+function carriesNoVerdict(
+  fields: readonly string[],
+  pendingStatus: string,
+  existing?: Doc | null,
+  incoming?: Doc | null,
+): boolean {
+  if (!incoming) return false;
+  if (incoming.status != null && incoming.status !== pendingStatus) return false;
+  return fields.every((f) => incoming[f] == null || sameFieldValue(existing?.[f], incoming[f]));
+}
+
 async function evidencesPolicy(action: Action, ctx: PolicyCtx, admin: boolean): Promise<boolean> {
   const { user, existing, incoming } = ctx;
   switch (action) {
@@ -240,10 +302,21 @@ async function evidencesPolicy(action: Action, ctx: PolicyCtx, admin: boolean): 
       return isAncestorManager(ctx, existing.userId); // a subordinate's
     }
     case 'create':
-      return !!incoming && (incoming.userId === user.id || admin);
+      if (admin) return true;
+      // Your own submission only, and it arrives as a REQUEST: PENDING, unscored
+      // (H4 — this used to accept status APPROVED + assignedScore 5).
+      if (!incoming || incoming.userId !== user.id) return false;
+      return carriesNoVerdict(EVIDENCE_VERDICT_FIELDS, 'PENDING', null, incoming);
     case 'update':
       if (admin) return true;
-      if (existing && existing.userId === user.id && existing.status === 'PENDING') return true;
+      if (existing && existing.userId === user.id && existing.status === 'PENDING') {
+        // Editing your own pending submission re-opens it; it may never be the
+        // act that approves or scores it.
+        return carriesNoVerdict(EVIDENCE_VERDICT_FIELDS, 'PENDING', existing, incoming);
+      }
+      // The reviewer branch. A manager judging one of their own people writes
+      // the verdict here — but never on their own record.
+      if (isSubjectOfRecord(user, existing) || isSubjectOfRecord(user, incoming)) return false;
       return isManagerOf(ctx, existing?.userId);
     case 'delete':
       return admin;
@@ -272,10 +345,26 @@ async function workExperiencesPolicy(action: Action, ctx: PolicyCtx, admin: bool
       return isAncestorManager(ctx, existing.userId); // a subordinate's
     }
     case 'create':
-      return !!incoming && (incoming.userId === user.id || admin);
+      if (admin) return true;
+      // As with evidence: your own record, submitted PENDING and unverified —
+      // no verdict fields and no per-skill `verifiedLevel` (H5).
+      if (!incoming || incoming.userId !== user.id) return false;
+      return (
+        carriesNoVerdict(EXPERIENCE_VERDICT_FIELDS, 'PENDING', null, incoming) &&
+        !experienceSkillsCarryVerifiedLevel(incoming.skills)
+      );
     case 'update':
       if (admin) return true;
-      if (existing && existing.userId === user.id && existing.status === 'PENDING') return true;
+      if (existing && existing.userId === user.id && existing.status === 'PENDING') {
+        if (!carriesNoVerdict(EXPERIENCE_VERDICT_FIELDS, 'PENDING', existing, incoming)) return false;
+        // Untouched skills come back merged, so "unchanged" is as acceptable as
+        // "cleared" — what is refused is the owner ADDING a verified level.
+        return (
+          !experienceSkillsCarryVerifiedLevel(incoming?.skills) ||
+          sameFieldValue(existing.skills, incoming?.skills)
+        );
+      }
+      if (isSubjectOfRecord(user, existing) || isSubjectOfRecord(user, incoming)) return false;
       return isManagerOf(ctx, existing?.userId);
     case 'delete':
       // Deliberately looser than evidencesPolicy (admin-only): an employee may

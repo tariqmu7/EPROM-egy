@@ -933,6 +933,123 @@ describe('users: privilege escalation is closed', () => {
   });
 });
 
+describe('submissions: nobody may award themselves a verdict', () => {
+  // Its own employee + evidence record, for the same reason as the escalation
+  // suite above: the admin-reset tests rotate EMP's password, and this suite
+  // must not depend on where it sits in the file. SUBJ reports DIRECTLY to MGR,
+  // which is what the reviewer path needs.
+  const SUBJ = { id: 'vsubj-1', email: 'vsubj@eprom.local' };
+  beforeAll(async () => {
+    await seedUser(SUBJ, 'EMPLOYEE', 'vsubj-pass', { managerId: MGR.id, orgLevel: 'JP' });
+    await seedDoc('evidences', 'e-vsubj', { userId: SUBJ.id, skillId: 's-1', status: 'PENDING' });
+  });
+  // H4/H5 — a plain employee used to be able to POST an evidence record already
+  // APPROVED with assignedScore 5, or a work experience already VERIFIED with a
+  // verifiedLevel, and thereby award themselves a competency level.
+  it('H4 — an employee cannot create pre-approved, self-scored evidence', async () => {
+    const empTok = await login(SUBJ.email, 'vsubj-pass');
+
+    const selfApproved = await request(app)
+      .post('/col/evidences')
+      .set('Authorization', `Bearer ${empTok}`)
+      .send({ id: 'e-self-approved', data: { userId: SUBJ.id, skillId: 's-1', status: 'APPROVED', assignedScore: 5 } });
+    expect(selfApproved.status).toBe(403);
+
+    // Even PENDING, a score is the reviewer's to write.
+    const scoredPending = await request(app)
+      .post('/col/evidences')
+      .set('Authorization', `Bearer ${empTok}`)
+      .send({ id: 'e-self-scored', data: { userId: SUBJ.id, skillId: 's-1', status: 'PENDING', assignedScore: 5 } });
+    expect(scoredPending.status).toBe(403);
+
+    // The real submission still works.
+    const honest = await request(app)
+      .post('/col/evidences')
+      .set('Authorization', `Bearer ${empTok}`)
+      .send({ id: 'e-honest', data: { userId: SUBJ.id, skillId: 's-1', status: 'PENDING', notes: 'my work' } });
+    expect(honest.status).toBe(201);
+    expect((await query('SELECT 1 FROM evidences WHERE id = $1', ['e-self-approved'])).rows.length).toBe(0);
+  });
+
+  it('H4 — nor approve or score their own pending evidence by PATCH', async () => {
+    const empTok = await login(SUBJ.email, 'vsubj-pass');
+    for (const patch of [{ status: 'APPROVED' }, { assignedScore: 5 }, { status: 'APPROVED', assignedScore: 5 }, { reviewedBy: SUBJ.id }]) {
+      const res = await request(app)
+        .patch('/col/evidences/e-honest')
+        .set('Authorization', `Bearer ${empTok}`)
+        .send({ data: patch });
+      expect([res.status, JSON.stringify(patch)]).toEqual([403, JSON.stringify(patch)]);
+    }
+    // Editing the submission itself is still allowed (it stays PENDING).
+    const edit = await request(app)
+      .patch('/col/evidences/e-honest')
+      .set('Authorization', `Bearer ${empTok}`)
+      .send({ data: { notes: 'better notes' } });
+    expect(edit.status).toBe(200);
+    expect((await query('SELECT data FROM evidences WHERE id = $1', ['e-honest'])).rows[0].data.status).toBe('PENDING');
+  });
+
+  it('H4 — the manager review path is untouched', async () => {
+    const mgrTok = await login(MGR.email, 'mgr-pass');
+    const approve = await request(app)
+      .patch('/col/evidences/e-vsubj')
+      .set('Authorization', `Bearer ${mgrTok}`)
+      .send({ data: { status: 'APPROVED', assignedScore: 4, reviewedBy: MGR.id } });
+    expect(approve.status).toBe(200);
+  });
+
+  it('H5 — an employee cannot self-verify work experience, on create or by PATCH', async () => {
+    const empTok = await login(SUBJ.email, 'vsubj-pass');
+    const skills = JSON.stringify([{ skillId: 's-1', claimedLevel: 4, yearsApplied: 8, verifiedLevel: 5 }]);
+
+    const selfVerified = await request(app)
+      .put('/col/workExperiences/we-self-verified')
+      .set('Authorization', `Bearer ${empTok}`)
+      .send({ data: { userId: SUBJ.id, employer: 'Acme', jobTitle: 'T', startDate: '2010-01-01', status: 'VERIFIED', skills } });
+    expect(selfVerified.status).toBe(403);
+
+    // PENDING but carrying a verified level is the same self-award: the score
+    // reader only looks at VERIFIED records, but one PATCH away it would count.
+    const levelled = await request(app)
+      .put('/col/workExperiences/we-self-levelled')
+      .set('Authorization', `Bearer ${empTok}`)
+      .send({ data: { userId: SUBJ.id, employer: 'Acme', jobTitle: 'T', startDate: '2010-01-01', status: 'PENDING', skills } });
+    expect(levelled.status).toBe(403);
+
+    // A clean claim goes through…
+    const claim = JSON.stringify([{ skillId: 's-1', claimedLevel: 4, yearsApplied: 8, suggestedLevel: 3 }]);
+    const honest = await request(app)
+      .put('/col/workExperiences/we-honest')
+      .set('Authorization', `Bearer ${empTok}`)
+      .send({ data: { userId: SUBJ.id, employer: 'Acme', jobTitle: 'T', startDate: '2010-01-01', status: 'PENDING', skills: claim } });
+    expect(honest.status).toBe(200);
+
+    // …and cannot then be verified by its own owner.
+    for (const patch of [{ status: 'VERIFIED' }, { skills }, { reviewedBy: SUBJ.id }]) {
+      const res = await request(app)
+        .patch('/col/workExperiences/we-honest')
+        .set('Authorization', `Bearer ${empTok}`)
+        .send({ data: patch });
+      expect([res.status, JSON.stringify(patch)]).toEqual([403, JSON.stringify(patch)]);
+    }
+    expect((await query('SELECT data FROM "workExperiences" WHERE id = $1', ['we-honest'])).rows[0].data.status).toBe('PENDING');
+  });
+
+  it('H4/H5 — the same rule holds through /batch (no back door)', async () => {
+    const empTok = await login(SUBJ.email, 'vsubj-pass');
+    const res = await request(app)
+      .post('/batch')
+      .set('Authorization', `Bearer ${empTok}`)
+      .send({
+        operations: [
+          { type: 'set', collection: 'evidences', id: 'e-batch', data: { userId: SUBJ.id, skillId: 's-1', status: 'APPROVED', assignedScore: 5 } },
+        ],
+      });
+    expect(res.status).toBe(403);
+    expect((await query('SELECT 1 FROM evidences WHERE id = $1', ['e-batch'])).rows.length).toBe(0);
+  });
+});
+
 describe('deleting an employee releases their login', () => {
   const LEAVER = { id: 'leaver-1', email: 'leaver@eprom.local' };
 
