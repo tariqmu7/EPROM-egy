@@ -177,6 +177,52 @@ across all three. The database ends with **81 users** (11 real + 70 invented).
 
 ---
 
+### Step 5 — Two years of demo history (and the demo password)
+
+> Phase 3, run on **2026-09-09**. Invented scores for invented people. Read the warning at
+> the top before running this against anything but a laptop or a demo database.
+
+```bash
+node   scripts/etl/ops/dump_placement.mjs        # -> data/ops/livePlacement.json
+python scripts/etl/ops/generate_history.py       # -> data/ops/assessments.json + evidences.json
+node   scripts/etl/ops/load-history.mjs --dry-run
+node   scripts/etl/ops/load-history.mjs
+node   scripts/etl/ops/set-demo-passwords.mjs    # one shared password for the 90001+ block
+```
+
+Expect **6,077 assessments and 992 evidence records created**, and the department to read
+**61% measured · 55% compliant over what is known · average gap 0.59**.
+
+- **Five half-yearly campaigns** — Nov 2024 · May 2025 · Nov 2025 · May 2026 · Aug 2026 —
+  so the History tab, the trend and the "last assessed" dates all have a past to show.
+- **A record is written only in the shape the skill can be scored from.** Exam / interview /
+  practical-demo skills get a direct record of that type (latest wins, so the history rises);
+  work-record skills get APPROVED evidence with an `assignedScore` (highest wins);
+  `OJT_OBSERVATION` skills get a SELF / PEER / MANAGER trio. The six
+  `THREE_SIXTY_EVALUATION` skills get **nothing** — `computeSkillScore` reaches the 360
+  blend only when the primary method is exactly `OJT_OBSERVATION`, so rows there would look
+  assessed and score nothing. They are reported as 360-blocked and left unmeasured.
+- **The holes are deliberate.** About a third of each person's requirements (more for a
+  recent arrival) has never been looked at, so "X of Y measured" keeps meaning something
+  and compliance is a percentage of a real base.
+- **Nobody is assessed before they arrived.** Each person gets a joining campaign from their
+  rung — Section Heads and above from Nov 2024, Fresh engineers from late 2025/2026 — and
+  no record predates it.
+- **The row budget is a real constraint.** The SPA reads a collection in ONE query bounded
+  by `MAX_PAGE_SIZE` (10,000). Both the generator and the loader refuse above it, because a
+  truncated read would score everybody from a partial set with no error anywhere.
+- **Re-running is safe**: every id embeds (subject, skill, campaign, type), so a re-run
+  updates in place. `--purge` on the loader deletes only `asm-u-9%` / `ev-u-9%`, so the
+  BD / External-Contracts demo history is never touched.
+- **The demo password.** `set-demo-passwords.mjs` gives every invented account the same
+  password (`1234567891` by default, `--password '<pw>'` to change) and clears `must_reset`
+  so a demonstration can switch accounts without the forced-change screen. It **refuses**
+  any account not marked `isTestData`, so a real person can never be given it. Changing a
+  credential ends any session already open on that account.
+- **Still missing on purpose:** no certificates, no work experience, no training courses for
+  `sk-op-*` (so the TNA budget shows 97 of 107 skills uncosted), no saved development plans
+  and no back-filled monthly snapshots. Each is its own piece of work.
+
 ---
 
 ## 3. Verification
@@ -281,6 +327,9 @@ UPDATE departments SET data = jsonb_set(data, '{name}', '"Operations"')
 Removing the **invented people** — the whole point of the 90001+ block:
 
 ```sql
+-- their invented two years of history first (or re-run load-history.mjs --purge)
+DELETE FROM assessments WHERE id LIKE 'asm-u-9%';
+DELETE FROM evidences   WHERE id LIKE 'ev-u-9%';
 -- the 70 invented users and their logins
 DELETE FROM auth_credentials WHERE user_id LIKE 'u-900%';
 DELETE FROM users WHERE id LIKE 'u-900%';
@@ -290,8 +339,8 @@ UPDATE departments SET data = data - 'managerId'
 ```
 
 Check the count first (`SELECT count(*) FROM users WHERE id LIKE 'u-900%'` — expect 70).
-Nothing real uses that id block, and no assessment, evidence or plan references them, so
-this leaves nothing orphaned. Re-run step 4 to put them back.
+Nothing real uses that id block, and every record about them carries their `u-9…` id, so
+this leaves nothing orphaned. Re-run steps 4 and 5 to put them back.
 
 **Do not delete the skills.** `sk-op-*` can be removed only while nothing references them;
 once anybody is assessed against one, **archive it** (`isArchived: true`) instead —
@@ -304,15 +353,19 @@ EC profiles now reference them.
 ## 6. Known state at the end of this load (2026-09-09)
 
 - **In:** 15 units + 1 rename, 105 competencies, 8 job profiles, 70 invented people, 16
-  unit→manager references, 70 temporary logins. Integrity clean, 172 server tests green.
-- **Nobody is measured.** No assessment, evidence, work experience, course, development
-  plan or snapshot exists for Operations, so every gap, compliance %, ITP, TNA priority and
-  budget figure for the department reads "—". The org chart and the 7,135 requirements are
-  real; the scores are simply absent. **The next piece of work is measurement**, and it is
-  not part of this runbook.
-- **The 70 people are test data** (`u-90001`…`u-90070`, `isTestData: true`). §5 removes
-  them in one query. Replace them with a real roster before anyone treats an Operations
-  number as fact.
+  unit→manager references, 70 logins, and (step 5) **6,077 invented assessments + 992
+  evidence records** spanning Nov 2024 → Aug 2026. Integrity clean, 172 server tests green.
+- **The department now shows numbers, and they are invented ones**: 61% measured, 55%
+  compliant over what is known, average gap 0.59, 117 TNA rows. Every record says
+  "DEMO DATA" in its own comment / notes field and every id carries a `u-9…` subject.
+- **What is still absent:** certificates, work experience, training courses for `sk-op-*`
+  (the TNA budget therefore reports 97 of 107 skills uncosted), saved development plans and
+  back-filled monthly snapshots — so the trend chart starts at the first live snapshot.
+- **The 70 people and their whole history are test data** (`u-90001`…`u-90070`,
+  `isTestData: true`). §5 removes them in one query. Replace them with a real roster before
+  anyone treats an Operations number as fact.
+- **All 70 share the password `1234567891`** with no forced change — a demonstration
+  convenience that must be undone before the database is anything but a demo.
 - **The GM seat (`jp-op-gm`) has no holder**, on purpose — that is the `g-canal` sector
   General Manager, an appointment over five departments, not a seat to invent.
 - **One loose end:** `u-3397` came out of the hand-moves with **no job profile**. They will
