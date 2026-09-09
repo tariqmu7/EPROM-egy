@@ -3,17 +3,24 @@
 **What this is.** The end-to-end procedure that added the fourth department to an ECMS
 database: the **strategic-tank Operations** organisation under the General Manager of
 Operations, Canal Cities & Sinai — **15 new org units + 1 rename**, **105 new
-competencies** and **8 job profiles** (Fresh → GM, including two shift roles).
+competencies**, **8 job profiles** (Fresh → GM, including two shift roles) and, in a
+second phase, **70 people** placed against those profiles.
 
-Executed against the laptop's local Postgres on **2026-09-08**. Run the same sequence, in
-the same order, to reproduce it on an EPROM server.
+Executed against the laptop's local Postgres on **2026-09-08** (the structure) and
+**2026-09-09** (the people). Run the same sequence, in the same order, to reproduce it on
+an EPROM server.
 
-> **Nothing demo about this one.** Unlike
-> [`BD_EC_PRODUCTION_LOAD_RUNBOOK.md`](BD_EC_PRODUCTION_LOAD_RUNBOOK.md), this load writes
-> **no** people, courses, assessments, evidences, plans or snapshots — only the org units,
-> the competency dictionary entries and the job profiles. **Nobody is placed in the 15 new
-> units**, so every Operations figure in the app correctly reads "—" until people are
-> assigned. That is the coverage rule working, not a fault.
+> **The 70 people are INVENTED test data.** EPROM supplied no Operations roster, so
+> step 4 loads a fictional one — Egyptian names against employee numbers **90001–90070**
+> (ids `u-90001`…`u-90070`, each document flagged `isTestData: true`), a block nothing
+> real uses, so one query removes every one of them (see §5). **Do not run step 4 on a
+> production database** unless a real roster has replaced the workbook. Steps 1–3 — the
+> units, the competencies and the profiles — are real and production-ready.
+>
+> **Nobody is measured.** This load writes no assessments, evidences, courses, plans or
+> snapshots. Placing people buys headcount, requirements and an org chart; it buys no
+> score, so every Operations gap, compliance and TNA figure still reads "—" until
+> assessments exist. That is the coverage rule working, not a fault.
 
 ---
 
@@ -26,6 +33,8 @@ the same order, to reproduce it on an EPROM server.
 | Node | Node 20+, `npm install` done in `server/`. |
 | Python | Python 3.11+ with `openpyxl`, for the extract steps only. |
 | Source pack | `BD\ECMS\Job Profiles\1_Final_Deliverables\ECMS_Import\` — `ops_departments.json`, `ECMS_Upload_1_SKILL.xlsx` (272 rows), `ECMS_Upload_2_JOB.xlsx` (2,501 rows). Rebuild them with `_working\generate_ops_departments.py` and `_working\generate_ecms_import.py`. |
+| Roster (step 4 only) | `BD\ECMS\Job Profiles\1_Final_Deliverables\Operations_Canal_Sinai\Operations_Roster_TEST_DATA.xlsx` — 70 invented people. Rebuild it with `_working\generate_ops_roster.py`; **never edit the workbook by hand**. |
+| Prior load (step 4) | `data/bd-ec/users.json` must be present — the people loader reads it to put strays back where they belong (see step 4). |
 | Org chart | The 129 EPROM departments must already be loaded — including `g-canal` and `d-canal-ops`, which **already exist**. The loaders refuse on an unknown parent. |
 | Prior load | BD / External Contracts must be loaded first (this load reuses 21 of their skills by name). |
 
@@ -41,8 +50,8 @@ followed by a *Node loader that upserts idempotently under stable ids*. Every lo
 
 ## 2. Load order
 
-The order is not optional. Units before skills before profiles — a profile refuses to load
-against a department or a skill that is not there yet.
+The order is not optional. Units before skills before profiles before people — each step
+refuses to load against something the step before it has not created yet.
 
 ### Step 1 — Org units (15 new + 1 rename)
 
@@ -118,11 +127,62 @@ Expect **8 created, 24 job profiles total**.
   the section a person sits in is recorded on the *person*). Placement is a business
   decision and can be changed in the app afterwards — see section 4.
 
+### Step 4 — People (70 invented)
+
+> Phase 2, run on **2026-09-09**. Test data — read the warning at the top before running
+> this against anything but a laptop or a demo database.
+
+```bash
+python scripts/etl/ops/extract_users.py           # -> data/ops/users.json (70 + 16 manager refs)
+node   scripts/etl/ops/load-users.mjs --dry-run
+node   scripts/etl/ops/load-users.mjs
+```
+
+Expect **70 created, 0 updated, 16 unit → manager references set, 70 credentials issued**.
+
+By rung: 1 AGM · 3 Department Managers · 12 Section Heads · 20 SP (9 Senior Operations
+Engineers + 11 Shift Supervisors — the same rung) · 20 Shift Operations Engineers ·
+14 Fresh. By site: Suez **26** · Ismailia & Port Said **24** · Sinai **19** · the AGM
+across all three. The database ends with **81 users** (11 real + 70 invented).
+
+- **The extract is the refusal step, not the judgement step.** Unlike the BD/EC loader,
+  no `PLACEMENT` dict is buried in the script: `generate_ops_roster.py` already decided
+  every unit, rung, profile and reporting line **in the workbook, in the open**.
+  `extract_users.py` only checks the workbook against the live org chart and refuses on a
+  dead unit id, a unit name the sheet disagrees with, a rung sitting in the wrong node
+  **type** (`ASSISTANT_GENERAL`→AGM, `DEPARTMENT`→DM, `SECTION`→SH/SP/JP/FR), a
+  `jobProfileId` outside the eight or whose `orgLevel` disagrees, a duplicate email / name
+  / employee number, an email already owned by a real account, an employee number outside
+  the **90001–90099** block, or a manager who is missing, junior, looping, or a second
+  root. Every one of those checks was proved to fire by tampering with a row.
+- **Passwords.** All 70 get the same temporary password (`Eprom@2026` by default,
+  `--password '<temp>'` to change it) with `must_reset = true`, so the forced-change screen
+  gates any first login. An account that **already has a password is left alone** —
+  `--reset-existing` overrides — so a re-run can never lock a real person out.
+- **16 unit → manager references** (the AGM on `d-canal-ops`, the 3 site DMs, the 12
+  Section Heads). That is what gives a manager a team in the app; without it the manager
+  dashboard is empty even though the people are there.
+- **Step 4 of the loader restores strays.** Anybody sitting in an Operations unit who is
+  not on the roster is put back where `data/bd-ec/users.json` says they belong
+  (departmentId · generalDepartmentId · orgLevel · jobProfileId · managerId). Three real
+  BD / External-Contracts people had been moved into the Sinai tank farm by hand while the
+  profile placement was being settled, and their org level no longer matched the profile
+  they had been given, so the employee form refused to save them. `--no-restore` skips it;
+  a stray with **no** canonical record makes the loader refuse rather than guess.
+- **The GM seat is deliberately empty.** `jp-op-gm` has no holder: that rung is the sector
+  General Manager of `g-canal`, who also runs Maintenance, HSE & Quality, Inspection and
+  the Laboratories. Inventing a person there would claim the whole sector.
+- `data/ops/users.json` is generated and git-ignored, like every other extract output.
+  Only the scripts are committed.
+
+---
+
 ---
 
 ## 3. Verification
 
-Run all of this after a load. This is what was run on 2026-09-08.
+Run all of this after a load. The first table is what was run on 2026-09-08 after steps
+1–3; the second is 2026-09-09 after step 4.
 
 ```bash
 cd server
@@ -130,9 +190,12 @@ npm run integrity      # expect: no dangling references across 19 relationships
 npm test               # expect: 172 passed (10 files)
 ```
 
-Result on the laptop load: **integrity clean**, **172/172 server tests green**.
+Result on the laptop load: **integrity clean**, **172/172 server tests green** — and
+still clean after the people step (0 dangling references across **19** relationships).
 
-| Check | Expected after this load |
+**After steps 1–3 (the structure):**
+
+| Check | Expected |
 |---|---|
 | Row counts | departments **144** (129 + 15) · live skills **228** (123 + 105) · jobProfiles **24** (16 + 8) |
 | `sk-op-*` | 96 present, 0 archived |
@@ -143,49 +206,60 @@ Result on the laptop load: **integrity clean**, **172/172 server tests green**.
 | `/analytics/training-needs?scope=d-canal-ops&includeSubUnits=true` | `200`, headcount **0**, **0** rows — correct, and it must never print 0% or a fake gap |
 | `/analytics/overview?scope=company` | unchanged by this load (headcount 11, withoutProfile 2, compliance 55%) — Operations adds no people |
 
+**After step 4 (the people):**
+
+| Check | Expected |
+|---|---|
+| Row counts | users **81** (11 real + 70 invented); ids `u-90001`…`u-90070`, every one `isTestData: true` |
+| Dangling refs | `npm run integrity` → 0 across **19** relationships — every departmentId, jobProfileId and managerId resolves |
+| Managers | **21** of the 144 departments name a manager (16 set by this load) |
+| Reporting chain | exactly **one** person (the AGM) has no manager; every other chain terminates at them |
+| Credentials | 70 accounts with `must_reset = true`; no existing password overwritten |
+| Strays | 0 — the three real BD / EC people are back in their own sections |
+| `/analytics/training-needs?scope=d-canal-ops&includeSubUnits=true` | headcount **70**, withRequirements **70**, **117** skill rows, required **7,135** / measured **0** / unknown **7,135**, `compliancePct` **null**, every row `priority LOW` with `priorityScore` **null** |
+
+That last row is the point of the whole coverage rule: 70 people with 7,135 requirements
+and not one measurement produces **"—"**, never 0%, and never a HIGH-priority training
+need invented out of silence.
+
 Screen walk in the app (admin):
 
 | Screen | What must be true |
 |---|---|
-| `/admin/depts` | The Operations branch expands to 3 sites × 4 sections; each new unit shows 0 members |
+| `/admin/depts` | The Operations branch expands to 3 sites × 4 sections; after step 4 each populated unit shows its members and names its manager |
 | `/admin/skills` | 228 live standards; searching `OP-` finds the 96 new ones with their criticality badges |
 | `/admin/jobs` | The eight Operations profiles open and list their skills with required levels |
-| `/training-needs` | Picking the Operations scope shows an empty state — **not** a zeroed dashboard |
-| `/admin/analytics` | Company figures unchanged; Operations units appear in the department table with `—` compliance and `—` avg gap (nulls sorted **last**) |
+| `/training-needs` | Picking the Operations scope shows headcount 70 with every requirement **unknown** — "—" for compliance and average gap, **not** a zeroed dashboard |
+| `/admin/analytics` | Operations units appear in the department table with `—` compliance and `—` avg gap (nulls sorted **last**); headcount rises by 70 |
+| `/admin/users` | The 70 invented people list under their sections with a job profile each; a manager card shows a real team |
 
 ---
 
-## 4. Placement of the eight profiles — the one open decision
+## 4. Placement of the eight profiles — SETTLED (2026-09-09)
 
-The loaders attach all eight to `d-canal-ops`. **On 2026-09-08, immediately after the load,
-seven of the eight were moved by hand in the app** (admin, `/admin/jobs`) onto the real
-units — all of them on the **Sinai** branch:
+On 2026-09-08, immediately after the load, seven of the eight profiles were moved by hand
+in the app onto units on the **Sinai** branch. That left Suez and Ismailia & Port Said with
+no job profile at all, and it had silently reset five profiles' `orgLevel` to SH.
 
-| Profile | Loaded on | Now on |
-|---|---|---|
-| `jp-op-gm` | `d-canal-ops` | `g-canal` (the GENERAL unit) |
-| `jp-op-agm` | `d-canal-ops` | `d-canal-ops` (unchanged) |
-| `jp-op-dm` | `d-canal-ops` | `dept-canal-ops-sinai` |
-| `jp-op-sh` · `jp-op-spe` · `jp-op-sps` · `jp-op-jp` · `jp-op-fr` | `d-canal-ops` | `sect-canal-ops-sinai-farm` |
+**The decision taken on 2026-09-09 was to keep ONE ladder.** All eight profiles sit on
+`d-canal-ops` and are shared by the three sites; the site and section a person works in is
+recorded on the **person**, not by duplicating the profile. Per-site copies were rejected:
+12 sections × 5 rungs would be 60 near-identical documents to maintain.
 
-**That leaves Suez and Ismailia & Port Said with no job profile at all** — 2 site
-departments and 11 of the 12 sections. Anybody placed there will count as
-`withoutProfile` and contribute to no coverage, gap or compliance figure. Either the
-per-site copies must be created, or the profiles go back onto `d-canal-ops`.
+Two things were done to make that stick:
 
-Both arrangements are legitimate; they answer different questions.
+1. `extract_jobs.py` + `load-jobs.mjs` were re-run (**8 updated**), putting all eight back
+   on `d-canal-ops` with their correct org levels.
+2. The app hole that made the hand-moves look necessary was fixed: the employee form now
+   offers **a unit's ancestors' profiles**, so somebody sitting in
+   `sect-canal-ops-suez-farm` can be given the ladder that hangs on `d-canal-ops`
+   (commit `48530a4`, 2 new tests).
 
-- **All on `d-canal-ops`** (as loaded): one profile per rung, shared by all three sites. The
-  site a person works at is recorded on the person. Fewest documents to maintain.
-- **Per unit** (the hand edits): a profile hangs on the exact unit it belongs to, which is
-  what the org-chart screens and the per-unit TNA read most naturally — but it must then be
-  **repeated for Suez and Ismailia & Port Said**, or those ten sections have no profile and
-  anybody placed in them counts as `withoutProfile` in every figure on the analytics page.
-
-**If the per-unit shape is the one that is wanted, do not hand-copy it.** Change
-`DEPARTMENT_ID` in `scripts/etl/ops/extract_jobs.py` to a per-rung/per-site mapping and
-re-run steps 1–3 — the loaders are idempotent and will update in place, and the profile ids
-stay stable. Hand edits are lost the next time the extract is re-run.
+**Do not move a profile by hand in the app.** A re-run of the extract overwrites hand edits
+and can leave an org level disagreeing with the profile, which makes the employee form
+refuse to save the person. If a different shape is genuinely wanted, change `DEPARTMENT_ID`
+in `scripts/etl/ops/extract_jobs.py` and re-run steps 1–3 — the loaders are idempotent and
+the profile ids stay stable.
 
 ---
 
@@ -204,6 +278,21 @@ UPDATE departments SET data = jsonb_set(data, '{name}', '"Operations"')
  WHERE id = 'd-canal-ops';
 ```
 
+Removing the **invented people** — the whole point of the 90001+ block:
+
+```sql
+-- the 70 invented users and their logins
+DELETE FROM auth_credentials WHERE user_id LIKE 'u-900%';
+DELETE FROM users WHERE id LIKE 'u-900%';
+-- and the manager references that pointed at them
+UPDATE departments SET data = data - 'managerId'
+ WHERE data->>'managerId' LIKE 'u-900%';
+```
+
+Check the count first (`SELECT count(*) FROM users WHERE id LIKE 'u-900%'` — expect 70).
+Nothing real uses that id block, and no assessment, evidence or plan references them, so
+this leaves nothing orphaned. Re-run step 4 to put them back.
+
 **Do not delete the skills.** `sk-op-*` can be removed only while nothing references them;
 once anybody is assessed against one, **archive it** (`isArchived: true`) instead —
 deleting a skill orphans every assessment, evidence and plan item that ever named it. The
@@ -212,13 +301,26 @@ EC profiles now reference them.
 
 ---
 
-## 6. Known state at the end of this load (2026-09-08)
+## 6. Known state at the end of this load (2026-09-09)
 
-- 15 units, 105 skills, 8 profiles in; integrity clean; 172 server tests green.
-- **Nobody is assigned to any Operations unit**, so no Operations coverage, gap, ITP, TNA
-  or snapshot figure exists yet. Placing people is the next piece of work and is not part
-  of this runbook.
+- **In:** 15 units + 1 rename, 105 competencies, 8 job profiles, 70 invented people, 16
+  unit→manager references, 70 temporary logins. Integrity clean, 172 server tests green.
+- **Nobody is measured.** No assessment, evidence, work experience, course, development
+  plan or snapshot exists for Operations, so every gap, compliance %, ITP, TNA priority and
+  budget figure for the department reads "—". The org chart and the 7,135 requirements are
+  real; the scores are simply absent. **The next piece of work is measurement**, and it is
+  not part of this runbook.
+- **The 70 people are test data** (`u-90001`…`u-90070`, `isTestData: true`). §5 removes
+  them in one query. Replace them with a real roster before anyone treats an Operations
+  number as fact.
+- **The GM seat (`jp-op-gm`) has no holder**, on purpose — that is the `g-canal` sector
+  General Manager, an appointment over five departments, not a seat to invent.
+- **One loose end:** `u-3397` came out of the hand-moves with **no job profile**. They will
+  count as `withoutProfile` and contribute to no coverage or compliance figure until an
+  admin gives them one in **Admin → Users**.
 - The `d-canal-ops` rename was applied by the ETL loader. It is one edit to undo in
   **Admin → Departments** if the name is not wanted.
 - The generators that produce the source workbooks live outside this repo, in
   `BD\ECMS\Job Profiles\_working\`. **Never edit an xlsx by hand — re-run the generator.**
+  The same rule applies to profile placement and to people: re-run the extract, do not
+  edit in the app.
