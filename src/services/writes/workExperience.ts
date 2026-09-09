@@ -41,9 +41,13 @@ export async function addWorkExperience(
   const user = host.users.find(u => u.id === entry.userId);
   if (user && user.managerId) {
     const notifId = doc(collection(db, 'notifications')).id;
+    // Attribution is mandatory on a client write (hole H7) — the API refuses an
+    // unattributed notification, so a batch that skips it fails the WHOLE write.
+    const { actorId } = host.currentActor();
     batch.set(doc(db, 'notifications', notifId), {
       id: notifId,
       userId: user.managerId,
+      createdBy: actorId ?? host.authUid(),
       title: 'Work Experience Submitted',
       message: `${user.name} submitted work experience at ${newEntry.employer} for verification.`,
       type: 'INFO',
