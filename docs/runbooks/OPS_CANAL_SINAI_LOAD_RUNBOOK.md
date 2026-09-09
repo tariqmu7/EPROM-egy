@@ -17,10 +17,12 @@ an EPROM server.
 > production database** unless a real roster has replaced the workbook. Steps 1–3 — the
 > units, the competencies and the profiles — are real and production-ready.
 >
-> **Nobody is measured.** This load writes no assessments, evidences, courses, plans or
-> snapshots. Placing people buys headcount, requirements and an org chart; it buys no
-> score, so every Operations gap, compliance and TNA figure still reads "—" until
-> assessments exist. That is the coverage rule working, not a fault.
+> **Steps 1–4 measure nobody.** Placing people buys headcount, requirements and an org
+> chart; it buys no score, so every Operations gap, compliance and TNA figure reads "—"
+> until assessments exist. That is the coverage rule working, not a fault. **Steps 5 and 6
+> then invent two years of it** — assessments, evidence, certificates and prior work
+> experience — for the demonstration. They are as fictional as the people, and they must
+> not be run against a database anybody treats as fact.
 
 ---
 
@@ -219,9 +221,54 @@ Expect **6,077 assessments and 992 evidence records created**, and the departmen
   so a demonstration can switch accounts without the forced-change screen. It **refuses**
   any account not marked `isTestData`, so a real person can never be given it. Changing a
   credential ends any session already open on that account.
-- **Still missing on purpose:** no certificates, no work experience, no training courses for
-  `sk-op-*` (so the TNA budget shows 97 of 107 skills uncosted), no saved development plans
-  and no back-filled monthly snapshots. Each is its own piece of work.
+- **Still missing after this step:** certificates and work experience (added in step 6
+  below), training courses for `sk-op-*` (so the TNA budget shows 97 of 107 skills
+  uncosted), saved development plans and back-filled monthly snapshots. Each is its own
+  piece of work.
+
+### Step 6 — Certificates and prior work experience (invented)
+
+> Phase 3 task 3, run on **2026-09-09**. Invented certificates and invented previous
+> employers. Same warning as step 5: laptop or demo database only.
+
+```bash
+node   scripts/etl/ops/dump_placement.mjs             # refresh the live placement first
+python scripts/etl/ops/generate_certs_experience.py   # -> data/ops/certificates.json + workExperiences.json
+node   scripts/etl/ops/load-certs-experience.mjs --dry-run
+node   scripts/etl/ops/load-certs-experience.mjs
+```
+
+Expect **238 certificates across all 70 people** (VALID 102 · no-expiry 65 ·
+EXPIRING_SOON 39 · EXPIRED 32, of which **14 are awaiting a supervisor's approval**) and
+**40 work-experience records** (VERIFIED 27 · PENDING 12 · REJECTED 1).
+
+- **The generator needs step 5's output.** It reads `assessments.json` + `evidences.json`
+  as well as `livePlacement.json`, because a work experience is only tagged on skills
+  **nothing has measured** — `computeSkillScore` reaches the experience tier only when the
+  score is still 0, so tagging a measured skill would create a record that changes nothing.
+  All 80 verified tags land on unmeasured requirements.
+- **A provisional score is KNOWN, never MEASURED.** After this step the department reads
+  **61% measured / 62% known · 80 provisional · compliance 54%**: measured coverage is
+  unchanged, which is the point — verified experience is credit, not a measurement, and the
+  assessment queue still treats an EXPERIENCE score as 0 so the confirming assessment is
+  still asked for. Every verified level is capped at the policy's `maxProvisionalLevel` (3).
+- **The banding is the app's own.** `renewalStatus` is computed exactly as
+  `server/src/jobs/scheduling.ts certificateStatus` does. Proof: the first nightly sweep
+  after the load re-banded **0** certificates and raised **71 renewal alerts** from the
+  90/60/30-day and expired buckets, so the Certificates tab, the renewal colours and the
+  nightly warnings all agree.
+- **A submission never carries its own verdict.** A PENDING work experience has no reviewer
+  fields and no `verifiedLevel` anywhere; only a VERIFIED one carries a level, and it was
+  reviewed by that person's own manager — the same rule `authz.ts` enforces on a browser
+  write. The loader refuses any file that breaks it.
+- **The attachment is a real, openable PDF.** Every certificate carries a one-page
+  "DEMO CERTIFICATE" PDF data URL. It has to be a PDF: the server polices every `fileUrl`
+  inside `users.certificates` (`schemas.ts` `ATTACHMENT_MIME`), so a `text/plain` one would
+  load fine here and then **422 the next edit of that person's profile**.
+- **Everything is conspicuous.** Every issuer and employer name ends in `(DEMO)`, every
+  credential id starts with `DEMO-`, ids are `cert-u-9…` / `we-u-9…`. Re-running updates in
+  place; `--purge` removes only those ids and leaves any other certificate on the document
+  untouched.
 
 ---
 
@@ -268,6 +315,16 @@ That last row is the point of the whole coverage rule: 70 people with 7,135 requ
 and not one measurement produces **"—"**, never 0%, and never a HIGH-priority training
 need invented out of silence.
 
+**After step 6 (certificates + work experience):**
+
+| Check | Expected |
+|---|---|
+| Certificates | **238** across all 70 people (`cert-u-9…` inside the user document, not a table); VALID 102 · no-expiry 65 · EXPIRING_SOON 39 · EXPIRED 32; **14** still `PENDING` a supervisor |
+| Work experience | **40** rows `we-u-9…` — VERIFIED 27 · PENDING 12 · REJECTED 1; every PENDING one carries no reviewer fields and no `verifiedLevel` |
+| Provisional credit | Operations coverage **required 7,135 · measured 4,375 (61%) · provisional 80 · known 4,455 (62%)** — measured is unchanged by this step, which is the test: experience is credit, not measurement |
+| Nightly sweep | `POST /jobs/run` (or `runAndRecord('manual')`) re-bands **0** certificates — the loaded `renewalStatus` already agrees with the server's own banding — and raises **71** `Certification Renewal Alert` notifications |
+| Dangling refs | `npm run integrity` → still 0 across 19 relationships |
+
 Screen walk in the app (admin):
 
 | Screen | What must be true |
@@ -278,6 +335,10 @@ Screen walk in the app (admin):
 | `/training-needs` | Picking the Operations scope shows headcount 70 with every requirement **unknown** — "—" for compliance and average gap, **not** a zeroed dashboard |
 | `/admin/analytics` | Operations units appear in the department table with `—` compliance and `—` avg gap (nulls sorted **last**); headcount rises by 70 |
 | `/admin/users` | The 70 invented people list under their sections with a job profile each; a manager card shows a real team |
+| `/dashboard/certificates` (as an invented person) | 2–5 certificates, each with a downloadable one-page DEMO PDF, and the renewal colours in use — some valid, some expiring, some expired |
+| `/manager/approvals` | Non-empty on all three queues: pending evidence, **pending certificates** and **pending work experience** |
+| `/admin/experience` | The org-wide register lists the 40 records; a VERIFIED one shows the years→level band and the level it was capped to |
+| `/dashboard/experience` (as an invented person with a VERIFIED record) | The requirement row shows the **"Provisional"** badge and the source "Provisional — from experience", and the assessment queue still asks for that skill |
 
 ---
 
@@ -330,6 +391,9 @@ Removing the **invented people** — the whole point of the 90001+ block:
 -- their invented two years of history first (or re-run load-history.mjs --purge)
 DELETE FROM assessments WHERE id LIKE 'asm-u-9%';
 DELETE FROM evidences   WHERE id LIKE 'ev-u-9%';
+-- their invented work experience (certificates live INSIDE the user document, so
+-- use load-certs-experience.mjs --purge if the people themselves are staying)
+DELETE FROM "workExperiences" WHERE id LIKE 'we-u-9%';
 -- the 70 invented users and their logins
 DELETE FROM auth_credentials WHERE user_id LIKE 'u-900%';
 DELETE FROM users WHERE id LIKE 'u-900%';
@@ -340,7 +404,7 @@ UPDATE departments SET data = data - 'managerId'
 
 Check the count first (`SELECT count(*) FROM users WHERE id LIKE 'u-900%'` — expect 70).
 Nothing real uses that id block, and every record about them carries their `u-9…` id, so
-this leaves nothing orphaned. Re-run steps 4 and 5 to put them back.
+this leaves nothing orphaned. Re-run steps 4 to 6 to put them back.
 
 **Do not delete the skills.** `sk-op-*` can be removed only while nothing references them;
 once anybody is assessed against one, **archive it** (`isArchived: true`) instead —
@@ -353,14 +417,16 @@ EC profiles now reference them.
 ## 6. Known state at the end of this load (2026-09-09)
 
 - **In:** 15 units + 1 rename, 105 competencies, 8 job profiles, 70 invented people, 16
-  unit→manager references, 70 logins, and (step 5) **6,077 invented assessments + 992
-  evidence records** spanning Nov 2024 → Aug 2026. Integrity clean, 172 server tests green.
-- **The department now shows numbers, and they are invented ones**: 61% measured, 55%
-  compliant over what is known, average gap 0.59, 117 TNA rows. Every record says
-  "DEMO DATA" in its own comment / notes field and every id carries a `u-9…` subject.
-- **What is still absent:** certificates, work experience, training courses for `sk-op-*`
-  (the TNA budget therefore reports 97 of 107 skills uncosted), saved development plans and
-  back-filled monthly snapshots — so the trend chart starts at the first live snapshot.
+  unit→manager references, 70 logins, (step 5) **6,077 invented assessments + 992
+  evidence records** spanning Nov 2024 → Aug 2026, and (step 6) **238 invented certificates
+  + 40 invented work-experience records**. Integrity clean, 172 server tests green.
+- **The department now shows numbers, and they are invented ones**: 61% measured, 62% known
+  (80 provisional from verified experience), 54% compliant over what is known, average gap
+  0.60, 117 TNA rows. Every record says "DEMO DATA" or carries a `(DEMO)` marker, and every
+  id carries a `u-9…` subject.
+- **What is still absent:** training courses for `sk-op-*` (the TNA budget therefore reports
+  97 of 107 skills uncosted), saved development plans and back-filled monthly snapshots — so
+  the trend chart starts at the first live snapshot.
 - **The 70 people and their whole history are test data** (`u-90001`…`u-90070`,
   `isTestData: true`). §5 removes them in one query. Replace them with a real roster before
   anyone treats an Operations number as fact.

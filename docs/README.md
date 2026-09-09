@@ -17,7 +17,7 @@ and `WORKPLAN.md` (active local-server hardening tracker).
 - [PRODUCTION_HARDENING.md](runbooks/PRODUCTION_HARDENING.md) — what is hardened and what is still open: TLS (the one thing still off), the CSP and header set, the secret-strength boot check, backup verification and the monthly restore rehearsal, and the dependency-advisory decisions.
 - [MONDAY_GO_LIVE_CHECKLIST.md](runbooks/MONDAY_GO_LIVE_CHECKLIST.md) — first-launch cutover checklist.
 - [BD_EC_PRODUCTION_LOAD_RUNBOOK.md](runbooks/BD_EC_PRODUCTION_LOAD_RUNBOOK.md) — loading the Business Development & External Contracts department (skills, profiles, accounts, courses) via the `server/scripts/etl/bd-ec/` pipeline, plus the demo history layer and how to purge it.
-- [OPS_CANAL_SINAI_LOAD_RUNBOOK.md](runbooks/OPS_CANAL_SINAI_LOAD_RUNBOOK.md) — loading the Operations (Canal Cities & Sinai) strategic-tank department — 15 org units + 1 rename, 105 competencies, 8 job profiles, then 70 **invented** people — via the `server/scripts/etl/ops/` pipeline. Nobody is measured yet; the people step is test data and is removable in one query.
+- [OPS_CANAL_SINAI_LOAD_RUNBOOK.md](runbooks/OPS_CANAL_SINAI_LOAD_RUNBOOK.md) — loading the Operations (Canal Cities & Sinai) strategic-tank department — 15 org units + 1 rename, 105 competencies, 8 job profiles, then 70 **invented** people, two years of invented history, certificates and prior work experience — via the `server/scripts/etl/ops/` pipeline. Everything from the people step on is test data, marked as such, and removable in one query.
 
 ## qa/ — quality & task tracking
 - [QA_TASKS.md](qa/QA_TASKS.md)
