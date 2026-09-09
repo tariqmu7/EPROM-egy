@@ -74,13 +74,30 @@ export const UserForm: React.FC<{ initialData?: User | null, currentUser: User, 
   });
   const deptOptions: Option[] = filteredDepts.map(d => ({ value: d.id, label: d.name, subLabel: d.code }));
   
-  // Job profiles are scoped to the employee's chosen unit (positions live inside
-  // departments). The dropdown only offers profiles belonging to that unit.
-  const unitJobProfiles = useMemo(
-    () => jobProfiles.filter(j => j.departmentId === formData.departmentId && !j.isArchived),
-    [jobProfiles, formData.departmentId]
-  );
-  const jobOptions: Option[] = unitJobProfiles.map(j => ({ value: j.id, label: j.title, subLabel: `${j.code || ''} · ${j.orgLevel || ''}` }));
+  // Job profiles are scoped to the employee's chosen unit — plus the units ABOVE
+  // it, because a ladder written once for a branch (Operations: eight positions
+  // held on the assistant-general unit and shared by three sites) is the house
+  // pattern, and matching the unit exactly left every section with an empty
+  // dropdown and nobody assignable. Ancestors only, never siblings: a profile
+  // from another section is not this person's position.
+  const unitJobProfiles = useMemo(() => {
+    const unitId = formData.departmentId;
+    if (!unitId) return [];
+    const byId = new Map(departments.map(d => [d.id, d]));
+    const chain: string[] = [];
+    for (let id: string | undefined = unitId; id && !chain.includes(id); id = byId.get(id)?.parentId) {
+      chain.push(id);
+    }
+    const rank = new Map(chain.map((id, i) => [id, i]));   // 0 = the unit itself
+    return jobProfiles
+      .filter(j => !j.isArchived && j.departmentId && rank.has(j.departmentId))
+      .sort((a, b) => (rank.get(a.departmentId!)! - rank.get(b.departmentId!)!)
+        || ORG_HIERARCHY_ORDER.indexOf(a.orgLevel as OrgLevel) - ORG_HIERARCHY_ORDER.indexOf(b.orgLevel as OrgLevel));
+  }, [jobProfiles, departments, formData.departmentId]);
+  const jobOptions: Option[] = unitJobProfiles.map(j => {
+    const owner = j.departmentId === formData.departmentId ? '' : ` · ${departments.find(d => d.id === j.departmentId)?.name || ''}`;
+    return { value: j.id, label: j.title, subLabel: `${j.code || ''} · ${j.orgLevel || ''}${owner}` };
+  });
 
   // Auto-assign when a unit has exactly one profile; clear when none or ambiguous
   // (multiple) so the admin makes an explicit choice. Skipped for the initial
