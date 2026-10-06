@@ -4,11 +4,12 @@ import { dataService } from '../services/store';
 import { useStoreData } from '../hooks/useStoreData';
 import { useSessionState } from '../hooks/useSessionState';
 import { User, Role, Skill } from '../types';
-import { Plus, Users, ChevronRight, CheckCircle, ShieldCheck, Trash2, ArrowLeft, UserPlus, Building2, Search, Edit2, AlertCircle, BookOpen, Activity, Eye, FileSpreadsheet, TrendingUp, ChevronDown } from 'lucide-react';
+import { Plus, Users, ChevronRight, CheckCircle, ShieldCheck, Trash2, ArrowLeft, UserPlus, Building2, Search, Edit2, AlertCircle, BookOpen, Activity, Eye, FileSpreadsheet, TrendingUp, ChevronDown, Link2 } from 'lucide-react';
 import { BulkUpload } from '../components/BulkUpload';
 import { CriticalityBadge } from '../components/CriticalityBadge';
 import { FormPage } from './admin/FormPage';
 import { SkillDetailsModal } from './admin/SkillDetailsModal';
+import { LinkCertificatesModal } from './admin/LinkCertificatesModal';
 import { PromotionModal } from './admin/PromotionModal';
 import { UserForm } from './admin/UserForm';
 import { JobForm } from './admin/JobForm';
@@ -42,6 +43,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
   const [formType, setFormType] = useState<'USER' | 'JOB' | 'SKILL' | 'DEPT' | 'PROJECT' | null>(null);
   const [editItem, setEditItem] = useState<any>(null);
   const [viewSkill, setViewSkill] = useState<Skill | null>(null);
+  const [showLinkCerts, setShowLinkCerts] = useState(false);
   // Per-view list filter (Users: status; Skills: category). Persisted per view so
   // a refresh keeps the filter the admin had selected (finer state → sessionStorage).
   const [activeTab, setActiveTab] = useSessionState<string>(`admin-filter-${view}`, 'ALL');
@@ -750,6 +752,15 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
                                 <FileSpreadsheet size={16} className="text-blue-700" /> Bulk Upload
                             </button>
                         )}
+                        {view === 'SKILLS' && (
+                            <button
+                                onClick={() => setShowLinkCerts(true)}
+                                title="Link certificate names typed on skills to Training Catalogue courses"
+                                className="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-sm text-xs font-bold uppercase tracking-wide flex items-center gap-2 transition-all flex-1 md:flex-none justify-center"
+                            >
+                                <Link2 size={16} className="text-blue-700" /> Link Certificates
+                            </button>
+                        )}
                          <button onClick={() => handleAdd(view === 'USERS' ? 'USER' : view === 'SKILLS' ? 'SKILL' : 'DEPT')}
                              className="bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-sm text-xs font-bold uppercase tracking-wide  flex items-center gap-2 transition-all flex-1 md:flex-none justify-center">
                              <Plus size={16} /> Add {
@@ -953,6 +964,7 @@ export const AdminPanel: React.FC<{ view: string; onNavigate: (tab: string) => v
             })()}
        </div>
        {viewSkill && <SkillDetailsModal skill={viewSkill} onClose={() => setViewSkill(null)} />}
+       {showLinkCerts && <LinkCertificatesModal onClose={() => setShowLinkCerts(false)} />}
        {showBulkUpload && (
          <BulkUpload
            type={bulkType}

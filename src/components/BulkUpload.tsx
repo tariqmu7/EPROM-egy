@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import ExcelJS from 'exceljs';
 import { Download, Upload, X, AlertCircle, CheckCircle, FileSpreadsheet, Loader2, Lock } from 'lucide-react';
 import { dataService } from '../services/store';
+import { resolveRequiredCourses } from '../utils/requiredCourses';
 import { assertSpreadsheetSize, ACCEPT_SPREADSHEET, MAX_IMPORT_ROWS, UploadRejectedError } from '../utils/fileUpload';
 import { User, Role, JobProfile, Skill, Department, OrgLevel, TrainingCourse, SkillCategory, SkillCriticality, normalizeSkillCategory, skillCriticalityOf } from '../types';
 
@@ -529,7 +530,9 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, user, onComplete, 
         // back to the admin — silently dropping them would leave a course that
         // looks imported but can never be recommended.
         const unmatchedSkillNames = new Set<string>();
-
+        // Certificate names on a SKILL row with no Training Catalogue course.
+        // Kept on the skill (flagged "not in catalogue"), but the admin is told.
+        const unmatchedCertNames = new Set<string>();
 
         // For JOB type, we need to group rows by Title and Department
         const jobBatch = new Map<string, JobProfile>();
@@ -684,10 +687,16 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, user, onComplete, 
               case 'SKILL': {
                 const levels: any = {};
                 for (let i = 1; i <= 5; i++) {
+                  // Certificate names are linked to the catalogue course of the
+                  // same title or code; an unknown name is kept as typed.
+                  const typed = row[`Level ${i} Certs`]?.toString() ? row[`Level ${i} Certs`].toString().split(',').map((s: string) => s.trim()).filter(Boolean) : [];
+                  const resolved = resolveRequiredCourses(typed, courses);
+                  resolved.unmatched.forEach(n => unmatchedCertNames.add(n));
                   levels[i] = {
                     level: i,
                     description: row[`Level ${i} Desc`]?.toString() || '',
-                    requiredCertificates: row[`Level ${i} Certs`]?.toString() ? row[`Level ${i} Certs`].toString().split(',').map((s: string) => s.trim()) : []
+                    requiredCertificates: resolved.names,
+                    requiredCourseIds: resolved.courseIds,
                   };
                 }
                 const name = row['Name']?.toString() || '';
@@ -868,8 +877,14 @@ export const BulkUpload: React.FC<BulkUploadProps> = ({ type, user, onComplete, 
             `Check the spelling against the Skill Library, then re-import.`,
           );
         }
+        if (unmatchedCertNames.size > 0) {
+          setError(
+            `These certificates are not in the Training Catalogue, so they were kept as names only: ${[...unmatchedCertNames].join(', ')}. ` +
+            `Add them to the catalogue (or request them from the skill form) and re-import, or fix the spelling.`,
+          );
+        }
         setLoading(false);
-        setTimeout(() => onComplete(), unmatchedSkillNames.size > 0 ? 6000 : 2000);
+        setTimeout(() => onComplete(), unmatchedSkillNames.size > 0 || unmatchedCertNames.size > 0 ? 6000 : 2000);
       }
     } catch {
       setError('Failed to process file. Please check the format.');

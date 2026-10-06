@@ -6,6 +6,7 @@ import { Save, BookOpen, Activity } from 'lucide-react';
 import { SearchableSelect } from '../../components/SearchableSelect';
 import { AssessmentMethodEditor } from '../../components/AssessmentMethodEditor';
 import { RequiredCoursePicker } from '../../components/RequiredCoursePicker';
+import { linkSkillCertificates, resolveRequiredCourses } from '../../utils/requiredCourses';
 
 // --- Skill Form (Competency Standard) ---
 // Two top-level sections: the competency standard (identity + proficiency
@@ -19,7 +20,10 @@ export const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill
     5: { level: 5, description: '', requiredCertificates: [] },
   };
 
-  const [formData, setFormData] = useState<Partial<Skill>>(initialData || { levels: defaultLevels });
+  // Certificate names typed before the pick-list are linked to the catalogue
+  // course of the same title or code as the form opens; saving keeps the link.
+  const [formData, setFormData] = useState<Partial<Skill>>(() =>
+    initialData ? linkSkillCertificates(initialData, dataService.getAllTrainingCourses(true)).skill : { levels: defaultLevels });
   const [activeTab, setActiveTab] = useState(1);
   const [section, setSection] = useState<'STANDARD' | 'METHODS'>('STANDARD');
   // Fixed up front (not at submit) so a course requested while the skill is
@@ -243,8 +247,7 @@ export const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill
                 {(() => {
                    const lvl = formData.levels?.[activeTab as any];
                    const ids = lvl?.requiredCourseIds || [];
-                   const titles = new Set(ids.map(id => dataService.getTrainingCourse(id)?.title.toLowerCase()).filter(Boolean));
-                   const legacy = (lvl?.requiredCertificates || []).filter(n => !titles.has(n.toLowerCase()));
+                   const legacy = resolveRequiredCourses(lvl?.requiredCertificates || [], dataService.getAllTrainingCourses(true), ids).unmatched;
                    return (
                      <RequiredCoursePicker
                         key={activeTab}
