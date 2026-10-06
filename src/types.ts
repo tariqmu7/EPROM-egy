@@ -476,6 +476,9 @@ export interface TrainingCourse {
   reviewNote?: string;
   reviewedBy?: string;
   reviewedAt?: string;
+  /** Training department follow-up once a requested course is approved:
+   *  material, who prepares it, and when it runs. */
+  preparation?: CoursePreparation;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -485,6 +488,44 @@ export type TrainingCourseStatus = 'APPROVED' | 'PENDING' | 'REJECTED';
 /** A course with no status predates requests and counts as approved. */
 export const isCourseApproved = (c: Pick<TrainingCourse, 'status'>): boolean =>
   !c.status || c.status === 'APPROVED';
+
+export type CourseMaterialStatus = 'NOT_STARTED' | 'IN_PREPARATION' | 'READY';
+
+export const COURSE_MATERIAL_STATUSES = ['NOT_STARTED', 'IN_PREPARATION', 'READY'] as const;
+
+export const COURSE_MATERIAL_STATUS_LABELS: Record<CourseMaterialStatus, string> = {
+  NOT_STARTED: 'Not started',
+  IN_PREPARATION: 'In preparation',
+  READY: 'Ready',
+};
+
+/** One scheduled run of a course. `date` is a plain YYYY-MM-DD day. */
+export interface CourseSession {
+  id: string;
+  date: string;
+  venue?: string;
+  trainer?: string;
+  seats?: number;
+}
+
+export interface CoursePreparation {
+  materialStatus: CourseMaterialStatus;
+  /** Who in the training department prepares it — free text, as the
+   *  preparer is often not an app user. */
+  owner?: string;
+  /** Day the material should be ready (YYYY-MM-DD). */
+  targetDate?: string;
+  notes?: string;
+  sessions: CourseSession[];
+  updatedBy?: string;
+  updatedAt?: string;
+}
+
+/** A new course the training department must prepare: asked for from a
+ *  skill, approved, and still live. Catalogue courses added directly by an
+ *  admin are assumed to exist already. */
+export const isCourseToPrepare = (c: Pick<TrainingCourse, 'status' | 'requestedAt' | 'isArchived'>): boolean =>
+  isCourseApproved(c) && !!c.requestedAt && !c.isArchived;
 
 export const TRAINING_COURSE_TYPES = ['INTERNAL', 'EXTERNAL', 'OJT'] as const;
 

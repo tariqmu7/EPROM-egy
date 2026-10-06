@@ -1,4 +1,4 @@
-import { User, Role, JobProfile, Skill, Project, Department, Assessment, ActivityLog, ORG_LEVEL_NUMBERS, Notification, AssessmentCycle, Nomination, IndividualTrainingPlan, OrgLevel, Evidence, CareerProgressionPlan, TrainingCourse, ScheduledAssessment, AssessmentMethod, Certificate, CareerHistoryEntry, SkillLevel, EvaluationQuestion, AssessmentPlan, AssessmentInstruction, SkillAssessmentMethod, AssessmentAudience, JobProfileSkill, DepartmentType, DEPT_TYPE_TO_ORG_LEVEL, RaterWeights, WorkExperience, WorkExperienceSkill, WorkExperienceStatus, WorkExperiencePolicy, SkillScoreSource, CompetencyCoverage, CompetencySnapshot, OrgOverview, TrainingNeedsAnalysis, DevelopmentPlan, DevelopmentPlanItem, DevelopmentPlanStatus, DevelopmentItemStatus, DevelopmentPlanItemProgress, DevelopmentPlanProgress, isCourseApproved } from '../types';
+import { User, Role, JobProfile, Skill, Project, Department, Assessment, ActivityLog, ORG_LEVEL_NUMBERS, Notification, AssessmentCycle, Nomination, IndividualTrainingPlan, OrgLevel, Evidence, CareerProgressionPlan, TrainingCourse, CoursePreparation, ScheduledAssessment, AssessmentMethod, Certificate, CareerHistoryEntry, SkillLevel, EvaluationQuestion, AssessmentPlan, AssessmentInstruction, SkillAssessmentMethod, AssessmentAudience, JobProfileSkill, DepartmentType, DEPT_TYPE_TO_ORG_LEVEL, RaterWeights, WorkExperience, WorkExperienceSkill, WorkExperienceStatus, WorkExperiencePolicy, SkillScoreSource, CompetencyCoverage, CompetencySnapshot, OrgOverview, TrainingNeedsAnalysis, DevelopmentPlan, DevelopmentPlanItem, DevelopmentPlanStatus, DevelopmentItemStatus, DevelopmentPlanItemProgress, DevelopmentPlanProgress, isCourseApproved } from '../types';
 import { DEFAULT_WORK_EXPERIENCE_POLICY, suggestLevelFromYears } from '../constants/experiencePolicy';
 import {
   collection,
@@ -2286,6 +2286,9 @@ export class DataService {
   }
   async reviewTrainingCourseRequest(course: TrainingCourse, decision: 'APPROVED' | 'REJECTED', note?: string) {
     return writes.reviewTrainingCourseRequest(this.writeCtx, course, decision, note);
+  }
+  async updateCoursePreparation(courseId: string, prep: CoursePreparation) {
+    return writes.updateCoursePreparation(this.writeCtx, courseId, prep);
   }
   getSystemLogs() { return this.logs; }
 

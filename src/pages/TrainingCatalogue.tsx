@@ -4,14 +4,18 @@ import { safeExportRow } from '../utils/fileUpload';
 import {
   BookOpen, Plus, Search, Download, Pencil, Archive, RotateCcw, X, Save, Link2,
   AlertTriangle, FileSpreadsheet, Loader2, Inbox, Check, Ban, Clock,
+  ClipboardList, CalendarDays, Trash2,
 } from 'lucide-react';
 import { dataService } from '../services/store';
 import { useStoreData } from '../hooks/useStoreData';
 import { useSessionState } from '../hooks/useSessionState';
 import { BulkUpload } from '../components/BulkUpload';
+import { newId } from '../utils/uuid';
 import {
   User, Skill, TrainingCourse, TRAINING_COURSE_TYPES, TRAINING_COURSE_TYPE_LABELS,
-  PROFICIENCY_LABELS, isCourseApproved,
+  PROFICIENCY_LABELS, isCourseApproved, isCourseToPrepare,
+  CourseMaterialStatus, CoursePreparation, CourseSession,
+  COURSE_MATERIAL_STATUSES, COURSE_MATERIAL_STATUS_LABELS,
 } from '../types';
 
 // Every exported cell goes through `safeExportCell`: a value that begins with
@@ -468,6 +472,285 @@ const RequestsList: React.FC<{
   );
 };
 
+// ── Courses to prepare — the training department's follow-up ────────────────
+// An approved request is a course that does not exist yet: somebody has to
+// write the material and put sessions in the calendar. This list tracks that
+// until the material is ready and a session is booked.
+
+const MATERIAL_PILL: Record<CourseMaterialStatus, string> = {
+  NOT_STARTED: 'border-slate-300 bg-slate-50 text-slate-600',
+  IN_PREPARATION: 'border-blue-200 bg-blue-50 text-blue-700',
+  READY: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+};
+
+const todayIso = () => new Date().toISOString().slice(0, 10);
+const prepOf = (c: TrainingCourse): CoursePreparation =>
+  c.preparation ?? { materialStatus: 'NOT_STARTED', sessions: [] };
+const upcomingSessions = (c: TrainingCourse) =>
+  (prepOf(c).sessions || []).filter(s => s.date >= todayIso());
+
+const PreparationForm: React.FC<{
+  course: TrainingCourse;
+  skillName: (id: string) => string;
+  onSave: (prep: CoursePreparation) => void;
+  onCancel: () => void;
+  isSubmitting: boolean;
+}> = ({ course, skillName, onSave, onCancel, isSubmitting }) => {
+  const [prep, setPrep] = useState<CoursePreparation>(() => {
+    const p = prepOf(course);
+    return { ...p, sessions: [...(p.sessions || [])] };
+  });
+  const [error, setError] = useState<string | null>(null);
+
+  const patch = (p: Partial<CoursePreparation>) => setPrep(prev => ({ ...prev, ...p }));
+  const patchSession = (id: string, p: Partial<CourseSession>) =>
+    patch({ sessions: prep.sessions.map(s => (s.id === id ? { ...s, ...p } : s)) });
+  const addSession = () => patch({ sessions: [...prep.sessions, { id: newId(), date: '' }] });
+  const removeSession = (id: string) => patch({ sessions: prep.sessions.filter(s => s.id !== id) });
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (prep.sessions.some(s => !s.date)) {
+      setError('Every session needs a date — fill it in or remove the row.');
+      return;
+    }
+    setError(null);
+    onSave(prep);
+  };
+
+  const topics = (course.syllabus || '').split('\n').map(t => t.trim()).filter(Boolean);
+  const field = 'w-full px-3 py-2 border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500';
+  const label = 'block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white border border-slate-300 shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col">
+        <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+          <h2 className="font-black text-slate-900 text-sm uppercase tracking-widest flex items-center gap-2">
+            <ClipboardList size={16} className="text-slate-500" /> Prepare course
+          </h2>
+          <button onClick={onCancel} className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors">
+            <X size={18} />
+          </button>
+        </div>
+
+        <form onSubmit={submit} className="flex-1 overflow-y-auto p-5 space-y-5">
+          {/* What has to be prepared — read-only, settled at approval */}
+          <div className="bg-slate-50 border border-slate-200 p-4 text-xs text-slate-700 space-y-2">
+            <p className="font-black text-sm text-slate-900">{course.title}</p>
+            <p className="text-[10px] uppercase tracking-wide text-slate-500">
+              {course.code || '—'} · {TRAINING_COURSE_TYPE_LABELS[course.type]} · {course.provider}
+              {course.durationHours != null ? ` · ${course.durationHours} h` : ''}
+              {course.targetLevel ? ` · to L${course.targetLevel}` : ''}
+            </p>
+            <p>For: <span className="font-bold">{course.linkedSkillIds.map(skillName).join(', ') || '—'}</span></p>
+            {topics.length > 0 && (
+              <div>
+                <p className="font-bold mb-1">Syllabus</p>
+                <ul className="list-disc pl-5 space-y-0.5">{topics.map((t, i) => <li key={i}>{t}</li>)}</ul>
+              </div>
+            )}
+            {course.learningObjectives && <p><span className="font-bold">Objectives:</span> {course.learningObjectives}</p>}
+          </div>
+
+          <div>
+            <span className={label}>Material</span>
+            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Material status">
+              {COURSE_MATERIAL_STATUSES.map(s => (
+                <button
+                  key={s} type="button" role="radio" aria-checked={prep.materialStatus === s}
+                  onClick={() => patch({ materialStatus: s })}
+                  className={`px-4 py-2 border text-[10px] font-black uppercase tracking-widest transition-colors ${
+                    prep.materialStatus === s ? MATERIAL_PILL[s] + ' ring-2 ring-offset-1 ring-slate-400' : 'border-slate-200 text-slate-400 hover:text-slate-700'
+                  }`}
+                >
+                  {COURSE_MATERIAL_STATUS_LABELS[s]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="prep-owner" className={label}>Prepared by</label>
+              <input id="prep-owner" value={prep.owner || ''} onChange={e => patch({ owner: e.target.value })}
+                className={field} placeholder="e.g. Eng. Ahmed — Training Dept." />
+            </div>
+            <div>
+              <label htmlFor="prep-target" className={label}>Material ready by</label>
+              <input id="prep-target" type="date" value={prep.targetDate || ''} onChange={e => patch({ targetDate: e.target.value || undefined })}
+                className={field} />
+            </div>
+            <div className="md:col-span-2">
+              <label htmlFor="prep-notes" className={label}>Notes</label>
+              <textarea id="prep-notes" rows={2} value={prep.notes || ''} onChange={e => patch({ notes: e.target.value })}
+                className={field} placeholder="e.g. Waiting for the vendor's slides; practical part needs the workshop." />
+            </div>
+          </div>
+
+          {/* Sessions */}
+          <div className="border border-slate-200">
+            <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 flex items-center gap-2">
+                <CalendarDays size={14} className="text-slate-500" /> Sessions ({prep.sessions.length})
+              </span>
+              <button type="button" onClick={addSession}
+                className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-300 bg-white text-slate-700 font-black text-[10px] uppercase tracking-widest hover:bg-slate-100">
+                <Plus size={12} /> Add session
+              </button>
+            </div>
+            {prep.sessions.length === 0 ? (
+              <p className="p-6 text-center text-xs text-slate-500">No session scheduled yet.</p>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {prep.sessions.map((s, i) => (
+                  <div key={s.id} className="grid grid-cols-2 md:grid-cols-[9rem_1fr_1fr_5rem_auto] gap-2 p-3 items-end">
+                    <div>
+                      <label htmlFor={`ses-date-${s.id}`} className={label}>Date *</label>
+                      <input id={`ses-date-${s.id}`} type="date" value={s.date} onChange={e => patchSession(s.id, { date: e.target.value })} className={field} />
+                    </div>
+                    <div>
+                      <label htmlFor={`ses-venue-${s.id}`} className={label}>Venue</label>
+                      <input id={`ses-venue-${s.id}`} value={s.venue || ''} onChange={e => patchSession(s.id, { venue: e.target.value })} className={field} />
+                    </div>
+                    <div>
+                      <label htmlFor={`ses-trainer-${s.id}`} className={label}>Trainer</label>
+                      <input id={`ses-trainer-${s.id}`} value={s.trainer || ''} onChange={e => patchSession(s.id, { trainer: e.target.value })} className={field} />
+                    </div>
+                    <div>
+                      <label htmlFor={`ses-seats-${s.id}`} className={label}>Seats</label>
+                      <input id={`ses-seats-${s.id}`} type="number" min={1} step={1} value={s.seats ?? ''}
+                        onChange={e => patchSession(s.id, { seats: e.target.value === '' ? undefined : Number(e.target.value) })} className={field} />
+                    </div>
+                    <button type="button" onClick={() => removeSession(s.id)} title={`Remove session ${i + 1}`}
+                      className="p-2 mb-0.5 text-slate-400 hover:text-rose-700 hover:bg-rose-50 justify-self-start">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {error && (
+            <div className="bg-rose-50 border border-rose-200 p-3 flex items-start gap-2 text-rose-700">
+              <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+              <p className="text-xs font-medium">{error}</p>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3 pt-1">
+            <button type="button" onClick={onCancel}
+              className="px-4 py-2 text-slate-600 font-black text-[10px] uppercase tracking-widest hover:bg-slate-100">
+              Cancel
+            </button>
+            <button type="submit" disabled={isSubmitting}
+              className="px-6 py-2 bg-slate-900 text-white font-black text-[10px] uppercase tracking-widest hover:bg-slate-700 disabled:opacity-40 flex items-center gap-2">
+              {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+const PreparationList: React.FC<{
+  courses: TrainingCourse[];
+  skillName: (id: string) => string;
+  onOpen: (c: TrainingCourse) => void;
+}> = ({ courses, skillName, onOpen }) => {
+  const today = todayIso();
+  const counts = COURSE_MATERIAL_STATUSES.map(s => [s, courses.filter(c => prepOf(c).materialStatus === s).length] as const);
+
+  if (courses.length === 0) {
+    return (
+      <div className="bg-white border border-slate-200 shadow-sm p-12 text-center">
+        <ClipboardList size={28} className="text-slate-300 mx-auto mb-3" />
+        <p className="text-sm text-slate-500">
+          Nothing to prepare. A course appears here once a course request is approved.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-4">
+        {counts.map(([s, n]) => (
+          <div key={s} className="bg-white border border-slate-200 shadow-sm p-4">
+            <div className="text-[9px] font-black uppercase tracking-widest text-slate-400">{COURSE_MATERIAL_STATUS_LABELS[s]}</div>
+            <p className="text-3xl font-black text-slate-900 mt-2">{n}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-white border border-slate-200 shadow-sm overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 border-b border-slate-200">
+            <tr className="text-[9px] font-black uppercase tracking-widest text-slate-500">
+              <th className="text-left px-6 py-3">Course</th>
+              <th className="text-left px-3 py-3">Material</th>
+              <th className="text-left px-3 py-3">Prepared by</th>
+              <th className="text-left px-3 py-3">Next session</th>
+              <th className="text-right px-6 py-3">Action</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {courses.map(c => {
+              const p = prepOf(c);
+              const upcoming = upcomingSessions(c);
+              const next = upcoming[0];
+              const late = p.materialStatus !== 'READY' && !!p.targetDate && p.targetDate < today;
+              return (
+                <tr key={c.id} className="hover:bg-slate-50 transition-colors align-top">
+                  <td className="px-6 py-3">
+                    <p className="font-bold text-slate-900">{c.title}</p>
+                    <p className="text-[10px] text-slate-400 uppercase tracking-wide">
+                      {c.code || '—'} · {c.requestedForSkillId ? skillName(c.requestedForSkillId) : c.linkedSkillIds.map(skillName).join(', ')}
+                    </p>
+                    <p className="text-[10px] text-slate-400">Approved {shortDate(c.reviewedAt)}</p>
+                  </td>
+                  <td className="px-3 py-3">
+                    <span className={`text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 border ${MATERIAL_PILL[p.materialStatus]}`}>
+                      {COURSE_MATERIAL_STATUS_LABELS[p.materialStatus]}
+                    </span>
+                    {p.targetDate && p.materialStatus !== 'READY' && (
+                      <p className={`text-[10px] mt-1 ${late ? 'text-rose-700 font-bold' : 'text-slate-500'}`}>
+                        {late ? 'Overdue — was due ' : 'Due '}{shortDate(p.targetDate)}
+                      </p>
+                    )}
+                  </td>
+                  <td className="px-3 py-3 text-slate-700">{p.owner || <span className="text-amber-700 italic text-xs">Nobody assigned</span>}</td>
+                  <td className="px-3 py-3 text-slate-700">
+                    {next ? (
+                      <>
+                        <p className="font-bold">{shortDate(next.date)}</p>
+                        <p className="text-[10px] text-slate-500">
+                          {[next.venue, next.trainer, next.seats ? `${next.seats} seats` : ''].filter(Boolean).join(' · ') || '—'}
+                        </p>
+                        {upcoming.length > 1 && <p className="text-[10px] text-slate-400">+{upcoming.length - 1} more</p>}
+                      </>
+                    ) : (
+                      <span className="text-xs text-slate-400 italic">None scheduled</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-3 text-right">
+                    <button onClick={() => onOpen(c)}
+                      className="px-3 py-1.5 bg-slate-900 text-white font-black text-[10px] uppercase tracking-widest hover:bg-slate-700">
+                      Follow up
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
 // ── The page ────────────────────────────────────────────────────────────────
 
 export const TrainingCatalogue: React.FC<{ user: User }> = ({ user }) => {
@@ -477,9 +760,10 @@ export const TrainingCatalogue: React.FC<{ user: User }> = ({ user }) => {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useSessionState<string>('catalogue-type', 'ALL');
   const [showArchived, setShowArchived] = useSessionState<boolean>('catalogue-archived', false);
-  const [view, setView] = useSessionState<'catalogue' | 'requests'>('catalogue-view', 'catalogue');
+  const [view, setView] = useSessionState<'catalogue' | 'requests' | 'prepare'>('catalogue-view', 'catalogue');
   const [editing, setEditing] = useState<TrainingCourse | null>(null);
   const [reviewing, setReviewing] = useState<TrainingCourse | null>(null);
+  const [preparing, setPreparing] = useState<TrainingCourse | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showBulk, setShowBulk] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -504,6 +788,14 @@ export const TrainingCatalogue: React.FC<{ user: User }> = ({ user }) => {
       .sort((a, b) => (b.reviewedAt || '').localeCompare(a.reviewedAt || '')),
     [allCourses],
   );
+  // Not-ready first (not started, then in preparation), oldest approval first.
+  const toPrepare = useMemo(() => {
+    const rank = (c: TrainingCourse) => COURSE_MATERIAL_STATUSES.indexOf(c.preparation?.materialStatus ?? 'NOT_STARTED');
+    return allCourses
+      .filter(isCourseToPrepare)
+      .sort((a, b) => rank(a) - rank(b) || (a.reviewedAt || '').localeCompare(b.reviewedAt || ''));
+  }, [allCourses]);
+  const notReadyCount = toPrepare.filter(c => c.preparation?.materialStatus !== 'READY').length;
 
   const skillName = (id: string) => skills.find(s => s.id === id)?.name || 'Deleted skill';
 
@@ -559,6 +851,20 @@ export const TrainingCatalogue: React.FC<{ user: User }> = ({ user }) => {
       setRefreshKey(k => k + 1);
     } catch (err) {
       window.alert(err instanceof Error ? err.message : 'The decision could not be saved.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSavePreparation = async (prep: CoursePreparation) => {
+    if (isSubmitting || !preparing) return;
+    setIsSubmitting(true);
+    try {
+      await dataService.updateCoursePreparation(preparing.id, prep);
+      setPreparing(null);
+      setRefreshKey(k => k + 1);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'The follow-up could not be saved.');
     } finally {
       setIsSubmitting(false);
     }
@@ -667,6 +973,7 @@ export const TrainingCatalogue: React.FC<{ user: User }> = ({ user }) => {
         {([
           ['catalogue', 'Catalogue', courses.filter(c => !c.isArchived).length],
           ['requests', 'Course requests', pendingRequests.length],
+          ['prepare', 'To prepare', notReadyCount],
         ] as const).map(([id, label, count]) => (
           <button
             key={id}
@@ -678,15 +985,20 @@ export const TrainingCatalogue: React.FC<{ user: User }> = ({ user }) => {
             }`}
           >
             {id === 'requests' && <Inbox size={14} />}
+            {id === 'prepare' && <ClipboardList size={14} />}
             {label}
             <span className={`px-1.5 py-0.5 text-[10px] ${
-              id === 'requests' && count > 0 ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-500'
+              id === 'requests' && count > 0 ? 'bg-amber-500 text-white'
+                : id === 'prepare' && count > 0 ? 'bg-blue-600 text-white'
+                : 'bg-slate-100 text-slate-500'
             }`}>{count}</span>
           </button>
         ))}
       </div>
 
-      {view === 'requests' ? (
+      {view === 'prepare' ? (
+        <PreparationList courses={toPrepare} skillName={skillName} onOpen={setPreparing} />
+      ) : view === 'requests' ? (
         <RequestsList
           pending={pendingRequests}
           decided={decidedRequests}
@@ -900,6 +1212,16 @@ export const TrainingCatalogue: React.FC<{ user: User }> = ({ user }) => {
           onSave={handleSaveRequest}
           onDecide={handleDecide}
           onCancel={() => setReviewing(null)}
+          isSubmitting={isSubmitting}
+        />
+      )}
+
+      {preparing && (
+        <PreparationForm
+          course={preparing}
+          skillName={skillName}
+          onSave={handleSavePreparation}
+          onCancel={() => setPreparing(null)}
           isSubmitting={isSubmitting}
         />
       )}

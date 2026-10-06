@@ -1,4 +1,4 @@
-import { Role, type TrainingCourse } from '../../types';
+import { Role, type CoursePreparation, type CourseSession, type TrainingCourse } from '../../types';
 import { newId } from '../../utils/uuid';
 import type { WriteHost } from './host';
 
@@ -146,4 +146,60 @@ export async function reviewTrainingCourseRequest(
     });
   }
   return reviewed;
+}
+
+/**
+ * The training department's follow-up on an approved new course: material
+ * status, owner, target date and the sessions it will run. Only the
+ * `preparation` block changes — the course content was settled at approval.
+ * Sessions without a day are dropped, the rest are kept in date order. When
+ * the material first becomes READY, whoever asked for the course is told.
+ */
+export async function updateCoursePreparation(
+  host: WriteHost,
+  courseId: string,
+  prep: CoursePreparation,
+): Promise<TrainingCourse> {
+  const course = host.trainingCourses.find(c => c.id === courseId);
+  if (!course) throw new Error('That course no longer exists.');
+
+  const sessions: CourseSession[] = (prep.sessions || [])
+    .filter(s => s.date && /^\d{4}-\d{2}-\d{2}$/.test(s.date))
+    .map(s => ({
+      id: s.id || newId(),
+      date: s.date,
+      venue: s.venue?.trim() || undefined,
+      trainer: s.trainer?.trim() || undefined,
+      seats: s.seats != null && Number.isFinite(s.seats) && s.seats > 0 ? Math.floor(s.seats) : undefined,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  const { actorId, actorName } = host.currentActor();
+  const now = new Date().toISOString();
+  const preparation: CoursePreparation = {
+    materialStatus: prep.materialStatus || 'NOT_STARTED',
+    owner: prep.owner?.trim() || undefined,
+    targetDate: prep.targetDate || undefined,
+    notes: prep.notes?.trim() || undefined,
+    sessions,
+    updatedBy: actorId ?? host.authUid(),
+    updatedAt: now,
+  };
+  const updated: TrainingCourse = { ...course, preparation, updatedAt: now };
+  await host.update('trainingCourses', updated);
+  await host.logActivity('Updated Course Preparation', updated.title);
+
+  const becameReady = preparation.materialStatus === 'READY' && course.preparation?.materialStatus !== 'READY';
+  if (becameReady && course.requestedBy && course.requestedBy !== actorId) {
+    const first = sessions.find(s => s.date >= now.slice(0, 10));
+    await host.notify({
+      userId: course.requestedBy,
+      title: 'Requested course is ready',
+      message: `${actorName || 'The training department'} marked the material for "${updated.title}" as ready.${
+        first ? ` First session: ${first.date}${first.venue ? ` at ${first.venue}` : ''}.` : ' No session scheduled yet.'}`,
+      type: 'SUCCESS',
+      actionLink: 'admin-courses',
+    });
+  }
+  return updated;
 }

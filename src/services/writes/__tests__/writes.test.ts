@@ -485,4 +485,48 @@ describe('training catalogue', () => {
     await writes.reviewTrainingCourseRequest(host, own, 'APPROVED');
     expect(host.notified).toHaveLength(0);
   });
+
+  describe('preparation follow-up', () => {
+    const approved = {
+      id: 'c9', title: 'PTW', provider: 'P', type: 'INTERNAL', linkedSkillIds: ['s1'],
+      status: 'APPROVED', requestedBy: 'u7', requestedAt: '2026-10-01T00:00:00.000Z', syllabus: 'Isolation',
+    } as TrainingCourse;
+
+    it('saves only the follow-up: blank sessions dropped, the rest cleaned and in date order', async () => {
+      const host = makeHost({ trainingCourses: [approved] });
+      const done = await writes.updateCoursePreparation(host, 'c9', {
+        materialStatus: 'IN_PREPARATION', owner: '  Ahmed ', notes: ' ',
+        sessions: [
+          { id: 's2', date: '2026-12-01', venue: ' Hall B ', seats: 12.7 },
+          { id: '', date: '' },
+          { id: 's1', date: '2026-11-03', seats: 0 },
+        ],
+      });
+      expect(done.syllabus).toBe('Isolation');
+      expect(done.preparation).toMatchObject({ materialStatus: 'IN_PREPARATION', owner: 'Ahmed', updatedBy: 'actor-1' });
+      expect(done.preparation?.notes).toBeUndefined();
+      expect(done.preparation?.sessions.map(s => s.id)).toEqual(['s1', 's2']);
+      expect(done.preparation?.sessions[0].seats).toBeUndefined();
+      expect(done.preparation?.sessions[1]).toMatchObject({ venue: 'Hall B', seats: 12 });
+      expect(host.updated[0].item.preparation.materialStatus).toBe('IN_PREPARATION');
+      expect(host.notified).toHaveLength(0);
+    });
+
+    it('tells the requester once, when the material first becomes ready', async () => {
+      const host = makeHost({ trainingCourses: [approved] });
+      await writes.updateCoursePreparation(host, 'c9', { materialStatus: 'READY', sessions: [] });
+      expect(host.notified).toHaveLength(1);
+      expect(host.notified[0]).toMatchObject({ userId: 'u7', type: 'SUCCESS' });
+
+      const already = makeHost({ trainingCourses: [{ ...approved, preparation: { materialStatus: 'READY', sessions: [] } }] });
+      await writes.updateCoursePreparation(already, 'c9', { materialStatus: 'READY', sessions: [] });
+      expect(already.notified).toHaveLength(0);
+    });
+
+    it('refuses a course that no longer exists', async () => {
+      const host = makeHost({ trainingCourses: [] });
+      await expect(writes.updateCoursePreparation(host, 'nope', { materialStatus: 'READY', sessions: [] })).rejects.toThrow();
+      expect(host.updated).toHaveLength(0);
+    });
+  });
 });
