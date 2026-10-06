@@ -79,12 +79,16 @@ export const RequiredCoursePicker: React.FC<Props> = ({ courseIds, legacyNames, 
       {(selected.length > 0 || legacyNames.length > 0) && (
         <div className="flex flex-wrap gap-2 mb-2">
           {selected.map(c => (
-            <span key={c.id} className={`inline-flex items-center gap-1.5 px-2 py-1 text-xs border ${c.status === 'PENDING' ? 'bg-amber-50 border-amber-300 text-amber-900' : 'bg-blue-50 border-blue-200 text-blue-900'}`}>
+            <span key={c.id} className={`inline-flex items-center gap-1.5 px-2 py-1 text-xs border ${c.status === 'PENDING' ? 'bg-amber-50 border-amber-300 text-amber-900' : c.status === 'REJECTED' ? 'bg-rose-50 border-rose-200 text-rose-800' : 'bg-blue-50 border-blue-200 text-blue-900'}`}
+              title={c.status === 'REJECTED' && c.reviewNote ? `Request rejected: ${c.reviewNote}` : undefined}>
               <BookOpen size={12} />
               <span className="font-semibold">{c.title}</span>
               {c.code && <span className="text-[10px] opacity-70">{c.code}</span>}
               {c.status === 'PENDING' && (
                 <span className="inline-flex items-center gap-0.5 text-[10px] font-bold uppercase"><Clock size={10} /> Awaiting approval</span>
+              )}
+              {c.status === 'REJECTED' && (
+                <span className="inline-flex items-center gap-0.5 text-[10px] font-bold uppercase"><Ban size={10} /> Request rejected</span>
               )}
               <button type="button" aria-label={`Remove ${c.title}`} onClick={() => removeCourse(c.id)} className="ml-0.5 hover:text-red-600"><X size={12} /></button>
             </span>

@@ -100,3 +100,50 @@ export async function requestTrainingCourse(
   }
   return course;
 }
+
+/**
+ * An admin's decision on a course request. The reviewer may have edited the
+ * content first (title, syllabus, provider…), so the whole course is saved,
+ * not just the status. A rejection must say why — the requester only sees the
+ * note. Approving makes the course a normal catalogue entry: from then on it
+ * is recommended, priced and budgeted like any other.
+ */
+export async function reviewTrainingCourseRequest(
+  host: WriteHost,
+  course: TrainingCourse,
+  decision: 'APPROVED' | 'REJECTED',
+  note?: string,
+): Promise<TrainingCourse> {
+  const reviewNote = note?.trim() || undefined;
+  if (decision === 'REJECTED' && !reviewNote) {
+    throw new Error('A rejected request needs a reason for the requester.');
+  }
+  const { actorId, actorName } = host.currentActor();
+  const reviewed: TrainingCourse = {
+    ...course,
+    status: decision,
+    reviewNote,
+    reviewedBy: actorId ?? host.authUid(),
+    reviewedAt: new Date().toISOString(),
+    linkedSkillIds: course.linkedSkillIds || [],
+    updatedAt: new Date().toISOString(),
+  };
+  await host.update('trainingCourses', reviewed);
+  await host.logActivity(
+    decision === 'APPROVED' ? 'Approved Course Request' : 'Rejected Course Request',
+    reviewed.title,
+  );
+  if (reviewed.requestedBy && reviewed.requestedBy !== actorId) {
+    const by = actorName || 'An administrator';
+    await host.notify({
+      userId: reviewed.requestedBy,
+      title: decision === 'APPROVED' ? 'Course request approved' : 'Course request rejected',
+      message: decision === 'APPROVED'
+        ? `${by} approved your request "${reviewed.title}". It is now in the Training Catalogue.${reviewNote ? ` Note: ${reviewNote}` : ''}`
+        : `${by} rejected your request "${reviewed.title}". Reason: ${reviewNote}`,
+      type: decision === 'APPROVED' ? 'SUCCESS' : 'WARNING',
+      actionLink: 'admin-courses',
+    });
+  }
+  return reviewed;
+}

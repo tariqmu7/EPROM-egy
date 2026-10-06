@@ -456,4 +456,33 @@ describe('training catalogue', () => {
     expect(host.persisted[0].item.status).toBe('PENDING');
     expect(host.notified.map(n => n.userId)).toEqual(['a2']);
   });
+
+  it('approving a request saves the edited course as APPROVED and tells the requester', async () => {
+    const pending = { id: 'c9', title: 'PTW', provider: 'TBD', type: 'INTERNAL', linkedSkillIds: ['s1'], status: 'PENDING', requestedBy: 'u7' } as TrainingCourse;
+    const host = makeHost({ trainingCourses: [pending] });
+    const done = await writes.reviewTrainingCourseRequest(host, { ...pending, provider: 'EPROM Training Centre' }, 'APPROVED', '  ');
+    expect(done.status).toBe('APPROVED');
+    expect(done.reviewNote).toBeUndefined();
+    expect(done.reviewedBy).toBe('actor-1');
+    expect(host.updated[0].item.provider).toBe('EPROM Training Centre');
+    expect(host.notified).toHaveLength(1);
+    expect(host.notified[0]).toMatchObject({ userId: 'u7', type: 'SUCCESS' });
+  });
+
+  it('a rejection needs a reason, which reaches the requester', async () => {
+    const pending = { id: 'c9', title: 'PTW', provider: 'TBD', type: 'INTERNAL', linkedSkillIds: ['s1'], status: 'PENDING', requestedBy: 'u7' } as TrainingCourse;
+    const host = makeHost({ trainingCourses: [pending] });
+    await expect(writes.reviewTrainingCourseRequest(host, pending, 'REJECTED', ' ')).rejects.toThrow(/reason/);
+    expect(host.updated).toHaveLength(0);
+    await writes.reviewTrainingCourseRequest(host, pending, 'REJECTED', 'Covered by TRN-PTW-01');
+    expect(host.updated[0].item.status).toBe('REJECTED');
+    expect(host.notified[0].message).toContain('Covered by TRN-PTW-01');
+  });
+
+  it('no notification when the reviewer is the requester', async () => {
+    const own = { id: 'c9', title: 'PTW', provider: 'P', type: 'INTERNAL', linkedSkillIds: ['s1'], status: 'PENDING', requestedBy: 'actor-1' } as TrainingCourse;
+    const host = makeHost({ trainingCourses: [own] });
+    await writes.reviewTrainingCourseRequest(host, own, 'APPROVED');
+    expect(host.notified).toHaveLength(0);
+  });
 });

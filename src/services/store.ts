@@ -2284,6 +2284,9 @@ export class DataService {
   async requestTrainingCourse(draft: Omit<TrainingCourse, 'id'>) {
     return writes.requestTrainingCourse(this.writeCtx, draft);
   }
+  async reviewTrainingCourseRequest(course: TrainingCourse, decision: 'APPROVED' | 'REJECTED', note?: string) {
+    return writes.reviewTrainingCourseRequest(this.writeCtx, course, decision, note);
+  }
   getSystemLogs() { return this.logs; }
 
   // On-demand fetch of the full audit trail (ISO.1). The live listener keeps

@@ -3,7 +3,7 @@ import ExcelJS from 'exceljs';
 import { safeExportRow } from '../utils/fileUpload';
 import {
   BookOpen, Plus, Search, Download, Pencil, Archive, RotateCcw, X, Save, Link2,
-  AlertTriangle, FileSpreadsheet, Loader2,
+  AlertTriangle, FileSpreadsheet, Loader2, Inbox, Check, Ban, Clock,
 } from 'lucide-react';
 import { dataService } from '../services/store';
 import { useStoreData } from '../hooks/useStoreData';
@@ -46,7 +46,12 @@ const emptyCourse = (): TrainingCourse => ({
   linkedSkillIds: [],
 });
 
+const userName = (id?: string) => (id && dataService.getAllUsers(true).find(u => u.id === id)?.name) || 'Unknown user';
+const shortDate = (iso?: string) => (iso ? new Date(iso).toLocaleDateString() : '—');
+
 // ── The add/edit form ───────────────────────────────────────────────────────
+// With `onDecide` it is the review screen for a course request: the admin can
+// correct the content, then approve or reject it in the same step.
 
 const CourseForm: React.FC<{
   initial: TrainingCourse;
@@ -54,10 +59,12 @@ const CourseForm: React.FC<{
   onSave: (c: TrainingCourse) => void;
   onCancel: () => void;
   isSubmitting: boolean;
-}> = ({ initial, skills, onSave, onCancel, isSubmitting }) => {
+  onDecide?: (c: TrainingCourse, decision: 'APPROVED' | 'REJECTED', note: string) => void;
+}> = ({ initial, skills, onSave, onCancel, isSubmitting, onDecide }) => {
   const [form, setForm] = useState<TrainingCourse>(initial);
   const [skillSearch, setSkillSearch] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [decisionNote, setDecisionNote] = useState('');
 
   useEffect(() => { setForm(initial); }, [initial]);
 
@@ -79,24 +86,46 @@ const CourseForm: React.FC<{
       (s.code || '').toLowerCase().includes(term));
   }, [skills, skillSearch]);
 
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.title.trim()) { setError('A course needs a title.'); return; }
-    if (!form.provider.trim()) { setError('Name the provider — internal courses can use the department name.'); return; }
+  // Checks the content and returns the cleaned course, or null (error shown).
+  const validated = (): TrainingCourse | null => {
+    if (!form.title.trim()) { setError('A course needs a title.'); return null; }
+    if (!form.provider.trim()) { setError('Name the provider — internal courses can use the department name.'); return null; }
     if (form.linkedSkillIds.length === 0) {
       setError('Link at least one skill, otherwise the course can never be recommended for a gap.');
-      return;
+      return null;
     }
     setError(null);
-    onSave({
+    return {
       ...form,
       title: form.title.trim(),
       provider: form.provider.trim(),
       code: form.code?.trim() || undefined,
       link: form.link?.trim() || undefined,
       description: form.description?.trim() || undefined,
-    });
+      syllabus: form.syllabus?.trim() || undefined,
+      learningObjectives: form.learningObjectives?.trim() || undefined,
+    };
   };
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const course = validated();
+    if (course) onSave(course);
+  };
+
+  const decide = (decision: 'APPROVED' | 'REJECTED') => {
+    if (!onDecide) return;
+    if (decision === 'REJECTED') {
+      if (!decisionNote.trim()) { setError('Write the reason for rejecting — the requester will read it.'); return; }
+      setError(null);
+      onDecide(form, decision, decisionNote.trim());
+      return;
+    }
+    const course = validated();
+    if (course) onDecide(course, decision, decisionNote.trim());
+  };
+
+  const isReview = !!onDecide;
 
   const numberOrUndefined = (raw: string) => {
     if (raw.trim() === '') return undefined;
@@ -110,7 +139,7 @@ const CourseForm: React.FC<{
         <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
           <h2 className="font-black text-slate-900 text-sm uppercase tracking-widest flex items-center gap-2">
             <BookOpen size={16} className="text-slate-500" />
-            {initial.id ? 'Edit course' : 'New course'}
+            {isReview ? 'Review course request' : initial.id ? 'Edit course' : 'New course'}
           </h2>
           <button onClick={onCancel} className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors">
             <X size={18} />
@@ -118,6 +147,21 @@ const CourseForm: React.FC<{
         </div>
 
         <form onSubmit={submit} className="flex-1 overflow-y-auto p-5 space-y-5">
+          {isReview && (
+            <div className="bg-amber-50 border border-amber-200 p-4 text-xs text-amber-900 space-y-1">
+              <p className="font-black uppercase tracking-widest text-[10px] flex items-center gap-1.5">
+                <Clock size={12} /> Requested by {userName(initial.requestedBy)} on {shortDate(initial.requestedAt)}
+              </p>
+              {initial.requestedForSkillId && (
+                <p>For the skill <span className="font-bold">{skills.find(s => s.id === initial.requestedForSkillId)?.name || 'Deleted skill'}</span></p>
+              )}
+              {initial.requestNote && <p>Why it is needed: <span className="italic">{initial.requestNote}</span></p>}
+              <p className="text-amber-800">
+                Check and correct the content below, then approve it into the catalogue or reject it with a reason.
+              </p>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="md:col-span-2">
               <label htmlFor="tc-title" className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Course title *</label>
@@ -205,6 +249,22 @@ const CourseForm: React.FC<{
                 className="w-full px-3 py-2 border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
+
+            <div>
+              <label htmlFor="tc-syllabus" className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Syllabus — one topic per line</label>
+              <textarea
+                id="tc-syllabus" rows={4} value={form.syllabus || ''} onChange={e => patch({ syllabus: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="tc-objectives" className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Learning objectives</label>
+              <textarea
+                id="tc-objectives" rows={4} value={form.learningObjectives || ''} onChange={e => patch({ learningObjectives: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
           </div>
 
           {/* Skill links — the whole point of the record */}
@@ -257,19 +317,153 @@ const CourseForm: React.FC<{
             </div>
           )}
 
-          <div className="flex justify-end gap-3 pt-1">
+          {isReview && (
+            <div>
+              <label htmlFor="tc-decision" className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">
+                Note to the requester (required when rejecting)
+              </label>
+              <textarea
+                id="tc-decision" rows={2} value={decisionNote} onChange={e => setDecisionNote(e.target.value)}
+                placeholder="e.g. Already covered by TRN-PTW-01 — use that course instead."
+                className="w-full px-3 py-2 border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          )}
+
+          <div className="flex flex-wrap justify-end gap-3 pt-1">
             <button type="button" onClick={onCancel}
               className="px-4 py-2 text-slate-600 font-black text-[10px] uppercase tracking-widest hover:bg-slate-100">
               Cancel
             </button>
+            {isReview && (
+              <>
+                <button type="button" disabled={isSubmitting} onClick={() => decide('REJECTED')}
+                  className="px-5 py-2 border border-rose-300 text-rose-700 font-black text-[10px] uppercase tracking-widest hover:bg-rose-50 disabled:opacity-40 flex items-center gap-2">
+                  <Ban size={14} /> Reject
+                </button>
+                <button type="button" disabled={isSubmitting} onClick={() => decide('APPROVED')}
+                  className="px-5 py-2 bg-emerald-700 text-white font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 disabled:opacity-40 flex items-center gap-2">
+                  {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Approve into catalogue
+                </button>
+              </>
+            )}
             <button type="submit" disabled={isSubmitting}
               className="px-6 py-2 bg-slate-900 text-white font-black text-[10px] uppercase tracking-widest hover:bg-slate-700 disabled:opacity-40 flex items-center gap-2">
               {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-              {initial.id ? 'Save changes' : 'Add course'}
+              {isReview ? 'Save, decide later' : initial.id ? 'Save changes' : 'Add course'}
             </button>
           </div>
         </form>
       </div>
+    </div>
+  );
+};
+
+// ── Course requests — the admin's inbox ─────────────────────────────────────
+// Courses asked for from the skill form. Pending ones wait here (oldest first)
+// until an admin approves or rejects them; decided ones stay listed below as a
+// record, and a rejected one can be reviewed again if the decision changes.
+
+const RequestsList: React.FC<{
+  pending: TrainingCourse[];
+  decided: TrainingCourse[];
+  skillName: (id: string) => string;
+  onReview: (c: TrainingCourse) => void;
+}> = ({ pending, decided, skillName, onReview }) => {
+  const row = (c: TrainingCourse) => (
+    <tr key={c.id} className="hover:bg-slate-50 transition-colors align-top">
+      <td className="px-6 py-3">
+        <p className="font-bold text-slate-900">{c.title}</p>
+        <p className="text-[10px] text-slate-400 uppercase tracking-wide">
+          {TRAINING_COURSE_TYPE_LABELS[c.type]}
+          {c.targetLevel ? ` · to L${c.targetLevel}` : ''}
+          {c.durationHours != null ? ` · ${c.durationHours} h` : ''}
+        </p>
+        {c.syllabus && (
+          <p className="text-[11px] text-slate-500 mt-1 line-clamp-2">
+            {c.syllabus.split('\n').filter(Boolean).join(' · ')}
+          </p>
+        )}
+      </td>
+      <td className="px-3 py-3 text-slate-700">
+        {c.requestedForSkillId ? skillName(c.requestedForSkillId) : c.linkedSkillIds.map(skillName).join(', ') || '—'}
+      </td>
+      <td className="px-3 py-3 text-slate-700">
+        <p>{userName(c.requestedBy)}</p>
+        <p className="text-[10px] text-slate-400">{shortDate(c.requestedAt)}</p>
+      </td>
+      <td className="px-3 py-3">
+        {c.status === 'PENDING' ? (
+          <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 border border-amber-300 bg-amber-50 text-amber-800">
+            <Clock size={10} /> Awaiting decision
+          </span>
+        ) : (
+          <>
+            <span className={`text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 border ${
+              c.status === 'REJECTED' ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+            }`}>
+              {c.status === 'REJECTED' ? 'Rejected' : 'Approved'}
+            </span>
+            <p className="text-[10px] text-slate-400 mt-1">{userName(c.reviewedBy)} · {shortDate(c.reviewedAt)}</p>
+            {c.reviewNote && <p className="text-[11px] text-slate-600 mt-1 italic">{c.reviewNote}</p>}
+          </>
+        )}
+      </td>
+      <td className="px-6 py-3 text-right">
+        {c.status !== 'APPROVED' && (
+          <button
+            onClick={() => onReview(c)}
+            className="px-3 py-1.5 bg-slate-900 text-white font-black text-[10px] uppercase tracking-widest hover:bg-slate-700"
+          >
+            {c.status === 'PENDING' ? 'Review' : 'Review again'}
+          </button>
+        )}
+      </td>
+    </tr>
+  );
+
+  const table = (rows: TrainingCourse[]) => (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead className="bg-slate-50 border-b border-slate-200">
+          <tr className="text-[9px] font-black uppercase tracking-widest text-slate-500">
+            <th className="text-left px-6 py-3">Requested course</th>
+            <th className="text-left px-3 py-3">For skill</th>
+            <th className="text-left px-3 py-3">Requested by</th>
+            <th className="text-left px-3 py-3">Decision</th>
+            <th className="text-right px-6 py-3">Action</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">{rows.map(row)}</tbody>
+      </table>
+    </div>
+  );
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white border border-slate-200 shadow-sm">
+        <div className="px-6 py-3 border-b border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-600">
+          Waiting for a decision ({pending.length})
+        </div>
+        {pending.length === 0 ? (
+          <div className="p-12 text-center">
+            <Inbox size={28} className="text-slate-300 mx-auto mb-3" />
+            <p className="text-sm text-slate-500">
+              No course requests waiting. New requests arrive from the skill form
+              (Required Certificates → “Request new course”).
+            </p>
+          </div>
+        ) : table(pending)}
+      </div>
+
+      {decided.length > 0 && (
+        <div className="bg-white border border-slate-200 shadow-sm">
+          <div className="px-6 py-3 border-b border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-600">
+            Decided requests ({decided.length})
+          </div>
+          {table(decided)}
+        </div>
+      )}
     </div>
   );
 };
@@ -283,15 +477,32 @@ export const TrainingCatalogue: React.FC<{ user: User }> = ({ user }) => {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useSessionState<string>('catalogue-type', 'ALL');
   const [showArchived, setShowArchived] = useSessionState<boolean>('catalogue-archived', false);
+  const [view, setView] = useSessionState<'catalogue' | 'requests'>('catalogue-view', 'catalogue');
   const [editing, setEditing] = useState<TrainingCourse | null>(null);
+  const [reviewing, setReviewing] = useState<TrainingCourse | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showBulk, setShowBulk] = useState(false);
   const [exporting, setExporting] = useState(false);
 
   const skills = useMemo(() => dataService.getAllSkills(), [storeVersion, refreshKey]);
-  const courses = useMemo(
+  const allCourses = useMemo(
     () => dataService.getAllTrainingCourses(true),
     [storeVersion, refreshKey],
+  );
+  // The catalogue proper is approved courses only; requests (pending, or
+  // rejected) live on their own tab until an admin decides.
+  const courses = useMemo(() => allCourses.filter(isCourseApproved), [allCourses]);
+  const pendingRequests = useMemo(
+    () => allCourses
+      .filter(c => c.status === 'PENDING' && !c.isArchived)
+      .sort((a, b) => (a.requestedAt || '').localeCompare(b.requestedAt || '')),
+    [allCourses],
+  );
+  const decidedRequests = useMemo(
+    () => allCourses
+      .filter(c => c.requestedAt && c.reviewedAt && c.status !== 'PENDING')
+      .sort((a, b) => (b.reviewedAt || '').localeCompare(a.reviewedAt || '')),
+    [allCourses],
   );
 
   const skillName = (id: string) => skills.find(s => s.id === id)?.name || 'Deleted skill';
@@ -314,8 +525,7 @@ export const TrainingCatalogue: React.FC<{ user: User }> = ({ user }) => {
   const coverage = useMemo(() => {
     const covered = new Set<string>();
     for (const c of courses) {
-      // A request still awaiting approval covers nothing yet.
-      if (c.isArchived || !isCourseApproved(c)) continue;
+      if (c.isArchived) continue;
       for (const id of c.linkedSkillIds) covered.add(id);
     }
     const live = skills.filter(s => covered.has(s.id)).length;
@@ -338,6 +548,25 @@ export const TrainingCatalogue: React.FC<{ user: User }> = ({ user }) => {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleDecide = async (course: TrainingCourse, decision: 'APPROVED' | 'REJECTED', note: string) => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await dataService.reviewTrainingCourseRequest(course, decision, note);
+      setReviewing(null);
+      setRefreshKey(k => k + 1);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'The decision could not be saved.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSaveRequest = async (course: TrainingCourse) => {
+    await handleSave(course);
+    setReviewing(null);
   };
 
   const handleArchive = async (course: TrainingCourse) => {
@@ -433,6 +662,38 @@ export const TrainingCatalogue: React.FC<{ user: User }> = ({ user }) => {
         </div>
       </div>
 
+      {/* Catalogue / Requests switch */}
+      <div className="flex border-b border-slate-200" role="tablist">
+        {([
+          ['catalogue', 'Catalogue', courses.filter(c => !c.isArchived).length],
+          ['requests', 'Course requests', pendingRequests.length],
+        ] as const).map(([id, label, count]) => (
+          <button
+            key={id}
+            role="tab"
+            aria-selected={view === id}
+            onClick={() => setView(id)}
+            className={`flex items-center gap-2 px-5 py-3 text-[10px] font-black uppercase tracking-widest border-b-2 -mb-px transition-colors ${
+              view === id ? 'border-slate-900 text-slate-900' : 'border-transparent text-slate-400 hover:text-slate-700'
+            }`}
+          >
+            {id === 'requests' && <Inbox size={14} />}
+            {label}
+            <span className={`px-1.5 py-0.5 text-[10px] ${
+              id === 'requests' && count > 0 ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-500'
+            }`}>{count}</span>
+          </button>
+        ))}
+      </div>
+
+      {view === 'requests' ? (
+        <RequestsList
+          pending={pendingRequests}
+          decided={decidedRequests}
+          skillName={skillName}
+          onReview={setReviewing}
+        />
+      ) : (<>
       {/* KPI row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white border border-slate-200 shadow-sm p-4">
@@ -563,16 +824,6 @@ export const TrainingCatalogue: React.FC<{ user: User }> = ({ user }) => {
                             Archived
                           </span>
                         )}
-                        {c.status === 'PENDING' && (
-                          <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 border border-amber-300 bg-amber-50 text-amber-800">
-                            Requested · awaiting approval
-                          </span>
-                        )}
-                        {c.status === 'REJECTED' && (
-                          <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 border border-red-200 bg-red-50 text-red-700">
-                            Request rejected
-                          </span>
-                        )}
                       </div>
                       <p className="text-[10px] text-slate-400 uppercase tracking-wide">
                         {c.code || '—'}
@@ -640,6 +891,18 @@ export const TrainingCatalogue: React.FC<{ user: User }> = ({ user }) => {
           </div>
         )}
       </div>
+      </>)}
+
+      {reviewing && (
+        <CourseForm
+          initial={reviewing}
+          skills={skills}
+          onSave={handleSaveRequest}
+          onDecide={handleDecide}
+          onCancel={() => setReviewing(null)}
+          isSubmitting={isSubmitting}
+        />
+      )}
 
       {editing && (
         <CourseForm
