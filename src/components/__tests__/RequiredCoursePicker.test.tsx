@@ -69,4 +69,22 @@ describe('RequiredCoursePicker', () => {
     expect(draft).toMatchObject({ title: 'Confined Space Entry', linkedSkillIds: ['s1'], targetLevel: 2, syllabus: 'Gas testing\nRescue plan' });
     await waitFor(() => expect(onChange).toHaveBeenCalledWith(['new1'], ['Confined Space Entry']));
   });
+
+  it('shows a just-requested course before the store has caught up, once', async () => {
+    // The real store only learns of the new course on its next refresh.
+    requestTrainingCourse.mockImplementationOnce(async (d: any) => ({ ...d, id: 'lag1', status: 'PENDING' }));
+    const onChange = vi.fn();
+    const props = { legacyNames: [] as string[], skillId: 's1', skillName: 'HSE', level: 2, onChange };
+    const { rerender } = render(<RequiredCoursePicker courseIds={[]} {...props} />);
+    fireEvent.change(screen.getByPlaceholderText(/search the training catalogue/i), { target: { value: 'Rope Access' } });
+    fireEvent.click(screen.getByText(/request a new course/i));
+    fireEvent.change(screen.getByPlaceholderText(/one topic per line/i), { target: { value: 'Knots' } });
+    fireEvent.click(screen.getByText(/send for approval/i));
+    await waitFor(() => expect(onChange).toHaveBeenCalledWith(['lag1'], ['Rope Access']));
+    // The parent cannot match the title yet, so it hands it back as a typed name.
+    rerender(<RequiredCoursePicker courseIds={['lag1']} {...props} legacyNames={['Rope Access']} />);
+    expect(screen.getByText('Rope Access')).toBeTruthy();
+    expect(screen.getByText(/awaiting approval/i)).toBeTruthy();
+    expect(screen.queryByText(/not in catalogue/i)).toBeNull();
+  });
 });

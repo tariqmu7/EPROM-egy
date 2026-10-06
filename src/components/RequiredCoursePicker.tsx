@@ -28,11 +28,19 @@ interface Props {
 const fieldClass = 'w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm text-sm focus:outline-none focus:ring-2 focus:ring-blue-500';
 const labelClass = 'block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1';
 
-export const RequiredCoursePicker: React.FC<Props> = ({ courseIds, legacyNames, skillId, skillName, level, onChange }) => {
+export const RequiredCoursePicker: React.FC<Props> = ({ courseIds, legacyNames: typedNames, skillId, skillName, level, onChange }) => {
   const storeVersion = useStoreData();
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [requestTitle, setRequestTitle] = useState<string | null>(null);
+  // A course just requested from here is not in the store until the next
+  // refresh (a few seconds), so remember it — else its chip and title vanish.
+  const [sent, setSent] = useState<TrainingCourse[]>([]);
+  const findCourse = (id: string, extra: TrainingCourse[] = []) =>
+    dataService.getTrainingCourse(id) ?? [...sent, ...extra].find(c => c.id === id);
+  // ...and the parent, not knowing it yet either, hands its title back as a
+  // typed name; drop that echo so it is not shown twice or saved twice.
+  const legacyNames = typedNames.filter(n => !sent.some(c => c.title.toLowerCase() === n.toLowerCase()));
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -50,7 +58,7 @@ export const RequiredCoursePicker: React.FC<Props> = ({ courseIds, legacyNames, 
     [storeVersion],
   );
   const selected = courseIds
-    .map(id => dataService.getTrainingCourse(id))
+    .map(id => findCourse(id))
     .filter((c): c is TrainingCourse => !!c);
 
   const q = query.trim().toLowerCase();
@@ -59,8 +67,8 @@ export const RequiredCoursePicker: React.FC<Props> = ({ courseIds, legacyNames, 
     .filter(c => !q || [c.title, c.code, c.provider].some(v => v?.toLowerCase().includes(q)))
     .slice(0, 30);
 
-  const emit = (ids: string[], names: string[]) => {
-    const courseNames = ids.map(id => dataService.getTrainingCourse(id)?.title).filter(Boolean) as string[];
+  const emit = (ids: string[], names: string[], extra: TrainingCourse[] = []) => {
+    const courseNames = ids.map(id => findCourse(id, extra)?.title).filter(Boolean) as string[];
     onChange(ids, [...courseNames, ...names]);
   };
 
@@ -158,7 +166,8 @@ export const RequiredCoursePicker: React.FC<Props> = ({ courseIds, legacyNames, 
           onCancel={() => setRequestTitle(null)}
           onSent={course => {
             const rest = legacyNames.filter(n => n.toLowerCase() !== course.title.toLowerCase() && n !== requestTitle);
-            emit([...courseIds, course.id], rest);
+            setSent(s => [...s, course]);
+            emit([...courseIds, course.id], rest, [course]);
             setRequestTitle(null);
             setQuery('');
           }}
