@@ -11,7 +11,7 @@ import { useSessionState } from '../hooks/useSessionState';
 import { BulkUpload } from '../components/BulkUpload';
 import {
   User, Skill, TrainingCourse, TRAINING_COURSE_TYPES, TRAINING_COURSE_TYPE_LABELS,
-  PROFICIENCY_LABELS,
+  PROFICIENCY_LABELS, isCourseApproved,
 } from '../types';
 
 // Every exported cell goes through `safeExportCell`: a value that begins with
@@ -314,7 +314,8 @@ export const TrainingCatalogue: React.FC<{ user: User }> = ({ user }) => {
   const coverage = useMemo(() => {
     const covered = new Set<string>();
     for (const c of courses) {
-      if (c.isArchived) continue;
+      // A request still awaiting approval covers nothing yet.
+      if (c.isArchived || !isCourseApproved(c)) continue;
       for (const id of c.linkedSkillIds) covered.add(id);
     }
     const live = skills.filter(s => covered.has(s.id)).length;
@@ -560,6 +561,16 @@ export const TrainingCatalogue: React.FC<{ user: User }> = ({ user }) => {
                         {c.isArchived && (
                           <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 border border-slate-300 text-slate-500">
                             Archived
+                          </span>
+                        )}
+                        {c.status === 'PENDING' && (
+                          <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 border border-amber-300 bg-amber-50 text-amber-800">
+                            Requested · awaiting approval
+                          </span>
+                        )}
+                        {c.status === 'REJECTED' && (
+                          <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 border border-red-200 bg-red-50 text-red-700">
+                            Request rejected
                           </span>
                         )}
                       </div>

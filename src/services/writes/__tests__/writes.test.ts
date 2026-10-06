@@ -436,4 +436,24 @@ describe('training catalogue', () => {
     await writes.restoreTrainingCourse(host, 'c1');
     expect(host.updated[1].item.isArchived).toBe(false);
   });
+
+  it('a requested course is stored PENDING and every other active admin is told', async () => {
+    const host = makeHost({
+      users: [
+        { id: 'actor-1', role: 'ADMIN', status: 'ACTIVE' } as any,
+        { id: 'a2', role: 'ADMIN', status: 'ACTIVE' } as any,
+        { id: 'a3', role: 'ADMIN', status: 'ACTIVE', isArchived: true } as any,
+        { id: 'e1', role: 'EMPLOYEE', status: 'ACTIVE' } as any,
+      ],
+    });
+    const course = await writes.requestTrainingCourse(host, {
+      title: 'Permit to Work', provider: 'To be decided', type: 'INTERNAL',
+      linkedSkillIds: ['s1'], syllabus: 'PTW types; Isolation', requestedForSkillId: 's1',
+    });
+    expect(course.status).toBe('PENDING');
+    expect(course.requestedBy).toBe('actor-1');
+    expect(course.syllabus).toContain('Isolation');
+    expect(host.persisted[0].item.status).toBe('PENDING');
+    expect(host.notified.map(n => n.userId)).toEqual(['a2']);
+  });
 });

@@ -74,7 +74,12 @@ export const PROFICIENCY_LABELS: Record<number, string> = {
 export interface SkillLevel {
   level: number;
   description: string;
+  /** Display names of the required certificates/courses. Kept in step with
+   *  requiredCourseIds so older screens and the bulk upload keep working. */
   requiredCertificates: string[];
+  /** The required certificates as Training Catalogue course ids — the source
+   *  of truth once a level is edited with the catalogue pick-list. */
+  requiredCourseIds?: string[];
 }
 
 // ─── Skill criticality — how much a gap on this skill MATTERS ───────────────
@@ -450,9 +455,36 @@ export interface TrainingCourse {
   targetLevel?: number;
   /** Soft delete — an archived course is hidden from recommendations. */
   isArchived?: boolean;
+  /**
+   * Approval state. Absent means APPROVED (every course written before
+   * requests existed). A course asked for from the skill form starts PENDING;
+   * only an APPROVED course is ever recommended, priced or budgeted.
+   */
+  status?: TrainingCourseStatus;
+  /** What the course must cover — one topic per line. The training
+   *  department prepares the material from this. */
+  syllabus?: string;
+  /** What a delegate can do afterwards. */
+  learningObjectives?: string;
+  /** Why it is needed — free text from whoever asked for it. */
+  requestNote?: string;
+  requestedBy?: string;
+  requestedAt?: string;
+  /** The skill it was asked for from (also in linkedSkillIds). */
+  requestedForSkillId?: string;
+  /** Admin's reason when approving with changes or rejecting. */
+  reviewNote?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
   createdAt?: string;
   updatedAt?: string;
 }
+
+export type TrainingCourseStatus = 'APPROVED' | 'PENDING' | 'REJECTED';
+
+/** A course with no status predates requests and counts as approved. */
+export const isCourseApproved = (c: Pick<TrainingCourse, 'status'>): boolean =>
+  !c.status || c.status === 'APPROVED';
 
 export const TRAINING_COURSE_TYPES = ['INTERNAL', 'EXTERNAL', 'OJT'] as const;
 

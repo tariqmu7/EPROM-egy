@@ -1,4 +1,4 @@
-import { User, Role, JobProfile, Skill, Project, Department, Assessment, ActivityLog, ORG_LEVEL_NUMBERS, Notification, AssessmentCycle, Nomination, IndividualTrainingPlan, OrgLevel, Evidence, CareerProgressionPlan, TrainingCourse, ScheduledAssessment, AssessmentMethod, Certificate, CareerHistoryEntry, SkillLevel, EvaluationQuestion, AssessmentPlan, AssessmentInstruction, SkillAssessmentMethod, AssessmentAudience, JobProfileSkill, DepartmentType, DEPT_TYPE_TO_ORG_LEVEL, RaterWeights, WorkExperience, WorkExperienceSkill, WorkExperienceStatus, WorkExperiencePolicy, SkillScoreSource, CompetencyCoverage, CompetencySnapshot, OrgOverview, TrainingNeedsAnalysis, DevelopmentPlan, DevelopmentPlanItem, DevelopmentPlanStatus, DevelopmentItemStatus, DevelopmentPlanItemProgress, DevelopmentPlanProgress } from '../types';
+import { User, Role, JobProfile, Skill, Project, Department, Assessment, ActivityLog, ORG_LEVEL_NUMBERS, Notification, AssessmentCycle, Nomination, IndividualTrainingPlan, OrgLevel, Evidence, CareerProgressionPlan, TrainingCourse, ScheduledAssessment, AssessmentMethod, Certificate, CareerHistoryEntry, SkillLevel, EvaluationQuestion, AssessmentPlan, AssessmentInstruction, SkillAssessmentMethod, AssessmentAudience, JobProfileSkill, DepartmentType, DEPT_TYPE_TO_ORG_LEVEL, RaterWeights, WorkExperience, WorkExperienceSkill, WorkExperienceStatus, WorkExperiencePolicy, SkillScoreSource, CompetencyCoverage, CompetencySnapshot, OrgOverview, TrainingNeedsAnalysis, DevelopmentPlan, DevelopmentPlanItem, DevelopmentPlanStatus, DevelopmentItemStatus, DevelopmentPlanItemProgress, DevelopmentPlanProgress, isCourseApproved } from '../types';
 import { DEFAULT_WORK_EXPERIENCE_POLICY, suggestLevelFromYears } from '../constants/experiencePolicy';
 import {
   collection,
@@ -2271,12 +2271,18 @@ export class DataService {
   getSkill(id: string) { return this.skills.find(s => s.id === id && !s.isArchived); }
   // Training catalogue. Archived courses stay in the store for history but are
   // never recommended, so the default excludes them (same shape as skills/jobs).
+  // Pending/rejected course requests are not part of the catalogue yet: they
+  // are left out unless includeArchived (the admin catalogue view) asks for all.
   getAllTrainingCourses(includeArchived = false) {
-    return includeArchived ? this.trainingCourses : this.trainingCourses.filter(c => !c.isArchived);
+    return includeArchived ? this.trainingCourses : this.trainingCourses.filter(c => !c.isArchived && isCourseApproved(c));
   }
   getTrainingCourse(id: string) { return this.trainingCourses.find(c => c.id === id); }
   getCoursesForSkill(skillId: string) {
-    return this.trainingCourses.filter(c => !c.isArchived && c.linkedSkillIds.includes(skillId));
+    return this.trainingCourses.filter(c => !c.isArchived && isCourseApproved(c) && c.linkedSkillIds.includes(skillId));
+  }
+
+  async requestTrainingCourse(draft: Omit<TrainingCourse, 'id'>) {
+    return writes.requestTrainingCourse(this.writeCtx, draft);
   }
   getSystemLogs() { return this.logs; }
 

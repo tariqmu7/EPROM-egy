@@ -57,6 +57,7 @@ export {
   updateTrainingCourse,
   removeTrainingCourse,
   restoreTrainingCourse,
+  requestTrainingCourse,
 } from './trainingCourses';
 
 export {

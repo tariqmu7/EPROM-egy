@@ -1,4 +1,4 @@
-import type { TrainingCourse } from '../../types';
+import { Role, type TrainingCourse } from '../../types';
 import { newId } from '../../utils/uuid';
 import type { WriteHost } from './host';
 
@@ -69,4 +69,34 @@ export async function restoreTrainingCourse(host: WriteHost, id: string): Promis
   if (!course) return;
   await host.update('trainingCourses', { ...course, isArchived: false, updatedAt: new Date().toISOString() });
   await host.logActivity('Restored Training Course', course.title);
+}
+
+/**
+ * A course asked for from the skill form because the catalogue does not have
+ * it yet. It is stored as a normal course in PENDING state — so no new table —
+ * and stays out of every recommendation until an admin approves it. Every
+ * other active admin is told, so the request does not sit unseen.
+ */
+export async function requestTrainingCourse(
+  host: WriteHost,
+  draft: Omit<TrainingCourse, 'id'>,
+): Promise<TrainingCourse> {
+  const { actorId, actorName } = host.currentActor();
+  const course = await addTrainingCourse(host, {
+    ...draft,
+    status: 'PENDING',
+    requestedBy: actorId ?? host.authUid(),
+    requestedAt: new Date().toISOString(),
+  });
+  const admins = host.users.filter(u => u.role === Role.ADMIN && u.status === 'ACTIVE' && !u.isArchived && u.id !== actorId);
+  for (const admin of admins) {
+    await host.notify({
+      userId: admin.id,
+      title: 'New course request',
+      message: `${actorName || 'An administrator'} asked for a new course: "${course.title}". Review its content and approve or reject it.`,
+      type: 'INFO',
+      actionLink: 'admin-courses',
+    });
+  }
+  return course;
 }

@@ -230,6 +230,8 @@ export async function loadAnalyticsModel(): Promise<AnalyticsModel> {
   const coursesBySkill = new Map<string, CourseRef[]>();
   for (const r of courseRows) {
     if (r.data.isArchived) continue;
+    // A requested course is not in the catalogue until an admin approves it.
+    if (r.data.status && r.data.status !== 'APPROVED') continue;
     const cost = Number(r.data.costPerSeat);
     const hours = Number(r.data.durationHours);
     const ref: CourseRef = {

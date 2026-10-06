@@ -5,6 +5,7 @@ import { PROFICIENCY_DEFINITIONS } from '../../constants';
 import { Save, BookOpen, Activity } from 'lucide-react';
 import { SearchableSelect } from '../../components/SearchableSelect';
 import { AssessmentMethodEditor } from '../../components/AssessmentMethodEditor';
+import { RequiredCoursePicker } from '../../components/RequiredCoursePicker';
 
 // --- Skill Form (Competency Standard) ---
 // Two top-level sections: the competency standard (identity + proficiency
@@ -21,6 +22,9 @@ export const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill
   const [formData, setFormData] = useState<Partial<Skill>>(initialData || { levels: defaultLevels });
   const [activeTab, setActiveTab] = useState(1);
   const [section, setSection] = useState<'STANDARD' | 'METHODS'>('STANDARD');
+  // Fixed up front (not at submit) so a course requested while the skill is
+  // still unsaved can already be linked to it.
+  const [skillId] = useState(() => initialData?.id || Math.random().toString(36).substr(2, 9));
 
   // Resolve the methods to edit: stored inline blocks, or a one-time synthesis
   // from any legacy linked instructions so existing config is editable inline.
@@ -74,7 +78,7 @@ export const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill
 
     onSave({
        ...(initialData || {}),
-       id: initialData?.id || Math.random().toString(36).substr(2, 9),
+       id: skillId,
        name: formData.name,
        category: formData.category,
        subcategory: formData.subcategory,
@@ -234,12 +238,28 @@ export const SkillForm: React.FC<{ initialData?: Skill | null, onSave: (s: Skill
                 />
              </div>
              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Required Certificates (Comma Separated)</label>
-                <input className="w-full px-3 py-2 bg-white text-slate-900 border border-slate-300 rounded-sm focus:ring-2 focus:ring-slate-900 outline-none"
-                   placeholder="e.g. PMP, NEBOSH"
-                   value={formData.levels?.[activeTab as any]?.requiredCertificates?.join(', ') || ''}
-                   onChange={e => updateLevel(activeTab, 'requiredCertificates', e.target.value.split(',').map((s: string) => s.trim()).filter(Boolean))}
-                />
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Required Certificates</label>
+                <p className="text-[10px] text-slate-500 mb-2">Pick from the Training Catalogue. If the course is not there, request it — an administrator approves it first.</p>
+                {(() => {
+                   const lvl = formData.levels?.[activeTab as any];
+                   const ids = lvl?.requiredCourseIds || [];
+                   const titles = new Set(ids.map(id => dataService.getTrainingCourse(id)?.title.toLowerCase()).filter(Boolean));
+                   const legacy = (lvl?.requiredCertificates || []).filter(n => !titles.has(n.toLowerCase()));
+                   return (
+                     <RequiredCoursePicker
+                        key={activeTab}
+                        courseIds={ids}
+                        legacyNames={legacy}
+                        skillId={skillId}
+                        skillName={formData.name || ''}
+                        level={activeTab}
+                        onChange={(courseIds, names) => {
+                           updateLevel(activeTab, 'requiredCourseIds', courseIds);
+                           updateLevel(activeTab, 'requiredCertificates', names);
+                        }}
+                     />
+                   );
+                })()}
              </div>
           </div>
        </div>
