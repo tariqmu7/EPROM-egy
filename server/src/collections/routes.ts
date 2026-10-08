@@ -7,22 +7,7 @@ import { isCollection, tableFor, type CollectionName } from './registry.js';
 import { buildWhere, type Filter, type QuerySpec } from './query.js';
 import { validateDoc } from './schemas.js';
 import { writeTombstone, clearTombstone } from './tombstones.js';
-
-// Greatest timestamp (as ISO) across a set of Date/string values, or null.
-// Drives the delta-sync cursor the client sends back on its next poll.
-function maxIso(values: unknown[]): string | null {
-  let best = -Infinity;
-  let iso: string | null = null;
-  for (const v of values) {
-    if (v == null) continue;
-    const t = v instanceof Date ? v.getTime() : Date.parse(String(v));
-    if (Number.isFinite(t) && t > best) {
-      best = t;
-      iso = new Date(t).toISOString();
-    }
-  }
-  return iso;
-}
+import { nextCursor, readWatermark } from './cursor.js';
 
 // Wrap async handlers so thrown errors hit the error middleware.
 const h =
@@ -216,7 +201,9 @@ export function collectionsRouter(): Router {
     const table = tableFor(name);
     const scope = await listScope(name, user, getSubordinateIds);
     const since = typeof spec.since === 'string' && spec.since !== '' ? spec.since : null;
-    const { text, params } = buildWhere(spec, scope);
+    const { text, params, limit } = buildWhere(spec, scope);
+    // Read the watermark BEFORE the rows, so nothing committed in between is lost.
+    const watermark = await readWatermark(query);
     const loaded = await query(`SELECT id, data, version, created_at, updated_at FROM ${table}${text}`, params);
     const rows = name === 'users' ? await redactUserRows(loaded.rows, user) : loaded.rows;
 
@@ -226,19 +213,28 @@ export function collectionsRouter(): Router {
       deletions?: { id: string }[];
     } = {
       documents: rows.map((r) => shape(r.id, r.data, r)),
-      cursor: maxIso(rows.map((r) => r.updated_at)),
+      cursor: null,
     };
 
     // On a delta poll, also report hard deletes since the cursor so the client
-    // evicts them, and advance the cursor past the newest deletion too.
+    // evicts them. The cursor itself — capped so it can never pass a write that
+    // is still committing, or rows a full page did not reach — is cursor.ts.
+    let deletionTimes: unknown[] = [];
     if (since) {
       const del = await query('SELECT id, deleted_at FROM tombstones WHERE collection = $1 AND deleted_at > $2', [
         name,
         since,
       ]);
       body.deletions = del.rows.map((r) => ({ id: r.id as string }));
-      body.cursor = maxIso([body.cursor, ...del.rows.map((r) => r.deleted_at)]) ?? since;
+      deletionTimes = del.rows.map((r) => r.deleted_at);
     }
+    body.cursor = nextCursor({
+      since,
+      rowTimes: loaded.rows.map((r) => r.updated_at),
+      deletionTimes,
+      truncated: loaded.rows.length >= limit,
+      watermark,
+    });
     res.json(body);
   }
 

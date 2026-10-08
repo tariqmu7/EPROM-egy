@@ -570,8 +570,12 @@ when set it returns only rows with `updated_at > since` (ordered by `updated_at`
 so clients can evict hard-deleted ids, plus a `cursor` for the next poll. Every response now
 carries `cursor`. DELETE writes a tombstone; create/set clears it (helpers in
 [`server/src/collections/tombstones.ts`](server/src/collections/tombstones.ts)). The cursor is
-millisecond-precision, so a boundary row may be re-sent once — harmless (the client cache merge is
-idempotent).
+computed in [`server/src/collections/cursor.ts`](server/src/collections/cursor.ts) and is
+**deliberately conservative**: `updated_at = now()` is the writing transaction's *start*, not its
+commit, so the cursor is capped below the oldest open transaction (`pg_stat_activity`, read
+*before* the rows; ignored once older than 5 min), and a page cut short by its LIMIT resumes
+before its last row instead of letting newer deletions carry it past rows it never reached. Rows
+near the boundary are therefore re-sent — harmless (the client cache merge is idempotent).
 
 **Observability.** Every request gets an `x-request-id` (honoured from the client or generated),
 a per-request child logger, and a structured JSON access log; the error handler logs with that id

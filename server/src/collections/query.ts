@@ -22,8 +22,8 @@ export interface QuerySpec {
 // A caller may ask for fewer, never more. Without this a `GET /col/:name` with no
 // `limit` streams an entire (scoped) collection into memory (finding F-3). Set to
 // the client's own listener cap (MAX_LISTENER_DOCS) so no legitimate read is
-// truncated; a delta poll that hits the cap simply resumes from the advanced
-// cursor next tick.
+// truncated; a delta poll that hits the cap resumes next tick from a cursor
+// that stops short of the rows it did not reach (see cursor.ts).
 export const MAX_PAGE_SIZE = 10000;
 
 // Only simple identifiers are valid JSON field names in this app. Validating
@@ -60,6 +60,7 @@ function renderFilter(f: Filter, params: unknown[]): string {
 export interface BuiltQuery {
   text: string;
   params: unknown[];
+  limit: number; // the LIMIT actually applied — a page this long may be truncated
 }
 
 // A mandatory access-control scope, ANDed into every list query so the caller can
@@ -120,7 +121,8 @@ export function buildWhere(
   // both the GET list and POST query paths flow through, so every response is
   // bounded regardless of the caller (finding F-3).
   const requested = typeof spec.limit === 'number' && spec.limit > 0 ? Math.floor(spec.limit) : MAX_PAGE_SIZE;
-  const p = params.push(Math.min(requested, MAX_PAGE_SIZE));
+  const limit = Math.min(requested, MAX_PAGE_SIZE);
+  const p = params.push(limit);
   text += ` LIMIT $${p}`;
 
   if (typeof spec.offset === 'number' && spec.offset > 0) {
@@ -128,5 +130,5 @@ export function buildWhere(
     text += ` OFFSET $${p}`;
   }
 
-  return { text, params };
+  return { text, params, limit };
 }

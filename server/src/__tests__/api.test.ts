@@ -78,6 +78,11 @@ beforeAll(async () => {
   await query(
     'CREATE TABLE tombstones (collection TEXT NOT NULL, id TEXT NOT NULL, deleted_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (collection, id))',
   );
+  // Stand-ins for what the delta cursor reads to find the oldest open
+  // transaction (collections/cursor.ts). A row here plays an in-flight write.
+  const { DataType } = await import('pg-mem');
+  mem.public.registerFunction({ name: 'current_database', returns: DataType.text, implementation: () => 'ecms' });
+  await query('CREATE TABLE pg_stat_activity (datname TEXT, backend_type TEXT, xact_start TIMESTAMPTZ)');
   // NOTE: there is deliberately no password_reset_tokens table — migration 009
   // dropped it with the half-built reset-by-email flow.
 
@@ -702,6 +707,8 @@ describe('delta sync (incremental reads + tombstones)', () => {
   it('a delta query returns only rows changed after the cursor', async () => {
     const a = await auth();
     await request(app).put('/col/skills/delta-a').set('Authorization', a).send({ data: { name: 'A', category: 'Technical' } });
+    // The cursor stays a millisecond behind "now" (cursor.ts), so give delta-a one.
+    await new Promise((r) => setTimeout(r, 5));
 
     const full = await request(app).post('/col/skills/query').set('Authorization', a).send({});
     expect(full.body.cursor).toBeTruthy();
@@ -730,6 +737,62 @@ describe('delta sync (incremental reads + tombstones)', () => {
     const delta = await request(app).post('/col/skills/query').set('Authorization', a).send({ since: cursor });
     const deletedIds = (delta.body.deletions ?? []).map((d: any) => d.id);
     expect(deletedIds).toContain('tomb-x');
+  });
+
+  // R7. `updated_at = now()` is when the writing transaction STARTED, not when
+  // its rows became visible. A slow write still open while a quicker one lands
+  // must not be overtaken by the cursor, or its rows are never sent.
+  it('the cursor never passes a write that is still committing (R7)', async () => {
+    const a = await auth();
+    const dbNow = (await query('SELECT now() AS n')).rows[0].n as Date;
+    const t0 = new Date(dbNow.getTime() - 2000); // the slow write began 2 s ago…
+    await query("INSERT INTO pg_stat_activity VALUES ('ecms', 'client backend', $1)", [t0]);
+    let cursor: string;
+    try {
+      // …a quick write lands meanwhile, and a client polls.
+      await request(app).put('/col/skills/r7-fast').set('Authorization', a).send({ data: { name: 'Fast', category: 'Technical' } });
+      const full = await request(app).post('/col/skills/query').set('Authorization', a).send({});
+      expect(idsOf(full)).toContain('r7-fast');
+      cursor = full.body.cursor;
+      expect(Date.parse(cursor)).toBeLessThan(t0.getTime());
+
+      // The slow write commits, stamped with its START time.
+      await query('INSERT INTO skills (id, data, updated_at) VALUES ($1, $2, $3)', [
+        'r7-late',
+        { id: 'r7-late', name: 'Late', category: 'Technical' },
+        t0,
+      ]);
+    } finally {
+      await query('DELETE FROM pg_stat_activity');
+    }
+
+    const delta = await request(app).post('/col/skills/query').set('Authorization', a).send({ since: cursor });
+    expect(idsOf(delta)).toContain('r7-late');
+  });
+
+  // R7. A page cut short by its LIMIT used to let the newest deletion (or the
+  // last row's own timestamp) carry the cursor past rows it never reached.
+  it('a page cut short by its limit resumes where it stopped, deletions or not (R7)', async () => {
+    const a = await auth();
+    const base = Date.parse('2020-01-01T00:00:00.000Z'); // older than every other row
+    const at = (ms: number) => new Date(base + ms);
+    await query('INSERT INTO nominations (id, data, updated_at) VALUES ($1, $2, $3), ($4, $5, $6)', [
+      'r7-n1', { id: 'r7-n1' }, at(100),
+      'r7-n2', { id: 'r7-n2' }, at(200),
+    ]);
+    await query('INSERT INTO tombstones (collection, id, deleted_at) VALUES ($1, $2, $3)', ['nominations', 'r7-gone', at(300)]);
+
+    // A one-row page: r7-n1 fits, r7-n2 does not, and the deletion is newer than both.
+    const seen = new Set<string>();
+    let since = at(0).toISOString();
+    for (let poll = 0; poll < 4 && !seen.has('r7-n2'); poll++) {
+      const res = await request(app).post('/col/nominations/query').set('Authorization', a).send({ since, limit: 1 });
+      expect(res.status).toBe(200);
+      idsOf(res).forEach((id) => seen.add(id));
+      since = res.body.cursor;
+    }
+    expect(seen.has('r7-n1')).toBe(true);
+    expect(seen.has('r7-n2')).toBe(true);
   });
 });
 
