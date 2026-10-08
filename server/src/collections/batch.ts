@@ -5,6 +5,7 @@ import { isCollection, tableFor, type CollectionName } from './registry.js';
 import { validateDoc } from './schemas.js';
 import { writeTombstone, clearTombstone } from './tombstones.js';
 import { recordAudit, requestIdOf, stampClientLog, type AuditEntry } from '../audit/log.js';
+import { docIdFor } from './identity.js';
 
 // Mirrors Firestore writeBatch: an atomic list of set/update/delete ops.
 interface BatchOp {
@@ -112,6 +113,8 @@ export function batchRouter(): Router {
 
           // What each op did, for the audit rows written with the changes (R9).
           const audits: AuditEntry[] = [];
+          // What each op leaves in its row, as authorized — pass 2 writes exactly this.
+          const writes: (Record<string, any> | null)[] = [];
 
           // Pass 1: authorize everything first, advancing the composed state.
           for (const op of ops) {
@@ -119,8 +122,10 @@ export function batchRouter(): Router {
             const table = tableFor(name);
             const existing = await current(table, op.id);
             const action: Action = op.type === 'delete' ? 'delete' : existing ? 'update' : 'create';
-            const incoming = op.type === 'delete' ? null : { ...(op.data ?? {}), id: op.id };
-            const merged = op.type === 'update' && existing ? { ...existing, ...(op.data ?? {}), id: op.id } : incoming;
+            // An existing record keeps the id stored inside it (R11).
+            const docId = docIdFor(existing, op.id);
+            const incoming = op.type === 'delete' ? null : { ...(op.data ?? {}), id: docId };
+            const merged = op.type === 'update' && existing ? { ...existing, ...(op.data ?? {}), id: docId } : incoming;
 
             const ok = await can(name, action, { user, getUserDoc, getDepartmentDoc, docId: op.id, existing, incoming: merged });
             if (!ok) {
@@ -131,6 +136,7 @@ export function batchRouter(): Router {
             // writes nothing there (UPDATE matches no row), so it stays absent.
             const after = op.type === 'delete' ? null : op.type === 'set' ? incoming : existing ? merged : null;
             composed.set(keyOf(table, op.id), after);
+            writes.push(after);
             if (existing || after) {
               audits.push({
                 action: op.type === 'delete' ? 'delete' : existing ? 'update' : 'create',
@@ -142,28 +148,26 @@ export function batchRouter(): Router {
             }
           }
 
-          // Pass 2: apply. Updates re-read `existing` here so two ops touching the
-          // same id in one batch compose correctly (mirrors the single-doc path).
-          for (const op of ops) {
+          // Pass 2: apply what pass 1 authorized. Two ops on the same id already
+          // composed there, so each write is the state after that op.
+          for (const [i, op] of ops.entries()) {
             const table = tableFor(op.collection as CollectionName);
+            const after = writes[i];
             if (op.type === 'delete') {
               await tx(`DELETE FROM ${table} WHERE id = $1`, [op.id]);
               await writeTombstone(tx, op.collection, op.id);
             } else if (op.type === 'set') {
-              const incoming = { ...(op.data ?? {}), id: op.id };
               await tx(
                 `INSERT INTO ${table} (id, data, created_by, updated_by) VALUES ($1, $2, $3, $3)
                  ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, version = ${table}.version + 1,
                    updated_at = now(), updated_by = $3`,
-                [op.id, incoming, user.id],
+                [op.id, after, user.id],
               );
               await clearTombstone(tx, op.collection, op.id);
-            } else {
-              const existing = (await tx(`SELECT data FROM ${table} WHERE id = $1`, [op.id])).rows[0]?.data ?? {};
-              const merged = { ...existing, ...(op.data ?? {}), id: op.id };
+            } else if (after) {
               await tx(
                 `UPDATE ${table} SET data = $2, version = version + 1, updated_at = now(), updated_by = $3 WHERE id = $1`,
-                [op.id, merged, user.id],
+                [op.id, after, user.id],
               );
             }
           }

@@ -9,6 +9,7 @@ import { validateDoc } from './schemas.js';
 import { writeTombstone, clearTombstone } from './tombstones.js';
 import { nextCursor, readWatermark } from './cursor.js';
 import { recordAudit, requestIdOf, stampClientLog } from '../audit/log.js';
+import { docIdFor } from './identity.js';
 
 // Wrap async handlers so thrown errors hit the error middleware.
 const h =
@@ -334,7 +335,7 @@ export function collectionsRouter(): Router {
       for (let attempt = 0; attempt < MAX_CAS_ATTEMPTS; attempt++) {
         const existing = await loadRow(table, id);
         const action: Action = existing ? 'update' : 'create';
-        const base = { ...(raw as Record<string, any>), id };
+        const base = { ...(raw as Record<string, any>), id: docIdFor(existing?.data, id) };
         const incoming = existing ? base : stampClientLog(name, base, req.user!);
         if (!(await authorize(name, action, req.user!, { docId: id, existing: existing?.data, incoming }))) {
           res.status(403).json({ error: 'forbidden' });
@@ -393,7 +394,7 @@ export function collectionsRouter(): Router {
           res.status(404).json({ error: 'not found' });
           return;
         }
-        const merged = { ...existing.data, ...(raw as Record<string, any>), id };
+        const merged = { ...existing.data, ...(raw as Record<string, any>), id: docIdFor(existing.data, id) };
         if (!(await authorize(name, 'update', req.user!, { docId: id, existing: existing.data, incoming: merged }))) {
           res.status(403).json({ error: 'forbidden' });
           return;

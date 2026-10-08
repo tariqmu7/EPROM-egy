@@ -1899,3 +1899,78 @@ describe('the server keeps its own audit log (R9)', () => {
     expect(second.next).toBeNull(); // a short page is the end
   });
 });
+
+// ===========================================================================
+// R11 — a record carried over from Firebase keeps its original id in `data.id`
+// (the canonical id every score, plan and `managerId` points at) while its row
+// is keyed by the login uid. Every edit used to stamp the row key over
+// `data.id`: an admin archiving the person re-keyed them and orphaned their
+// history, and the person's own profile edit was refused outright, because
+// `id` is a protected users field and the stamp "changed" it.
+// ===========================================================================
+describe('R11 - an edit never changes the id stored inside a record', () => {
+  // Row key = login uid; data.id = the canonical id from the old system.
+  const MIGRATED = { id: 'r11-uid', email: 'r11@eprom.local' };
+  const LEGACY_ID = 'r11-legacy';
+  beforeAll(async () => {
+    await seedUser(MIGRATED, 'EMPLOYEE', 'r11-pass', { id: LEGACY_ID, orgLevel: 'JP' });
+  });
+  const storedId = async () => (await query('SELECT data FROM users WHERE id = $1', [MIGRATED.id])).rows[0].data.id;
+
+  it('the person can still edit their own profile, and keeps their id', async () => {
+    const tok = await login(MIGRATED.email, 'r11-pass');
+    const res = await request(app)
+      .patch(`/col/users/${MIGRATED.id}`)
+      .set('Authorization', `Bearer ${tok}`)
+      .send({ data: { phone: '0100' } });
+    expect(res.status).toBe(200);
+    expect(await storedId()).toBe(LEGACY_ID);
+  });
+
+  it('an admin edit (PATCH, PUT, batch) keeps it too', async () => {
+    const tok = await login(ADMIN.email, 'admin-pass');
+    const patch = await request(app)
+      .patch(`/col/users/${MIGRATED.id}`)
+      .set('Authorization', `Bearer ${tok}`)
+      .send({ data: { isArchived: false } });
+    expect(patch.status).toBe(200);
+    expect(patch.body.data.id).toBe(LEGACY_ID);
+    expect(await storedId()).toBe(LEGACY_ID);
+
+    const { rows } = await query('SELECT data FROM users WHERE id = $1', [MIGRATED.id]);
+    const put = await request(app)
+      .put(`/col/users/${MIGRATED.id}`)
+      .set('Authorization', `Bearer ${tok}`)
+      .send({ data: { ...rows[0].data, id: undefined, name: 'Renamed' } });
+    expect(put.status).toBe(200);
+    expect(await storedId()).toBe(LEGACY_ID);
+
+    const batch = await request(app)
+      .post('/batch')
+      .set('Authorization', `Bearer ${tok}`)
+      .send({ operations: [{ type: 'update', collection: 'users', id: MIGRATED.id, data: { phone: '0200' } }] });
+    expect(batch.status).toBe(200);
+    expect(await storedId()).toBe(LEGACY_ID);
+  });
+
+  it('an id sent in the body cannot re-key the record', async () => {
+    const tok = await login(ADMIN.email, 'admin-pass');
+    const res = await request(app)
+      .patch(`/col/users/${MIGRATED.id}`)
+      .set('Authorization', `Bearer ${tok}`)
+      .send({ data: { id: 'someone-else' } });
+    expect(res.status).toBe(200);
+    expect(await storedId()).toBe(LEGACY_ID);
+  });
+
+  it('a new record still takes its row key', async () => {
+    const tok = await login(ADMIN.email, 'admin-pass');
+    const res = await request(app)
+      .post('/batch')
+      .set('Authorization', `Bearer ${tok}`)
+      .send({ operations: [{ type: 'set', collection: 'skills', id: 'sk-r11', data: { id: 'other', name: 'R11 skill' } }] });
+    expect(res.status).toBe(200);
+    const { rows } = await query('SELECT data FROM skills WHERE id = $1', ['sk-r11']);
+    expect(rows[0].data.id).toBe('sk-r11');
+  });
+});
