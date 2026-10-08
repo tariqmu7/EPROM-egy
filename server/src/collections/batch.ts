@@ -73,24 +73,41 @@ export function batchRouter(): Router {
       // concurrent single-doc write waits for the commit and then fails its
       // version compare-and-swap and retries on the batch's result (routes.ts),
       // instead of one silently undoing the other.
+      //
+      // Pass 1 authorizes each op against the COMPOSED state — what the batch's
+      // earlier ops will have made of the data — not against the pre-batch rows
+      // (R6). Checking every op against the original let two edits that are each
+      // fine alone combine into one that is not: a manager holding a PEER score
+      // on their own report could send {subjectId: <a stranger>} and
+      // {type: 'MANAGER'} as two updates of the same doc — each passes against
+      // the original, together they store a 60%-weight score on someone they do
+      // not supervise. `composed` is a working copy that pass 1 advances op by op
+      // exactly as pass 2 will write, and the authz lookups read through it too.
       try {
         await withTransaction(async (tx: Tx) => {
-          // Read helper for manager-of/ancestor checks, bound to THIS tx so authz
-          // sees the same snapshot as the writes.
-          const getUserDoc = async (id: string): Promise<Record<string, any> | null> => {
-            const { rows } = await tx('SELECT data FROM users WHERE id = $1', [id]);
-            return rows.length ? (rows[0].data as Record<string, any>) : null;
-          };
-          const getDepartmentDoc = async (id: string): Promise<Record<string, any> | null> => {
-            const { rows } = await tx('SELECT data FROM departments WHERE id = $1', [id]);
-            return rows.length ? (rows[0].data as Record<string, any>) : null;
+          const composed = new Map<string, Record<string, any> | null>();
+          const keyOf = (table: string, id: string) => `${table}/${id}`;
+          // First touch reads the committed row (FOR UPDATE, see above); every
+          // later touch in this batch sees what the earlier ops left behind.
+          const current = async (table: string, id: string): Promise<Record<string, any> | null> => {
+            const key = keyOf(table, id);
+            if (!composed.has(key)) {
+              const { rows } = await tx(`SELECT data FROM ${table} WHERE id = $1 FOR UPDATE`, [id]);
+              composed.set(key, rows.length ? (rows[0].data as Record<string, any>) : null);
+            }
+            return composed.get(key) ?? null;
           };
 
-          // Pass 1: authorize everything first.
+          // Read helpers for manager-of/ancestor checks, bound to THIS tx and to
+          // the composed state, so authz sees what the writes will produce.
+          const getUserDoc = (id: string) => current(tableFor('users'), id);
+          const getDepartmentDoc = (id: string) => current(tableFor('departments'), id);
+
+          // Pass 1: authorize everything first, advancing the composed state.
           for (const op of ops) {
             const name = op.collection as CollectionName;
             const table = tableFor(name);
-            const existing = (await tx(`SELECT data FROM ${table} WHERE id = $1 FOR UPDATE`, [op.id])).rows[0]?.data ?? null;
+            const existing = await current(table, op.id);
             const action: Action = op.type === 'delete' ? 'delete' : existing ? 'update' : 'create';
             const incoming = op.type === 'delete' ? null : { ...(op.data ?? {}), id: op.id };
             const merged = op.type === 'update' && existing ? { ...existing, ...(op.data ?? {}), id: op.id } : incoming;
@@ -99,6 +116,11 @@ export function batchRouter(): Router {
             if (!ok) {
               throw new BatchReject(403, { error: `forbidden: ${op.type} ${op.collection}/${op.id}` });
             }
+
+            // What pass 2 will leave in the row. An update of a missing row
+            // writes nothing there (UPDATE matches no row), so it stays absent.
+            const after = op.type === 'delete' ? null : op.type === 'set' ? incoming : existing ? merged : null;
+            composed.set(keyOf(table, op.id), after);
           }
 
           // Pass 2: apply. Updates re-read `existing` here so two ops touching the

@@ -1582,3 +1582,87 @@ describe('lost updates: a write never silently undoes another (R3)', () => {
     expect((await query('SELECT id FROM skills WHERE id = $1', ['race-del'])).rows).toHaveLength(0);
   });
 });
+
+// ===========================================================================
+// R6 — /batch used to authorize every op against the PRE-batch rows, so two
+// edits that are each fine alone could combine into one that is not. A manager
+// holding a PEER score on their own report sends {subjectId: <a stranger>} and
+// {type: 'MANAGER'} as two updates of the same doc: each passes against the
+// original, together they store a 60%-weight score on someone the manager does
+// not supervise. Each op is now checked against what the earlier ops made of
+// the data.
+// ===========================================================================
+describe('batch: each op is checked against what the earlier ops produced (R6)', () => {
+  // Its own little org: comp-boss -- managerId --> comp-report; comp-stranger
+  // reports to nobody comp-boss runs.
+  const BOSS = { id: 'comp-boss', email: 'compboss@eprom.local' };
+  const REPORT = { id: 'comp-report', email: 'compreport@eprom.local' };
+  const STRANGER = { id: 'comp-stranger', email: 'compstranger@eprom.local' };
+
+  beforeAll(async () => {
+    await seedUser(BOSS, 'EMPLOYEE', 'compboss-pass', { orgLevel: 'SH' });
+    await seedUser(REPORT, 'EMPLOYEE', 'compreport-pass', { orgLevel: 'JP', managerId: BOSS.id });
+    await seedUser(STRANGER, 'EMPLOYEE', 'compstranger-pass', { orgLevel: 'JP' });
+    await seedDoc('assessments', 'a-comp-peer', { raterId: BOSS.id, subjectId: REPORT.id, skillId: 's-1', score: 3, type: 'PEER' });
+    await seedDoc('assessments', 'a-comp-honest', { raterId: BOSS.id, subjectId: REPORT.id, skillId: 's-2', score: 3, type: 'PEER' });
+  });
+
+  const batch = (tok: string, operations: unknown[]) =>
+    request(app).post('/batch').set('Authorization', `Bearer ${tok}`).send({ operations });
+
+  it('two edits that are each allowed cannot combine into a forbidden one', async () => {
+    const tok = await login(BOSS.email, 'compboss-pass');
+    const res = await batch(tok, [
+      { type: 'update', collection: 'assessments', id: 'a-comp-peer', data: { subjectId: STRANGER.id } }, // PEER on a stranger: fine
+      { type: 'update', collection: 'assessments', id: 'a-comp-peer', data: { type: 'MANAGER', score: 5 } }, // MANAGER on my report: fine
+    ]);
+    expect(res.status).toBe(403);
+    const { rows } = await query('SELECT data FROM assessments WHERE id = $1', ['a-comp-peer']);
+    expect(rows[0].data).toMatchObject({ subjectId: REPORT.id, type: 'PEER', score: 3 });
+  });
+
+  it('edits that are fine together still apply together', async () => {
+    const tok = await login(BOSS.email, 'compboss-pass');
+    const res = await batch(tok, [
+      { type: 'update', collection: 'assessments', id: 'a-comp-honest', data: { score: 4 } },
+      { type: 'update', collection: 'assessments', id: 'a-comp-honest', data: { type: 'MANAGER' } },
+    ]);
+    expect(res.status).toBe(200);
+    const { rows } = await query('SELECT data FROM assessments WHERE id = $1', ['a-comp-honest']);
+    expect(rows[0].data).toMatchObject({ subjectId: REPORT.id, type: 'MANAGER', score: 4 });
+  });
+
+  it('an update after a create in the same batch is judged against the created doc', async () => {
+    const tok = await login(REPORT.email, 'compreport-pass');
+    // Honest: submit, then edit the description — the edit is an update of MY
+    // pending record, not a create of a userId-less fragment.
+    const ok = await batch(tok, [
+      { type: 'set', collection: 'evidences', id: 'e-comp-1', data: { userId: REPORT.id, status: 'PENDING', title: 'Draft' } },
+      { type: 'update', collection: 'evidences', id: 'e-comp-1', data: { title: 'Final' } },
+    ]);
+    expect(ok.status).toBe(200);
+
+    // And the created record is what the verdict rule sees: no self-approval.
+    const sneaky = await batch(tok, [
+      { type: 'set', collection: 'evidences', id: 'e-comp-2', data: { userId: REPORT.id, status: 'PENDING' } },
+      { type: 'update', collection: 'evidences', id: 'e-comp-2', data: { userId: REPORT.id, status: 'APPROVED', assignedScore: 5 } },
+    ]);
+    expect(sneaky.status).toBe(403);
+    const { rows } = await query('SELECT id FROM evidences WHERE id = $1', ['e-comp-2']);
+    expect(rows.length).toBe(0);
+  });
+
+  it('a delete earlier in the batch is seen by a later op', async () => {
+    const tok = await login(REPORT.email, 'compreport-pass');
+    await seedDoc('workExperiences', 'we-comp', { userId: REPORT.id, employer: 'Acme', jobTitle: 'Tech', startDate: '2015-01-01', status: 'PENDING' });
+    // Withdraw a pending record, then re-create it already VERIFIED: the second
+    // op is a CREATE now, and a create may never carry a verdict.
+    const res = await batch(tok, [
+      { type: 'delete', collection: 'workExperiences', id: 'we-comp' },
+      { type: 'set', collection: 'workExperiences', id: 'we-comp', data: { userId: REPORT.id, employer: 'Acme', jobTitle: 'Tech', startDate: '2015-01-01', status: 'VERIFIED' } },
+    ]);
+    expect(res.status).toBe(403);
+    const { rows } = await query('SELECT data FROM "workExperiences" WHERE id = $1', ['we-comp']);
+    expect(rows[0].data.status).toBe('PENDING');
+  });
+});
