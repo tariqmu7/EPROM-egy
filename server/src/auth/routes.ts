@@ -4,32 +4,51 @@ import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { config } from '../config.js';
 import { query, withTransaction } from '../db.js';
-import { hashPassword, verifyPassword } from './password.js';
+import { hashPassword, verifyPassword, MAX_PASSWORD_LENGTH } from './password.js';
 import { signToken } from './jwt.js';
 import { authenticate } from '../middleware/authenticate.js';
 import { isAdmin } from '../authz.js';
 
-// Brute-force protection on auth endpoints. Disabled under test so the suite's
-// many logins aren't throttled (mirrors the global limiter in app.ts).
-const loginLimiter =
-  process.env.NODE_ENV === 'test'
-    ? (_req: Request, _res: Response, next: (e?: unknown) => void) => next()
-    : rateLimit({
-        windowMs: 15 * 60 * 1000,
-        max: 20, // per IP per 15 min — blunt brute-force protection
-        standardHeaders: true,
-        legacyHeaders: false,
-      });
+// Brute-force protection on auth endpoints. Off by default under test so the
+// suite's many logins aren't throttled (mirrors the global limiter in app.ts);
+// a test that is ABOUT the limits turns them on with `rateLimits: true`.
+type Middleware = (req: Request, res: Response, next: (e?: unknown) => void) => void;
+const passThrough: Middleware = (_req, _res, next) => next();
+
+function makeLimiters(enabled: boolean): { login: Middleware; changePassword: Middleware } {
+  if (!enabled) return { login: passThrough, changePassword: passThrough };
+  return {
+    // Per IP per 15 min — blunt brute-force protection for the public forms.
+    login: rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false }),
+    // Per ACCOUNT, not per IP. The route sits behind `authenticate`, so the
+    // caller is known — and the threat is a stolen or borrowed session guessing
+    // the current password (which turns a 12-hour token into the account for
+    // good), from as many machines as it likes. Every attempt counts, success
+    // too: a forced-reset account skips the current-password check, so each
+    // call would otherwise be a free bcrypt hash on demand.
+    changePassword: rateLimit({
+      windowMs: 15 * 60 * 1000,
+      max: 10,
+      standardHeaders: true,
+      legacyHeaders: false,
+      keyGenerator: (req) => `user:${req.user!.id}`,
+      message: { error: 'too many password attempts — try again in 15 minutes' },
+    }),
+  };
+}
 
 const emailSchema = z.string().email().transform((s) => s.trim().toLowerCase());
 
-export function authRouter(): Router {
+const passwordSchema = z.string().max(MAX_PASSWORD_LENGTH, `password must be at most ${MAX_PASSWORD_LENGTH} characters`);
+
+export function authRouter(opts: { rateLimits?: boolean } = {}): Router {
   const router = Router();
+  const limit = makeLimiters(opts.rateLimits ?? process.env.NODE_ENV !== 'test');
 
   // ── LOGIN ─────────────────────────────────────────────────────────────────
-  router.post('/login', loginLimiter, async (req: Request, res: Response, next) => {
+  router.post('/login', limit.login, async (req: Request, res: Response, next) => {
     try {
-      const parsed = z.object({ email: emailSchema, password: z.string().min(1) }).safeParse(req.body);
+      const parsed = z.object({ email: emailSchema, password: passwordSchema.min(1) }).safeParse(req.body);
       if (!parsed.success) {
         res.status(400).json({ error: 'email and password required' });
         return;
@@ -81,12 +100,12 @@ export function authRouter(): Router {
   });
 
   // ── SIGNUP (self-registration → PENDING, needs admin approval) ─────────────
-  router.post('/signup', loginLimiter, async (req: Request, res: Response, next) => {
+  router.post('/signup', limit.login, async (req: Request, res: Response, next) => {
     try {
       const parsed = z
         .object({
           email: emailSchema,
-          password: z.string().min(8, 'password must be at least 8 characters'),
+          password: passwordSchema.min(8, 'password must be at least 8 characters'),
           name: z.string().min(1),
           profile: z.record(z.unknown()).optional(),
         })
@@ -167,13 +186,13 @@ export function authRouter(): Router {
   });
 
   // ── CHANGE PASSWORD (authenticated; also completes must_reset) ─────────────
-  router.post('/change-password', authenticate, async (req: Request, res: Response, next) => {
+  router.post('/change-password', authenticate, limit.changePassword, async (req: Request, res: Response, next) => {
     try {
       const parsed = z
-        .object({ currentPassword: z.string().optional(), newPassword: z.string().min(8) })
+        .object({ currentPassword: passwordSchema.optional(), newPassword: passwordSchema.min(8) })
         .safeParse(req.body);
       if (!parsed.success) {
-        res.status(400).json({ error: 'newPassword must be at least 8 characters' });
+        res.status(400).json({ error: `newPassword must be 8 to ${MAX_PASSWORD_LENGTH} characters` });
         return;
       }
       const userId = req.user!.id;
@@ -225,9 +244,9 @@ export function authRouter(): Router {
         res.status(403).json({ error: 'admin only' });
         return;
       }
-      const parsed = z.object({ userId: z.string().min(1), newPassword: z.string().min(8) }).safeParse(req.body);
+      const parsed = z.object({ userId: z.string().min(1), newPassword: passwordSchema.min(8) }).safeParse(req.body);
       if (!parsed.success) {
-        res.status(400).json({ error: 'userId and newPassword (min 8) required' });
+        res.status(400).json({ error: `userId and newPassword (8 to ${MAX_PASSWORD_LENGTH} characters) required` });
         return;
       }
       const target = (await query('SELECT data FROM users WHERE id = $1', [parsed.data.userId])).rows[0];

@@ -7,6 +7,7 @@ import { config } from './config.js';
 import { query } from './db.js';
 import { logger } from './logger.js';
 import { authRouter } from './auth/routes.js';
+import { PasswordBusyError } from './auth/password.js';
 import { authenticate } from './middleware/authenticate.js';
 import { collectionsRouter } from './collections/routes.js';
 import { batchRouter } from './collections/batch.js';
@@ -15,7 +16,9 @@ import { analyticsRouter } from './analytics/routes.js';
 
 // Builds the Express app WITHOUT starting a listener, so tests can drive it with
 // supertest and index.ts can add bootstrap (migrations + listen).
-export function createApp() {
+// `authRateLimits` overrides the default (on, except under NODE_ENV=test) so a
+// test can exercise the auth limiters without throttling every other suite.
+export function createApp(opts: { authRateLimits?: boolean } = {}) {
   const app = express();
 
   // Resolve the real caller behind the nginx reverse proxy (see config.trustProxy).
@@ -82,7 +85,7 @@ export function createApp() {
   });
 
   // Public auth endpoints (login/signup/reset). /me is protected inside the router.
-  app.use('/auth', authRouter());
+  app.use('/auth', authRouter({ rateLimits: opts.authRateLimits }));
 
   // Everything below requires a valid session.
   app.use('/col', authenticate, collectionsRouter());
@@ -98,6 +101,13 @@ export function createApp() {
   // Error handler — logs with the request id and returns it to the client so a
   // user-reported failure can be traced. Never leaks internals.
   app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
+    // Too many password checks already in flight (auth/password.ts): a load
+    // signal, not a bug — tell the client to retry rather than log a 500.
+    if (err instanceof PasswordBusyError) {
+      res.setHeader('Retry-After', '5');
+      res.status(503).json({ error: 'server busy, please try again in a moment' });
+      return;
+    }
     (req.log ?? logger).error('unhandled_error', {
       err: err instanceof Error ? err.message : String(err),
       stack: err instanceof Error ? err.stack : undefined,

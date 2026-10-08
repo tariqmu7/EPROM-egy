@@ -515,8 +515,14 @@ no external cloud. Four services:
   SMTP relay) was removed along with its table in migration
   [`009_drop_password_reset_tokens.sql`](server/src/migrations/009_drop_password_reset_tokens.sql).
   A forgotten password is reset by an admin (`/auth/admin/set-password`), which sets
-  `must_reset` and forces a change at next login. Auth endpoints
-  are rate-limited; a blunt global IP rate limit guards the rest (off under `NODE_ENV=test`).
+  `must_reset` and forces a change at next login. Login/signup are rate-limited per IP;
+  **change-password per ACCOUNT** (10 / 15 min, successes included — a stolen session must not
+  be able to guess the current password from many machines). Every bcrypt hash/compare goes
+  through a gate in [`server/src/auth/password.ts`](server/src/auth/password.ts) (4 at once,
+  64 queued, the rest `503` + `Retry-After`) and passwords are capped at 128 chars, so the sum of
+  password work cannot pin the api's one thread. A blunt global IP rate limit guards the rest.
+  All limiters are off under `NODE_ENV=test`; `createApp({ authRateLimits: true })` turns the auth
+  ones back on (`server/src/__tests__/auth-limits.test.ts`).
 - `/col/:collection` — authenticated generic CRUD/query over the Postgres tables
   (allowlisted collection names in [`server/src/collections/registry.ts`](server/src/collections/registry.ts)).
   Every write is validated against a per-collection **zod schema**
