@@ -345,6 +345,9 @@ async function supervisesCaller(ctx: PolicyCtx, candidateId: string): Promise<bo
   return false;
 }
 
+// The fields that say whose judgement of whom, on what, an assessment records.
+const ASSESSMENT_IDENTITY_FIELDS = ['raterId', 'subjectId', 'skillId'] as const;
+
 async function assessmentsPolicy(action: Action, ctx: PolicyCtx, admin: boolean): Promise<boolean> {
   const { user, existing, incoming } = ctx;
   switch (action) {
@@ -364,9 +367,18 @@ async function assessmentsPolicy(action: Action, ctx: PolicyCtx, admin: boolean)
     case 'update': {
       if (admin) return !!existing;
       if (!existing || existing.raterId !== user.id) return false;
+      // Who scored, who was scored and on what skill are fixed once written
+      // (R10). The type check below proves the CALLER may score the subject, but
+      // says nothing about the `raterId` stored beside it — so an edit could
+      // re-sign a score in somebody else's name, or move it onto a different
+      // person or skill. The SPA never changes these on an edit (a re-submission
+      // matches on all three), so a different rater/subject/skill is a new record.
+      if (!incoming || !ASSESSMENT_IDENTITY_FIELDS.every((f) => sameFieldValue(existing[f], incoming[f]))) {
+        return false;
+      }
       // The merged document is what will be stored — re-derive against it, so an
       // edit can't quietly turn a PEER score into a MANAGER one.
-      return assessmentTypeMatchesRelationship(ctx, incoming ?? existing);
+      return assessmentTypeMatchesRelationship(ctx, incoming);
     }
     case 'delete':
       return admin;

@@ -1395,6 +1395,37 @@ describe('assessments: the type must match the real relationship', () => {
     expect(upgrade.status).toBe(403);
   });
 
+  // R10 — the type check proves the CALLER may score the subject; it never
+  // looked at the raterId / subjectId / skillId stored beside the score.
+  it('R10 - an edit cannot re-sign, re-target or move a score', async () => {
+    const tok = await login(REL_PEER.email, 'relpeer-pass');
+    await post(tok, 'a-peer-r10', {
+      raterId: REL_PEER.id, subjectId: REL_EMP.id, skillId: 's-1', score: 2, type: 'PEER',
+    });
+    const patch = (data: Record<string, unknown>) =>
+      request(app).patch('/col/assessments/a-peer-r10').set('Authorization', `Bearer ${tok}`).send({ data });
+
+    // Re-sign it in the boss's name: it would then read as the boss's judgement.
+    expect((await patch({ raterId: REL_BOSS.id })).status).toBe(403);
+    // Move it onto another person - still a legal PEER pair, so the type check passed.
+    expect((await patch({ subjectId: OTHER.id })).status).toBe(403);
+    // Move it onto another skill.
+    expect((await patch({ skillId: 's-2' })).status).toBe(403);
+    // Same via /batch.
+    const viaBatch = await request(app)
+      .post('/batch')
+      .set('Authorization', `Bearer ${tok}`)
+      .send({ operations: [{ type: 'update', collection: 'assessments', id: 'a-peer-r10', data: { subjectId: OTHER.id } }] });
+    expect(viaBatch.status).toBe(403);
+
+    const { rows } = await query('SELECT data FROM assessments WHERE id = $1', ['a-peer-r10']);
+    expect(rows[0].data).toMatchObject({ raterId: REL_PEER.id, subjectId: REL_EMP.id, skillId: 's-1', score: 2 });
+
+    // The honest edit - a new score, the identity fields re-sent unchanged - still works.
+    const honest = await patch({ raterId: REL_PEER.id, subjectId: REL_EMP.id, skillId: 's-1', score: 3 });
+    expect(honest.status).toBe(200);
+  });
+
   it('the /batch route is not a back door', async () => {
     const tok = await login(REL_EMP.email, 'relemp-pass');
     const res = await request(app)
