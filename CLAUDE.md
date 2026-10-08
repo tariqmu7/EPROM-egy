@@ -538,6 +538,16 @@ no external cloud. Four services:
 - `/jobs` — **admin-only** view of the scheduled work: `GET /jobs/runs` (recent `job_runs` rows +
   whether the timer is enabled and at what hour) and `POST /jobs/run` (runs the nightly sweep now,
   `409` if one is already in flight). Not a `/col` collection — see The nightly sweep above.
+- `/audit` — **admin/CEO-only, read-only** view of the server's own audit log (`audit_log`,
+  migration [`010_audit_log.sql`](server/src/migrations/010_audit_log.sql); `GET /audit?limit=&before=&collection=&docId=&actorId=`).
+  Every `/col` and `/batch` write — plus admin set-password / release-login — inserts its audit row
+  **in the same transaction** as the change ([`server/src/audit/log.ts`](server/src/audit/log.ts)
+  `recordAudit`), actor from the session, time from the DB clock, changed fields only, file data URLs
+  summarised (never copied). Not a `/col` collection: no route can edit or delete a row. Skipped:
+  `notifications` (an inbox) and `activityLogs` creates. The browser-written `activityLogs` notes
+  remain as narration, but the server **overwrites** `actorId` / `actorName` / `timestamp` from the
+  session (`stampClientLog`) and nobody — admins included — may update or delete one (finding R9).
+  A new write path must call `recordAudit` with the runner it wrote with.
 - `/analytics/*` — the derived-numbers surface, none of it a `/col` collection
   ([`server/src/analytics/`](server/src/analytics/)):
   - `GET /analytics/snapshots` — **admin/CEO-only** read of the stored monthly snapshots

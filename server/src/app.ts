@@ -13,6 +13,7 @@ import { collectionsRouter } from './collections/routes.js';
 import { batchRouter } from './collections/batch.js';
 import { jobsRouter } from './jobs/routes.js';
 import { analyticsRouter } from './analytics/routes.js';
+import { auditRouter } from './audit/routes.js';
 
 // Builds the Express app WITHOUT starting a listener, so tests can drive it with
 // supertest and index.ts can add bootstrap (migrations + listen).
@@ -94,6 +95,8 @@ export function createApp(opts: { authRateLimits?: boolean } = {}) {
   app.use('/jobs', authenticate, jobsRouter());
   // Stored monthly snapshots (migration 008). Admin/CEO-only, checked inside.
   app.use('/analytics', authenticate, analyticsRouter());
+  // The server-written audit log (migration 010). Admin/CEO-only, read-only.
+  app.use('/audit', authenticate, auditRouter());
 
   // 404
   app.use((_req, res) => res.status(404).json({ error: 'not found' }));

@@ -4,6 +4,7 @@ import { can, type Action } from '../authz.js';
 import { isCollection, tableFor, type CollectionName } from './registry.js';
 import { validateDoc } from './schemas.js';
 import { writeTombstone, clearTombstone } from './tombstones.js';
+import { recordAudit, requestIdOf, stampClientLog, type AuditEntry } from '../audit/log.js';
 
 // Mirrors Firestore writeBatch: an atomic list of set/update/delete ops.
 interface BatchOp {
@@ -60,6 +61,12 @@ export function batchRouter(): Router {
         }
       }
 
+      // A browser-written log note carries the session's identity and the
+      // server's clock, whatever it arrived with (R9).
+      for (const op of ops) {
+        if (op.type === 'set') op.data = stampClientLog(op.collection, op.data ?? {}, user);
+      }
+
       // Phase 2 — authorize AND apply inside ONE transaction, in two passes:
       //   Pass 1 authorizes every op against the transactional snapshot (the same
       //     committed state the writes will act on — this is what closes the
@@ -103,6 +110,9 @@ export function batchRouter(): Router {
           const getUserDoc = (id: string) => current(tableFor('users'), id);
           const getDepartmentDoc = (id: string) => current(tableFor('departments'), id);
 
+          // What each op did, for the audit rows written with the changes (R9).
+          const audits: AuditEntry[] = [];
+
           // Pass 1: authorize everything first, advancing the composed state.
           for (const op of ops) {
             const name = op.collection as CollectionName;
@@ -121,6 +131,15 @@ export function batchRouter(): Router {
             // writes nothing there (UPDATE matches no row), so it stays absent.
             const after = op.type === 'delete' ? null : op.type === 'set' ? incoming : existing ? merged : null;
             composed.set(keyOf(table, op.id), after);
+            if (existing || after) {
+              audits.push({
+                action: op.type === 'delete' ? 'delete' : existing ? 'update' : 'create',
+                collection: name,
+                docId: op.id,
+                before: existing,
+                after,
+              });
+            }
           }
 
           // Pass 2: apply. Updates re-read `existing` here so two ops touching the
@@ -148,6 +167,9 @@ export function batchRouter(): Router {
               );
             }
           }
+
+          // Inside the same transaction: the batch and its audit rows commit together.
+          for (const entry of audits) await recordAudit(tx, user, entry, requestIdOf(req));
         });
       } catch (e) {
         if (e instanceof BatchReject) {

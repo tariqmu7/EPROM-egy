@@ -78,6 +78,10 @@ beforeAll(async () => {
   await query(
     'CREATE TABLE tombstones (collection TEXT NOT NULL, id TEXT NOT NULL, deleted_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (collection, id))',
   );
+  // The server's audit log (migration 010) — every write path inserts into it.
+  await query(
+    'CREATE TABLE audit_log (id TEXT PRIMARY KEY, at TIMESTAMPTZ NOT NULL DEFAULT now(), actor_id TEXT, actor_cid TEXT, actor_name TEXT, actor_email TEXT, action TEXT NOT NULL, collection TEXT NOT NULL, doc_id TEXT NOT NULL, changes JSONB, request_id TEXT)',
+  );
   // Stand-ins for what the delta cursor reads to find the oldest open
   // transaction (collections/cursor.ts). A row here plays an in-flight write.
   const { DataType } = await import('pg-mem');
@@ -567,13 +571,17 @@ describe('activityLogs audit trail (F-2)', () => {
     expect(res.status).toBe(403);
   });
 
-  it('a user cannot forge a log entry under another user id, but can log as themselves', async () => {
+  it('a log entry is always filed under the sender, whoever it claims to be from (R9)', async () => {
     const empTok = await login(EMP.email, 'emp-pass');
     const forged = await request(app)
       .post('/col/activityLogs')
       .set('Authorization', `Bearer ${empTok}`)
-      .send({ data: { actorId: OTHER.id, action: 'evil', target: 'x', timestamp: new Date().toISOString() } });
-    expect(forged.status).toBe(403);
+      .send({ id: 'log-forged', data: { actorId: OTHER.id, actorName: 'Someone Else', action: 'evil', target: 'x', timestamp: '2020-01-01T00:00:00.000Z' } });
+    expect(forged.status).toBe(201);
+    const { rows } = await query('SELECT data FROM "activityLogs" WHERE id = $1', ['log-forged']);
+    expect(rows[0].data.actorId).toBe(EMP.id);
+    expect(rows[0].data.actorName).not.toBe('Someone Else'); // the session's own name (an earlier test renames EMP)
+    expect(rows[0].data.timestamp).not.toBe('2020-01-01T00:00:00.000Z');
 
     const own = await request(app)
       .post('/col/activityLogs')
@@ -1727,5 +1735,108 @@ describe('batch: each op is checked against what the earlier ops produced (R6)',
     expect(res.status).toBe(403);
     const { rows } = await query('SELECT data FROM "workExperiences" WHERE id = $1', ['we-comp']);
     expect(rows[0].data.status).toBe('PENDING');
+  });
+});
+
+// R9 — the activity log used to be written by the browser: it chose whether to
+// log a change at all, and who and when to say. The server now writes its own
+// `audit_log` row in the same transaction as every write, from the session.
+describe('the server keeps its own audit log (R9)', () => {
+  const AUD = { id: 'aud-emp', email: 'aud@eprom.local' };
+  const PDF = `data:application/pdf;base64,${'A'.repeat(4000)}`;
+
+  beforeAll(async () => {
+    await seedUser(AUD, 'EMPLOYEE', 'aud-pass', { orgLevel: 'JP' });
+  });
+
+  const auditFor = async (collection: string, docId: string) =>
+    (await query('SELECT * FROM audit_log WHERE collection = $1 AND doc_id = $2 ORDER BY at', [collection, docId])).rows;
+
+  it('a write through the API leaves a server-written record, attributed to the session', async () => {
+    const tok = await login(AUD.email, 'aud-pass');
+    const created = await request(app)
+      .post('/col/evidences')
+      .set('Authorization', `Bearer ${tok}`)
+      .send({ id: 'e-aud', data: { userId: AUD.id, status: 'PENDING', title: 'Weld test', fileUrl: PDF } });
+    expect(created.status).toBe(201);
+    const patched = await request(app)
+      .patch('/col/evidences/e-aud')
+      .set('Authorization', `Bearer ${tok}`)
+      .send({ data: { title: 'Weld test v2' } });
+    expect(patched.status).toBe(200);
+    const adminTok = await login(ADMIN.email, 'admin-pass');
+    const deleted = await request(app).delete('/col/evidences/e-aud').set('Authorization', `Bearer ${adminTok}`);
+    expect(deleted.status).toBe(204);
+
+    const rows = await auditFor('evidences', 'e-aud');
+    expect(rows.map((r) => r.action)).toEqual(['create', 'update', 'delete']);
+    expect(rows.map((r) => r.actor_cid)).toEqual([AUD.id, AUD.id, ADMIN.id]);
+    expect(rows[0].actor_email).toBe(AUD.email);
+    // Only what changed, before and after.
+    expect(rows[1].changes).toEqual({ title: { before: 'Weld test', after: 'Weld test v2' } });
+    // The file is described, never copied into the log.
+    expect(JSON.stringify(rows[0].changes)).not.toContain('AAAA');
+    expect(rows[0].changes.fileUrl.after).toMatch(/^\[file application\/pdf, \d+ chars\]$/);
+  });
+
+  it('a batch is audited op by op, and a refused batch leaves no audit rows', async () => {
+    const tok = await login(AUD.email, 'aud-pass');
+    const ok = await request(app)
+      .post('/batch')
+      .set('Authorization', `Bearer ${tok}`)
+      .send({ operations: [{ type: 'set', collection: 'evidences', id: 'e-aud-b', data: { userId: AUD.id, status: 'PENDING' } }] });
+    expect(ok.status).toBe(200);
+    expect((await auditFor('evidences', 'e-aud-b')).map((r) => r.action)).toEqual(['create']);
+
+    const refused = await request(app)
+      .post('/batch')
+      .set('Authorization', `Bearer ${tok}`)
+      .send({
+        operations: [
+          { type: 'set', collection: 'evidences', id: 'e-aud-c', data: { userId: AUD.id, status: 'PENDING' } },
+          { type: 'set', collection: 'skills', id: 'sk-aud', data: { name: 'Nope', category: 'Technical' } },
+        ],
+      });
+    expect(refused.status).toBe(403);
+    expect(await auditFor('evidences', 'e-aud-c')).toEqual([]);
+  });
+
+  it('nobody can edit or delete a log entry through the API, admins included', async () => {
+    const adminTok = await login(ADMIN.email, 'admin-pass');
+    const edit = await request(app)
+      .patch('/col/activityLogs/log-emp')
+      .set('Authorization', `Bearer ${adminTok}`)
+      .send({ data: { action: 'rewritten' } });
+    expect(edit.status).toBe(403);
+    const del = await request(app).delete('/col/activityLogs/log-emp').set('Authorization', `Bearer ${adminTok}`);
+    expect(del.status).toBe(403);
+  });
+
+  it('an admin password reset is audited without the password', async () => {
+    const adminTok = await login(ADMIN.email, 'admin-pass');
+    const res = await request(app)
+      .post('/auth/admin/set-password')
+      .set('Authorization', `Bearer ${adminTok}`)
+      .send({ userId: AUD.id, newPassword: 'Temp-pass-123' });
+    expect(res.status).toBe(200);
+    const rows = await auditFor('users', AUD.id);
+    const reset = rows.find((r) => r.action === 'set-password');
+    expect(reset?.actor_cid).toBe(ADMIN.id);
+    expect(JSON.stringify(reset)).not.toContain('Temp-pass-123');
+  });
+
+  it('GET /audit is for admin and CEO only, and filters to one record', async () => {
+    const empTok = await login(OTHER.email, 'other-pass');
+    expect((await request(app).get('/audit').set('Authorization', `Bearer ${empTok}`)).status).toBe(403);
+
+    const ceoTok = await login(CEO.email, 'ceo-pass');
+    const res = await request(app)
+      .get('/audit?collection=evidences&docId=e-aud')
+      .set('Authorization', `Bearer ${ceoTok}`);
+    expect(res.status).toBe(200);
+    expect(res.body.entries.map((e: any) => e.action)).toEqual(['delete', 'update', 'create']);
+    expect(res.body.entries[2]).toMatchObject({ actorId: AUD.id, collection: 'evidences', docId: 'e-aud' });
+
+    expect((await request(app).get('/audit?before=yesterday').set('Authorization', `Bearer ${ceoTok}`)).status).toBe(400);
   });
 });

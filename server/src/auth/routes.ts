@@ -8,6 +8,7 @@ import { hashPassword, verifyPassword, warmUpPasswordCheck, MAX_PASSWORD_LENGTH 
 import { signToken } from './jwt.js';
 import { authenticate } from '../middleware/authenticate.js';
 import { isAdmin } from '../authz.js';
+import { recordAudit, requestIdOf } from '../audit/log.js';
 
 // Brute-force protection on auth endpoints. Off by default under test so the
 // suite's many logins aren't throttled (mirrors the global limiter in app.ts);
@@ -264,12 +265,22 @@ export function authRouter(opts: { rateLimits?: boolean } = {}): Router {
         res.status(404).json({ error: 'user not found' });
         return;
       }
-      await query(
-        `INSERT INTO auth_credentials (user_id, email, password_hash, must_reset)
-         VALUES ($1, $2, $3, true)
-         ON CONFLICT (user_id) DO UPDATE SET password_hash = EXCLUDED.password_hash, must_reset = true, updated_at = now()`,
-        [parsed.data.userId, String((target.data as any).email ?? ''), await hashPassword(parsed.data.newPassword)],
-      );
+      const hash = await hashPassword(parsed.data.newPassword);
+      await withTransaction(async (tx) => {
+        await tx(
+          `INSERT INTO auth_credentials (user_id, email, password_hash, must_reset)
+           VALUES ($1, $2, $3, true)
+           ON CONFLICT (user_id) DO UPDATE SET password_hash = EXCLUDED.password_hash, must_reset = true, updated_at = now()`,
+          [parsed.data.userId, String((target.data as any).email ?? ''), hash],
+        );
+        // That it happened and who did it — never the password (R9).
+        await recordAudit(
+          tx,
+          req.user!,
+          { action: 'set-password', collection: 'users', docId: parsed.data.userId, changes: { mustReset: { after: true } } },
+          requestIdOf(req),
+        );
+      });
       res.json({ ok: true, mustReset: true });
     } catch (e) {
       next(e);
@@ -334,6 +345,17 @@ export function authRouter(opts: { rateLimits?: boolean } = {}): Router {
             [userId, data, req.user!.id],
           );
         }
+        await recordAudit(
+          tx,
+          req.user!,
+          {
+            action: 'release-login',
+            collection: 'users',
+            docId: userId,
+            changes: currentEmail ? { email: { before: currentEmail }, archivedEmail: { after: currentEmail } } : {},
+          },
+          requestIdOf(req),
+        );
         // Null on a repeat call — nothing was left to free.
         return currentEmail;
       });

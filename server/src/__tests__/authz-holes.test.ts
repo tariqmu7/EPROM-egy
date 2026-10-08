@@ -75,6 +75,10 @@ beforeAll(async () => {
   await query(
     'CREATE TABLE tombstones (collection TEXT NOT NULL, id TEXT NOT NULL, deleted_at TIMESTAMPTZ NOT NULL DEFAULT now(), PRIMARY KEY (collection, id))',
   );
+  // The server's audit log (migration 010) — every write path inserts into it.
+  await query(
+    'CREATE TABLE audit_log (id TEXT PRIMARY KEY, at TIMESTAMPTZ NOT NULL DEFAULT now(), actor_id TEXT, actor_cid TEXT, actor_name TEXT, actor_email TEXT, action TEXT NOT NULL, collection TEXT NOT NULL, doc_id TEXT NOT NULL, changes JSONB, request_id TEXT)',
+  );
 
   await seedUser('emp-1', 'emp@eprom.local', 'EMPLOYEE', 'emp-pass', { orgLevel: 'JP', managerId: 'mgr-1' });
   await seedUser('mgr-1', 'mgr@eprom.local', 'EMPLOYEE', 'mgr-pass', { orgLevel: 'SH' });

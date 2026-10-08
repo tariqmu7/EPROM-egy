@@ -45,14 +45,14 @@ export function isAdmin(user: AuthedUser): boolean {
 // Org-wide readers: admins + the CEO. These roles legitimately see everyone's
 // performance data (executive analytics), so their personal-data reads are not
 // scoped. Everyone else is limited to their own + their subordinates' records.
-function canReadAll(user: AuthedUser): boolean {
+export function canReadAll(user: AuthedUser): boolean {
   return isAdmin(user) || user.role === 'CEO';
 }
 
 // The user's canonical `id` field. Activity docs (assessments/evidences/…) key
 // their owner/subject/rater fields by this canonical id, which post-migration can
 // differ from the auth uid; `managerId` uses it too. Falls back to the table id.
-function canonicalId(user: AuthedUser): string {
+export function canonicalId(user: AuthedUser): string {
   const cid = (user.data as Record<string, unknown> | undefined)?.id;
   return String(cid ?? user.id);
 }
@@ -618,15 +618,19 @@ function activityLogsPolicy(action: Action, ctx: PolicyCtx, admin: boolean): boo
       // everything; everyone else sees only entries they authored. List reads are
       // held to the same boundary in `listScope` so a query can't over-return.
       return canReadAll(user) || (!!existing && existing.actorId === canonicalId(user));
-    case 'create': {
-      // Anyone may append to the log, but only under their OWN identity — an
-      // entry can't be attributed to another user's id. System events carry no
-      // actorId (pre-auth) and attribute to no one, so they're allowed.
-      const actorId = incoming?.actorId;
-      return admin || actorId == null || actorId === canonicalId(user);
-    }
+    case 'create':
+      // Anyone may append a NOTE to the log, under their own identity. The
+      // write paths stamp actorId / actorName / timestamp from the session
+      // before this runs (audit/log.ts stampClientLog), so this only fails for
+      // a caller the stamp could not attribute. An unattributed entry is not
+      // allowed for anyone any more (R9). These notes are the browser's
+      // narration; the record nobody can skip or forge is the server's
+      // `audit_log` (migration 010).
+      return incoming?.actorId === canonicalId(user);
     default:
-      return admin; // update / delete — admin only
+      // update / delete — nobody, admins included. An audit entry that can be
+      // edited or removed through the API is not evidence of anything.
+      return false;
   }
 }
 

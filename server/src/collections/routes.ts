@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Router, type Request, type Response } from 'express';
-import { query } from '../db.js';
+import { query, withTransaction } from '../db.js';
 import { can, listScope, redactUserFiles, userDocHasFiles, userFileViewerScope, type Action } from '../authz.js';
 import type { AuthedUser } from '../types.js';
 import { isCollection, tableFor, type CollectionName } from './registry.js';
@@ -8,6 +8,7 @@ import { buildWhere, type Filter, type QuerySpec } from './query.js';
 import { validateDoc } from './schemas.js';
 import { writeTombstone, clearTombstone } from './tombstones.js';
 import { nextCursor, readWatermark } from './cursor.js';
+import { recordAudit, requestIdOf, stampClientLog } from '../audit/log.js';
 
 // Wrap async handlers so thrown errors hit the error middleware.
 const h =
@@ -299,17 +300,22 @@ export function collectionsRouter(): Router {
       const id = (req.body?.id as string) || randomUUID();
       const raw = req.body?.data ?? {};
       if (rejectInvalid(name, raw, res)) return; // reject non-objects/bad enums before spreading
-      const incoming = { ...(raw as Record<string, any>), id };
+      const incoming = stampClientLog(name, { ...(raw as Record<string, any>), id }, req.user!);
       if (!(await authorize(name, 'create', req.user!, { docId: id, incoming }))) {
         res.status(403).json({ error: 'forbidden' });
         return;
       }
-      const { rows } = await query(
-        `INSERT INTO ${tableFor(name)} (id, data, created_by) VALUES ($1, $2, $3)
-         RETURNING version, created_at, updated_at`,
-        [id, incoming, req.user!.id],
-      );
-      await clearTombstone(query, name, id); // a re-created id must not stay tombstoned
+      // The change and its audit row commit together or not at all (R9).
+      const rows = await withTransaction(async (tx) => {
+        const r = await tx(
+          `INSERT INTO ${tableFor(name)} (id, data, created_by) VALUES ($1, $2, $3)
+           RETURNING version, created_at, updated_at`,
+          [id, incoming, req.user!.id],
+        );
+        await clearTombstone(tx, name, id); // a re-created id must not stay tombstoned
+        await recordAudit(tx, req.user!, { action: 'create', collection: name, docId: id, after: incoming }, requestIdOf(req));
+        return r.rows;
+      });
       res.status(201).json(shape(id, incoming, rows[0] ?? {}));
     }),
   );
@@ -324,11 +330,12 @@ export function collectionsRouter(): Router {
       const table = tableFor(name);
       const raw = req.body?.data ?? {};
       if (rejectInvalid(name, raw, res)) return;
-      const incoming = { ...(raw as Record<string, any>), id };
       const expected = expectedVersionOf(req);
       for (let attempt = 0; attempt < MAX_CAS_ATTEMPTS; attempt++) {
         const existing = await loadRow(table, id);
         const action: Action = existing ? 'update' : 'create';
+        const base = { ...(raw as Record<string, any>), id };
+        const incoming = existing ? base : stampClientLog(name, base, req.user!);
         if (!(await authorize(name, action, req.user!, { docId: id, existing: existing?.data, incoming }))) {
           res.status(403).json({ error: 'forbidden' });
           return;
@@ -339,19 +346,29 @@ export function collectionsRouter(): Router {
         }
         // Replace only the version we authorized against; create only if the id
         // is still free. Either losing a race returns no row → retry.
-        const { rows } = existing
-          ? await query(
-              `UPDATE ${table} SET data = $2, version = version + 1, updated_at = now(), updated_by = $3
-               WHERE id = $1 AND version = $4 RETURNING version, created_at, updated_at`,
-              [id, incoming, req.user!.id, existing.version],
-            )
-          : await query(
-              `INSERT INTO ${table} (id, data, created_by, updated_by) VALUES ($1, $2, $3, $3)
-               ON CONFLICT (id) DO NOTHING RETURNING version, created_at, updated_at`,
-              [id, incoming, req.user!.id],
-            );
+        const rows = await withTransaction(async (tx) => {
+          const r = existing
+            ? await tx(
+                `UPDATE ${table} SET data = $2, version = version + 1, updated_at = now(), updated_by = $3
+                 WHERE id = $1 AND version = $4 RETURNING version, created_at, updated_at`,
+                [id, incoming, req.user!.id, existing.version],
+              )
+            : await tx(
+                `INSERT INTO ${table} (id, data, created_by, updated_by) VALUES ($1, $2, $3, $3)
+                 ON CONFLICT (id) DO NOTHING RETURNING version, created_at, updated_at`,
+                [id, incoming, req.user!.id],
+              );
+          if (!r.rows.length) return r.rows;
+          await clearTombstone(tx, name, id);
+          await recordAudit(
+            tx,
+            req.user!,
+            { action, collection: name, docId: id, before: existing?.data, after: incoming },
+            requestIdOf(req),
+          );
+          return r.rows;
+        });
         if (!rows.length) continue;
-        await clearTombstone(query, name, id);
         res.json(shape(id, incoming, rows[0]));
         return;
       }
@@ -385,11 +402,22 @@ export function collectionsRouter(): Router {
           versionConflict(res, existing.version);
           return;
         }
-        const { rows } = await query(
-          `UPDATE ${table} SET data = $2, version = version + 1, updated_at = now(), updated_by = $3
-           WHERE id = $1 AND version = $4 RETURNING version, created_at, updated_at`,
-          [id, merged, req.user!.id, existing.version],
-        );
+        const rows = await withTransaction(async (tx) => {
+          const r = await tx(
+            `UPDATE ${table} SET data = $2, version = version + 1, updated_at = now(), updated_by = $3
+             WHERE id = $1 AND version = $4 RETURNING version, created_at, updated_at`,
+            [id, merged, req.user!.id, existing.version],
+          );
+          if (r.rows.length) {
+            await recordAudit(
+              tx,
+              req.user!,
+              { action: 'update', collection: name, docId: id, before: existing.data, after: merged },
+              requestIdOf(req),
+            );
+          }
+          return r.rows;
+        });
         if (!rows.length) continue; // someone wrote between our read and write — re-merge on theirs
         res.json(shape(id, merged, rows[0]));
         return;
@@ -423,12 +451,17 @@ export function collectionsRouter(): Router {
         }
         // Delete only the version we authorized against — a doc changed under us
         // (e.g. moved to another owner) must be re-authorized, not deleted blind.
-        const { rows } = await query(`DELETE FROM ${table} WHERE id = $1 AND version = $2 RETURNING id`, [
-          id,
-          existing.version,
-        ]);
-        if (!rows.length) continue;
-        await writeTombstone(query, name, id); // let delta clients evict it
+        const deleted = await withTransaction(async (tx) => {
+          const { rows } = await tx(`DELETE FROM ${table} WHERE id = $1 AND version = $2 RETURNING id`, [
+            id,
+            existing.version,
+          ]);
+          if (!rows.length) return false;
+          await writeTombstone(tx, name, id); // let delta clients evict it
+          await recordAudit(tx, req.user!, { action: 'delete', collection: name, docId: id, before: existing.data }, requestIdOf(req));
+          return true;
+        });
+        if (!deleted) continue;
         res.status(204).end();
         return;
       }
