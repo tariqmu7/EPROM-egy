@@ -846,6 +846,47 @@ describe('self-registration is off by default', () => {
   });
 });
 
+// Hole R5: signup writes straight to SQL, past zod and the protected-field
+// rule, and used to spread a caller-supplied `profile` into the new document.
+describe('a sign-up cannot place itself in the org chart', () => {
+  it('keeps only email + name, whatever else is sent', async () => {
+    const { config } = await import('../config.js');
+    const was = config.allowSignup;
+    config.allowSignup = true;
+    try {
+      const res = await request(app)
+        .post('/auth/signup')
+        .send({
+          email: 'climber@eprom.local',
+          password: 'longenough1',
+          name: '  Climber  ',
+          role: 'ADMIN',
+          status: 'ACTIVE',
+          profile: {
+            orgLevel: 'GM',
+            managerId: 'ceo-1',
+            departmentId: 'sub-1',
+            jobProfileId: 'jp-gm',
+            role: 'ADMIN',
+            status: 'ACTIVE',
+            avatarUrl: 'javascript:alert(1)',
+          },
+        });
+      expect(res.status).toBe(201);
+      const { rows } = await query('SELECT data FROM users WHERE id = $1', [res.body.id]);
+      expect(rows[0].data).toEqual({
+        id: res.body.id,
+        name: 'Climber',
+        email: 'climber@eprom.local',
+        role: 'EMPLOYEE',
+        status: 'PENDING',
+      });
+    } finally {
+      config.allowSignup = was;
+    }
+  });
+});
+
 // ── The users-table escalation chain (holes H1, H2, H3, H8) ─────────────────
 // Every test here is a plain employee (or a merely-senior one) attacking the
 // real app over HTTP. Each one SUCCEEDED before this was fixed.

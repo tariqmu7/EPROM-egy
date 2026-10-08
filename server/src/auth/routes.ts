@@ -100,21 +100,27 @@ export function authRouter(opts: { rateLimits?: boolean } = {}): Router {
   });
 
   // ── SIGNUP (self-registration → PENDING, needs admin approval) ─────────────
+  // The new users document is built from email + name and NOTHING else the
+  // caller sends. This route writes straight to SQL, so neither the zod schemas
+  // nor the protected-field rule in authz.ts ever see it: an accepted extra
+  // field (an old `profile` blob was spread in here) would let a stranger
+  // arrive already holding an orgLevel, a managerId, a jobProfileId or an
+  // unchecked file URL. Placement in the org chart is an admin's job, done
+  // when the account is approved. Unknown keys are stripped by zod.
   router.post('/signup', limit.login, async (req: Request, res: Response, next) => {
     try {
       const parsed = z
         .object({
           email: emailSchema,
           password: passwordSchema.min(8, 'password must be at least 8 characters'),
-          name: z.string().min(1),
-          profile: z.record(z.unknown()).optional(),
+          name: z.string().trim().min(1, 'name is required').max(200, 'name must be at most 200 characters'),
         })
         .safeParse(req.body);
       if (!parsed.success) {
         res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'invalid input' });
         return;
       }
-      const { email, password, name, profile } = parsed.data;
+      const { email, password, name } = parsed.data;
 
       // Self-registration off: only the configured bootstrap admin may still
       // claim their account (first-run / recovery), everyone else is created by
@@ -156,7 +162,7 @@ export function authRouter(opts: { rateLimits?: boolean } = {}): Router {
           return uid;
         }
         const newId = randomUUID();
-        const userDoc = { ...(profile ?? {}), id: newId, name, email, role: 'EMPLOYEE', status: 'PENDING' };
+        const userDoc = { id: newId, name, email, role: 'EMPLOYEE', status: 'PENDING' };
         await tx('INSERT INTO users (id, data) VALUES ($1, $2)', [newId, userDoc]);
         await tx('INSERT INTO auth_credentials (user_id, email, password_hash) VALUES ($1, $2, $3)', [
           newId,
