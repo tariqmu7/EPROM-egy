@@ -1438,3 +1438,106 @@ describe('a live session ends when the account does', () => {
     expect(res.body.error).not.toBe('account_not_active');
   });
 });
+
+// R3 — a write that lands between another request's read and its write. pg-mem
+// runs one statement at a time, so the race is staged: `onceAfter` lets the
+// matching SELECT return its (now stale) row, then commits the rival write
+// before the route gets to its UPDATE — exactly the window a busy server has.
+async function onceAfter(match: RegExp, rival: () => Promise<unknown>) {
+  const db = await import('../db.js');
+  const pool = db.getPool() as any;
+  const original = pool.query.bind(pool);
+  let fired = false;
+  pool.query = async (text: string, params?: unknown[]) => {
+    const result = await original(text, params);
+    if (!fired && match.test(text)) {
+      fired = true;
+      await rival();
+    }
+    return result;
+  };
+  return () => {
+    pool.query = original;
+  };
+}
+
+describe('lost updates: a write never silently undoes another (R3)', () => {
+  it("a PATCH re-merges onto a rival write instead of erasing it", async () => {
+    await seedDoc('skills', 'race-skill', { name: 'Welding', category: 'Technical' });
+    const adminTok = await login(ADMIN.email, 'admin-pass');
+
+    const restore = await onceAfter(/SELECT data, version FROM skills/, async () => {
+      const doc = (await query('SELECT data FROM skills WHERE id = $1', ['race-skill'])).rows[0].data;
+      await query('UPDATE skills SET data = $1, version = version + 1 WHERE id = $2', [
+        { ...doc, description: 'written by the other tab' },
+        'race-skill',
+      ]);
+    });
+    try {
+      const res = await request(app)
+        .patch('/col/skills/race-skill')
+        .set('Authorization', `Bearer ${adminTok}`)
+        .send({ data: { name: 'Welding (TIG)' } });
+      expect(res.status).toBe(200);
+      expect(res.body.version).toBe(3); // the rival's bump, then ours — on top of it
+    } finally {
+      restore();
+    }
+
+    const stored = (await query('SELECT data FROM skills WHERE id = $1', ['race-skill'])).rows[0].data;
+    expect(stored.name).toBe('Welding (TIG)');
+    expect(stored.description).toBe('written by the other tab');
+  });
+
+  it("an employee's stale edit cannot undo the manager's verdict that beat it", async () => {
+    // Its own employee: earlier suites churn EMP's password.
+    const RACER = { id: 'racer-1', email: 'racer@eprom.local' };
+    await seedUser(RACER, 'EMPLOYEE', 'racer-pass', { managerId: 'mgr-x', orgLevel: 'JP' });
+    await seedDoc('evidences', 'e-race', { userId: RACER.id, status: 'PENDING', title: 'Pump overhaul' });
+    const empTok = await login(RACER.email, 'racer-pass');
+
+    // The employee's edit was authorized against PENDING; before it is written,
+    // the manager approves and scores the record.
+    const restore = await onceAfter(/SELECT data, version FROM evidences/, async () => {
+      const doc = (await query('SELECT data FROM evidences WHERE id = $1', ['e-race'])).rows[0].data;
+      await query('UPDATE evidences SET data = $1, version = version + 1 WHERE id = $2', [
+        { ...doc, status: 'APPROVED', assignedScore: 4, reviewedBy: 'mgr-x' },
+        'e-race',
+      ]);
+    });
+    let res;
+    try {
+      res = await request(app)
+        .patch('/col/evidences/e-race')
+        .set('Authorization', `Bearer ${empTok}`)
+        .send({ data: { title: 'Pump overhaul (edited)' } });
+    } finally {
+      restore();
+    }
+
+    // Re-authorized against the APPROVED record, the edit is no longer the
+    // owner's to make — and the verdict survives.
+    expect(res.status).toBe(403);
+    const stored = (await query('SELECT data FROM evidences WHERE id = $1', ['e-race'])).rows[0].data;
+    expect(stored.status).toBe('APPROVED');
+    expect(stored.assignedScore).toBe(4);
+  });
+
+  it('a DELETE does not remove a document that changed after it was checked', async () => {
+    await seedDoc('skills', 'race-del', { name: 'Scaffolding' });
+    const adminTok = await login(ADMIN.email, 'admin-pass');
+
+    const restore = await onceAfter(/SELECT data, version FROM skills/, async () => {
+      await query('UPDATE skills SET version = version + 1 WHERE id = $1', ['race-del']);
+    });
+    let res;
+    try {
+      res = await request(app).delete('/col/skills/race-del').set('Authorization', `Bearer ${adminTok}`);
+    } finally {
+      restore();
+    }
+    // It retries on the fresh row (still the admin's to delete) and deletes THAT.
+    expect(res.status).toBe(204);
+    expect((await query('SELECT id FROM skills WHERE id = $1', ['race-del'])).rows).toHaveLength(0);
+  });
+});

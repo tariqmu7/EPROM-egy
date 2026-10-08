@@ -318,12 +318,20 @@ export async function runNightlySweep(opts: { now?: Date } = {}): Promise<SweepS
       // Read-modify-write under FOR UPDATE rather than `jsonb_set` / `data ||
       // '{…}'::jsonb`: those two forms are not supported by pg-mem, and re-reading
       // inside the transaction means a profile edit made between the sweep's bulk
-      // load and this write is not clobbered.
+      // load and this write is not clobbered. That includes the certificate list
+      // itself: the bands are re-derived from the LOCKED copy, never written back
+      // from `updated` (the bulk load), or a certificate the employee added or
+      // removed after the load would be silently undone.
       await withTransaction(async (tx) => {
         const { rows } = await tx('SELECT data FROM users WHERE id = $1 FOR UPDATE', [user.rowId]);
         if (rows.length === 0) return;
         const current = (rows[0].data ?? {}) as Record<string, any>;
-        const certificates = typeof current.certificates === 'string' ? JSON.stringify(updated) : updated;
+        const fresh = (safeJson<CertificateLike[]>(current.certificates, []) || []).map((cert) =>
+          !cert || cert.noExpiry === true || !cert.expiryDate
+            ? cert
+            : { ...cert, renewalStatus: certificateStatus(String(cert.expiryDate), now).status },
+        );
+        const certificates = typeof current.certificates === 'string' ? JSON.stringify(fresh) : fresh;
         await tx(
           `UPDATE users
               SET data = $2, version = version + 1, updated_at = now(), updated_by = $3

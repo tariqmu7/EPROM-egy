@@ -123,6 +123,20 @@ function expectedVersionOf(req: Request): number | undefined {
   return typeof v === 'number' && Number.isFinite(v) ? v : undefined;
 }
 
+// Every single-doc write is read → authorize → write. Without a guard, a write
+// that lands between another request's read and its write is silently undone
+// (a PATCH re-writes the whole merged document from its stale read), and the
+// second request was authorized against a state that no longer exists. So each
+// write is a compare-and-swap on the `version` it read: zero rows changed means
+// somebody else got in first, and the request starts over from a fresh read —
+// re-merged and RE-AUTHORIZED. Under heavy contention it gives up with a 409
+// rather than spinning.
+const MAX_CAS_ATTEMPTS = 5;
+
+function versionConflict(res: Response, currentVersion?: number) {
+  res.status(409).json({ error: 'version_conflict', ...(currentVersion !== undefined ? { currentVersion } : {}) });
+}
+
 export function collectionsRouter(): Router {
   const router = Router();
 
@@ -258,29 +272,40 @@ export function collectionsRouter(): Router {
       if (!name) return;
       const { id } = req.params;
       const table = tableFor(name);
-      const existing = await loadRow(table, id);
       const raw = req.body?.data ?? {};
       if (rejectInvalid(name, raw, res)) return;
       const incoming = { ...(raw as Record<string, any>), id };
-      const action: Action = existing ? 'update' : 'create';
-      if (!(await authorize(name, action, req.user!, { docId: id, existing: existing?.data, incoming }))) {
-        res.status(403).json({ error: 'forbidden' });
-        return;
-      }
       const expected = expectedVersionOf(req);
-      if (existing && expected !== undefined && expected !== existing.version) {
-        res.status(409).json({ error: 'version_conflict', currentVersion: existing.version });
+      for (let attempt = 0; attempt < MAX_CAS_ATTEMPTS; attempt++) {
+        const existing = await loadRow(table, id);
+        const action: Action = existing ? 'update' : 'create';
+        if (!(await authorize(name, action, req.user!, { docId: id, existing: existing?.data, incoming }))) {
+          res.status(403).json({ error: 'forbidden' });
+          return;
+        }
+        if (existing && expected !== undefined && expected !== existing.version) {
+          versionConflict(res, existing.version);
+          return;
+        }
+        // Replace only the version we authorized against; create only if the id
+        // is still free. Either losing a race returns no row → retry.
+        const { rows } = existing
+          ? await query(
+              `UPDATE ${table} SET data = $2, version = version + 1, updated_at = now(), updated_by = $3
+               WHERE id = $1 AND version = $4 RETURNING version, created_at, updated_at`,
+              [id, incoming, req.user!.id, existing.version],
+            )
+          : await query(
+              `INSERT INTO ${table} (id, data, created_by, updated_by) VALUES ($1, $2, $3, $3)
+               ON CONFLICT (id) DO NOTHING RETURNING version, created_at, updated_at`,
+              [id, incoming, req.user!.id],
+            );
+        if (!rows.length) continue;
+        await clearTombstone(query, name, id);
+        res.json(shape(id, incoming, rows[0]));
         return;
       }
-      const { rows } = await query(
-        `INSERT INTO ${table} (id, data, created_by, updated_by) VALUES ($1, $2, $3, $3)
-         ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, version = ${table}.version + 1,
-           updated_at = now(), updated_by = $3
-         RETURNING version, created_at, updated_at`,
-        [id, incoming, req.user!.id],
-      );
-      await clearTombstone(query, name, id);
-      res.json(shape(id, incoming, rows[0] ?? {}));
+      versionConflict(res);
     }),
   );
 
@@ -292,29 +317,34 @@ export function collectionsRouter(): Router {
       if (!name) return;
       const { id } = req.params;
       const table = tableFor(name);
-      const existing = await loadRow(table, id);
-      if (!existing) {
-        res.status(404).json({ error: 'not found' });
-        return;
-      }
       const raw = req.body?.data ?? {};
       if (rejectInvalid(name, raw, res)) return;
-      const merged = { ...existing.data, ...(raw as Record<string, any>), id };
-      if (!(await authorize(name, 'update', req.user!, { docId: id, existing: existing.data, incoming: merged }))) {
-        res.status(403).json({ error: 'forbidden' });
-        return;
-      }
       const expected = expectedVersionOf(req);
-      if (expected !== undefined && expected !== existing.version) {
-        res.status(409).json({ error: 'version_conflict', currentVersion: existing.version });
+      for (let attempt = 0; attempt < MAX_CAS_ATTEMPTS; attempt++) {
+        const existing = await loadRow(table, id);
+        if (!existing) {
+          res.status(404).json({ error: 'not found' });
+          return;
+        }
+        const merged = { ...existing.data, ...(raw as Record<string, any>), id };
+        if (!(await authorize(name, 'update', req.user!, { docId: id, existing: existing.data, incoming: merged }))) {
+          res.status(403).json({ error: 'forbidden' });
+          return;
+        }
+        if (expected !== undefined && expected !== existing.version) {
+          versionConflict(res, existing.version);
+          return;
+        }
+        const { rows } = await query(
+          `UPDATE ${table} SET data = $2, version = version + 1, updated_at = now(), updated_by = $3
+           WHERE id = $1 AND version = $4 RETURNING version, created_at, updated_at`,
+          [id, merged, req.user!.id, existing.version],
+        );
+        if (!rows.length) continue; // someone wrote between our read and write — re-merge on theirs
+        res.json(shape(id, merged, rows[0]));
         return;
       }
-      const { rows } = await query(
-        `UPDATE ${table} SET data = $2, version = version + 1, updated_at = now(), updated_by = $3
-         WHERE id = $1 RETURNING version, created_at, updated_at`,
-        [id, merged, req.user!.id],
-      );
-      res.json(shape(id, merged, rows[0] ?? {}));
+      versionConflict(res);
     }),
   );
 
@@ -326,23 +356,33 @@ export function collectionsRouter(): Router {
       if (!name) return;
       const { id } = req.params;
       const table = tableFor(name);
-      const existing = await loadRow(table, id);
-      if (!existing) {
+      const expected = expectedVersionOf(req);
+      for (let attempt = 0; attempt < MAX_CAS_ATTEMPTS; attempt++) {
+        const existing = await loadRow(table, id);
+        if (!existing) {
+          res.status(204).end();
+          return;
+        }
+        if (!(await authorize(name, 'delete', req.user!, { docId: id, existing: existing.data }))) {
+          res.status(403).json({ error: 'forbidden' });
+          return;
+        }
+        if (expected !== undefined && expected !== existing.version) {
+          versionConflict(res, existing.version);
+          return;
+        }
+        // Delete only the version we authorized against — a doc changed under us
+        // (e.g. moved to another owner) must be re-authorized, not deleted blind.
+        const { rows } = await query(`DELETE FROM ${table} WHERE id = $1 AND version = $2 RETURNING id`, [
+          id,
+          existing.version,
+        ]);
+        if (!rows.length) continue;
+        await writeTombstone(query, name, id); // let delta clients evict it
         res.status(204).end();
         return;
       }
-      if (!(await authorize(name, 'delete', req.user!, { docId: id, existing: existing.data }))) {
-        res.status(403).json({ error: 'forbidden' });
-        return;
-      }
-      const expected = expectedVersionOf(req);
-      if (expected !== undefined && expected !== existing.version) {
-        res.status(409).json({ error: 'version_conflict', currentVersion: existing.version });
-        return;
-      }
-      await query(`DELETE FROM ${table} WHERE id = $1`, [id]);
-      await writeTombstone(query, name, id); // let delta clients evict it
-      res.status(204).end();
+      versionConflict(res);
     }),
   );
 

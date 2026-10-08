@@ -68,9 +68,11 @@ export function batchRouter(): Router {
       // Splitting the passes means no write happens until EVERY op has passed
       // authorization, so a forbidden op can't leave an earlier authorized op
       // applied even on an engine that doesn't roll back (belt-and-braces beyond
-      // the transaction's own atomicity). A concurrent committed write between the
-      // passes is still possible under READ COMMITTED; FOR UPDATE / SERIALIZABLE
-      // would fully serialize, at a cost we don't need for this app's batches.
+      // the transaction's own atomicity). Pass 1 reads each row FOR UPDATE, so
+      // the rows a batch authorized cannot change before pass 2 writes them: a
+      // concurrent single-doc write waits for the commit and then fails its
+      // version compare-and-swap and retries on the batch's result (routes.ts),
+      // instead of one silently undoing the other.
       try {
         await withTransaction(async (tx: Tx) => {
           // Read helper for manager-of/ancestor checks, bound to THIS tx so authz
@@ -88,7 +90,7 @@ export function batchRouter(): Router {
           for (const op of ops) {
             const name = op.collection as CollectionName;
             const table = tableFor(name);
-            const existing = (await tx(`SELECT data FROM ${table} WHERE id = $1`, [op.id])).rows[0]?.data ?? null;
+            const existing = (await tx(`SELECT data FROM ${table} WHERE id = $1 FOR UPDATE`, [op.id])).rows[0]?.data ?? null;
             const action: Action = op.type === 'delete' ? 'delete' : existing ? 'update' : 'create';
             const incoming = op.type === 'delete' ? null : { ...(op.data ?? {}), id: op.id };
             const merged = op.type === 'update' && existing ? { ...existing, ...(op.data ?? {}), id: op.id } : incoming;

@@ -421,3 +421,49 @@ describe('/jobs endpoints', () => {
     expect(ran.body.summary.usersScanned).toBe(3);
   });
 });
+
+// R3 — the sweep loads everybody at the start and writes certificate bands
+// much later. A certificate the employee adds in between must survive it.
+describe('the sweep never undoes an edit made while it ran', () => {
+  it('re-bands the certificates as they are NOW, not as they were loaded', async () => {
+    await seedDoc('users', 'race-1', {
+      name: 'Racer', email: 'race@eprom.local', role: 'EMPLOYEE', status: 'ACTIVE', orgLevel: 'JP',
+      certificates: JSON.stringify([{ id: 'c-old', name: 'H2S', expiryDate: day(-5), renewalStatus: 'VALID' }]),
+    });
+
+    // Stage the race inside the sweep's own transaction: just before it locks
+    // the row, the employee uploads a second certificate.
+    const db = await import('../db.js');
+    const pool = db.getPool() as any;
+    const connect = pool.connect.bind(pool);
+    let fired = false;
+    pool.connect = async () => {
+      const client = await connect();
+      const q = client.query.bind(client);
+      client.query = async (text: string, params?: unknown[]) => {
+        if (!fired && /FOR UPDATE/.test(text) && (params as unknown[])?.[0] === 'race-1') {
+          fired = true;
+          const doc = (await query('SELECT data FROM users WHERE id = $1', ['race-1'])).rows[0].data;
+          const certs = JSON.parse(doc.certificates);
+          certs.push({ id: 'c-new', name: 'BOSIET', expiryDate: day(400) });
+          await query('UPDATE users SET data = $1 WHERE id = $2', [{ ...doc, certificates: JSON.stringify(certs) }, 'race-1']);
+        }
+        return q(text, params);
+      };
+      return client;
+    };
+    try {
+      await runNightlySweep({ now: NOW });
+    } finally {
+      pool.connect = connect;
+    }
+
+    expect(fired).toBe(true);
+    const doc = (await query('SELECT data FROM users WHERE id = $1', ['race-1'])).rows[0].data;
+    expect(typeof doc.certificates).toBe('string'); // wire shape preserved
+    const certs = JSON.parse(doc.certificates);
+    expect(certs.map((c: any) => c.id)).toEqual(['c-old', 'c-new']);
+    expect(certs[0].renewalStatus).toBe('EXPIRED');
+    expect(certs[1].renewalStatus).toBe('VALID');
+  });
+});
