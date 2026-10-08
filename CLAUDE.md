@@ -697,6 +697,18 @@ See [`docs/runbooks/PRODUCTION_HARDENING.md`](docs/runbooks/PRODUCTION_HARDENING
   one, and an avatar is only ever rendered in an `<img>`. Bulk import caps the workbook at 10 MB and
   5,000 rows, and **every exported Excel cell** goes through `safeExportCell` — a value starting
   `= + - @` is a formula on the recipient's machine.
+- **A certificate scan is not directory data.** `users` stays open-read, but every users read
+  (`/col/users` list and get-one) is **redacted**: each certificate's `fileUrl` is stripped unless
+  the reader is the person, someone who supervises them (managerId chain OR the
+  ASSISTANT_GENERAL/DEPARTMENT/SECTION they run — `getSupervisedIds` in
+  [`collections/routes.ts`](server/src/collections/routes.ts)), or an admin/CEO
+  (`userFileViewerScope` / `redactUserFiles` in `authz.ts`). Names and dates still show; the wire
+  shape (string vs array) is kept. Everyone allowed to WRITE a users doc sees it unredacted, so a
+  redacted copy is never saved back. Likewise **server bulk loads read FIELDS, never documents**
+  ([`server/src/jobs/load.ts`](server/src/jobs/load.ts) `loadFields`): the analytics model and the
+  nightly sweep used to `SELECT data` of users/evidences, pulling every base64 file into the api
+  process; the sweep now reads certificates 50 people at a time with the scan dropped. A new field
+  a loader needs must be added to its list there.
 - `BOOTSTRAP_ADMIN_EMAIL` is treated as ADMIN before any user holds the `ADMIN` role
   (first-run / recovery only); normal admin access is role-driven (`users` doc `role == 'ADMIN'`).
 

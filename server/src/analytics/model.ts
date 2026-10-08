@@ -24,6 +24,13 @@ import { query } from '../db.js';
 import { skillCriticalityOf, type SkillCriticality } from '../domain/enums.js';
 import { safeJson, type MethodBlock, type SweepUser } from '../jobs/scheduling.js';
 import {
+  loadFields,
+  USER_FIELDS,
+  ASSESSMENT_FIELDS,
+  EVIDENCE_FIELDS,
+  EXPERIENCE_FIELDS,
+} from '../jobs/load.js';
+import {
   pairKey,
   DEFAULT_EXPERIENCE_POLICY,
   type AssessmentLike,
@@ -89,12 +96,14 @@ export async function loadAnalyticsModel(): Promise<AnalyticsModel> {
     userRows, skillRows, jobRows, assessmentRows, evidenceRows,
     experienceRows, deptRows, settingsRows, courseRows,
   ] = await Promise.all([
-    loadAll('users'),
+    // The four tables that can hold uploaded files (or grow with headcount)
+    // are loaded by FIELD — see jobs/load.ts. The rest are small config.
+    loadFields('users', USER_FIELDS),
     loadAll('skills'),
     loadAll('"jobProfiles"'),
-    loadAll('assessments'),
-    loadAll('evidences'),
-    loadAll('"workExperiences"'),
+    loadFields('assessments', ASSESSMENT_FIELDS),
+    loadFields('evidences', EVIDENCE_FIELDS),
+    loadFields('"workExperiences"', EXPERIENCE_FIELDS),
     loadAll('departments'),
     loadAll('"appSettings"'),
     loadAll('"trainingCourses"'),

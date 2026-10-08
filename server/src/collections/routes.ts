@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Router, type Request, type Response } from 'express';
 import { query } from '../db.js';
-import { can, listScope, type Action } from '../authz.js';
+import { can, listScope, redactUserFiles, userDocHasFiles, userFileViewerScope, type Action } from '../authz.js';
 import type { AuthedUser } from '../types.js';
 import { isCollection, tableFor, type CollectionName } from './registry.js';
 import { buildWhere, type Filter, type QuerySpec } from './query.js';
@@ -58,6 +58,59 @@ async function getSubordinateIds(rootCanonicalId: string): Promise<string[]> {
     frontier = next;
   }
   return [...all];
+}
+
+// Everyone the root supervises, by BOTH routes the SPA uses (DataService
+// .getSubordinates): an explicit `managerId`, or membership of an
+// ASSISTANT_GENERAL / DEPARTMENT / SECTION the root (or one of their people)
+// runs. Root included. Decides whose certificate scans a reader may see — see
+// userFileViewerScope in authz.ts. Bounded by org depth.
+const DIRECT_DEPT_TYPES = ['ASSISTANT_GENERAL', 'DEPARTMENT', 'SECTION'];
+
+async function getSupervisedIds(rootCanonicalId: string): Promise<string[]> {
+  const all = new Set<string>([rootCanonicalId]);
+  let frontier = [rootCanonicalId];
+  for (let hops = 0; hops < 12 && frontier.length > 0; hops++) {
+    const depts = await query(
+      `SELECT id, data->>'id' AS cid FROM departments
+        WHERE data->>'managerId' = ANY($1::text[]) AND data->>'type' = ANY($2::text[])`,
+      [frontier, DIRECT_DEPT_TYPES],
+    );
+    const deptIds = depts.rows.flatMap((r) => [String(r.id), ...(r.cid ? [String(r.cid)] : [])]);
+    const { rows } = await query(
+      `SELECT id, data->>'id' AS cid FROM users
+        WHERE data->>'managerId' = ANY($1::text[]) OR data->>'departmentId' = ANY($2::text[])`,
+      [frontier, deptIds],
+    );
+    const next: string[] = [];
+    for (const r of rows) {
+      const cid = String(r.cid ?? r.id);
+      if (!all.has(cid)) {
+        all.add(cid);
+        next.push(cid);
+      }
+    }
+    frontier = next;
+  }
+  return [...all];
+}
+
+// Strips certificate scans from the users rows this caller may not see the
+// files of (R2). The supervision walk only runs when a row actually carries a
+// file it might have to hide, so a plain directory poll stays cheap.
+async function redactUserRows<T extends { id: string; data: Record<string, any> }>(
+  rows: T[],
+  user: AuthedUser,
+): Promise<T[]> {
+  if (!rows.some((r) => userDocHasFiles(r.data))) return rows;
+  const visible = await userFileViewerScope(user, getSupervisedIds);
+  if (!visible) return rows;
+  return rows.map((r) => {
+    if (!userDocHasFiles(r.data)) return r;
+    const cid = String(r.data?.id ?? r.id);
+    if (visible.has(cid) || visible.has(r.id)) return r;
+    return { ...r, data: redactUserFiles(r.data) };
+  });
 }
 
 interface DocRow {
@@ -164,7 +217,8 @@ export function collectionsRouter(): Router {
     const scope = await listScope(name, user, getSubordinateIds);
     const since = typeof spec.since === 'string' && spec.since !== '' ? spec.since : null;
     const { text, params } = buildWhere(spec, scope);
-    const { rows } = await query(`SELECT id, data, version, created_at, updated_at FROM ${table}${text}`, params);
+    const loaded = await query(`SELECT id, data, version, created_at, updated_at FROM ${table}${text}`, params);
+    const rows = name === 'users' ? await redactUserRows(loaded.rows, user) : loaded.rows;
 
     const body: {
       documents: ReturnType<typeof shape>[];
@@ -231,11 +285,11 @@ export function collectionsRouter(): Router {
         res.status(404).json({ error: 'not found' });
         return;
       }
-      const row = rows[0];
-      if (!(await authorize(name, 'read', req.user!, { docId: req.params.id, existing: row.data }))) {
+      if (!(await authorize(name, 'read', req.user!, { docId: req.params.id, existing: rows[0].data }))) {
         res.status(403).json({ error: 'forbidden' });
         return;
       }
+      const [row] = name === 'users' ? await redactUserRows(rows, req.user!) : rows;
       res.json(shape(row.id, row.data, row));
     }),
   );

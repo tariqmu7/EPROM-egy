@@ -29,6 +29,7 @@
 // ============================================================================
 import { randomUUID } from 'node:crypto';
 import { query, withTransaction } from '../db.js';
+import { loadFields, certificateMeta, USER_FIELDS, ASSESSMENT_FIELDS, EVIDENCE_FIELDS } from './load.js';
 import { logger } from '../logger.js';
 import {
   certificateStatus,
@@ -66,6 +67,9 @@ interface Row {
   id: string;
   data: Record<string, any>;
 }
+
+/** People whose certificates step 1 holds in memory at once. */
+const CERTIFICATE_PAGE = 50;
 
 async function loadAll(table: string): Promise<Row[]> {
   const { rows } = await query(`SELECT id, data FROM ${table}`);
@@ -150,11 +154,14 @@ export async function runNightlySweep(opts: { now?: Date } = {}): Promise<SweepS
   const startedMs = Date.now();
 
   const [userRows, skillRows, jobRows, assessmentRows, evidenceRows, planRows] = await Promise.all([
-    loadAll('users'),
+    // By FIELD, not whole documents: users and evidences carry the uploaded
+    // files, which this job never reads (jobs/load.ts). Certificates are
+    // fetched a page at a time in step 1, scans dropped on arrival.
+    loadFields('users', USER_FIELDS),
     loadAll('skills'),
     loadAll('"jobProfiles"'),
-    loadAll('assessments'),
-    loadAll('evidences'),
+    loadFields('assessments', ASSESSMENT_FIELDS),
+    loadFields('evidences', EVIDENCE_FIELDS),
     loadAll('"developmentPlans"'),
   ]);
 
@@ -182,7 +189,7 @@ export async function runNightlySweep(opts: { now?: Date } = {}): Promise<SweepS
       managerId: r.data.managerId ? String(r.data.managerId) : undefined,
       jobProfileId: r.data.jobProfileId ? String(r.data.jobProfileId) : undefined,
       isArchived: r.data.isArchived === true,
-      certificates: safeJson<CertificateLike[]>(r.data.certificates, []) || [],
+      certificates: [], // filled a page at a time in step 1
       hasSubordinates: (managerCounts.get(canonical) ?? 0) > 0,
     };
   });
@@ -270,6 +277,24 @@ export async function runNightlySweep(opts: { now?: Date } = {}): Promise<SweepS
   };
 
   // ── 1. Certificates ───────────────────────────────────────────────────────
+  // Read CERTIFICATE_PAGE people at a time, keeping only the metadata, so the
+  // most this step ever holds is one page of scans — never the company's.
+  for (let start = 0; start < active.length; start += CERTIFICATE_PAGE) {
+    const page = active.slice(start, start + CERTIFICATE_PAGE);
+    // `IN ($1, $2, …)` rather than `= ANY($1)`: pg-mem (the test harness)
+    // silently matches nothing when ANY is applied to the primary key.
+    const ids = page.map((u) => u.rowId);
+    const { rows } = await query(
+      `SELECT id, data->'certificates' AS certs FROM users WHERE id IN (${ids.map((_, i) => `$${i + 1}`).join(', ')})`,
+      ids,
+    );
+    const byRow = new Map(rows.map((r) => [String(r.id), r.certs]));
+    for (const user of page) {
+      const list = safeJson<CertificateLike[]>(byRow.get(user.rowId), []);
+      user.certificates = (Array.isArray(list) ? list : []).map((c) => certificateMeta(c) as CertificateLike);
+    }
+  }
+
   for (const user of active) {
     if (user.certificates.length === 0) continue;
 

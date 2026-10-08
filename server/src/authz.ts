@@ -719,3 +719,66 @@ export async function listScope(
       return null;
   }
 }
+
+// ── Who may see the FILES on a users document (finding R2) ──────────────────
+// The directory stays open-read (see usersPolicy), but a users document also
+// carries the person's certificate SCANS — base64 files inside
+// `certificates[].fileUrl`. Those are personal documents, not directory data:
+// a colleague's ID-card-grade scan has no business on every employee's laptop.
+//
+// So a users read is REDACTED, not refused: every row still comes back (the org
+// chart, pickers and name resolution keep working, and certificate names/dates
+// still show), but a certificate's `fileUrl` is removed unless the reader is
+// the person themselves, someone who supervises them (managerId chain OR the
+// department/section they run — the same two routes as DataService
+// .getSubordinates), or an admin/CEO. Everyone who may WRITE a users document
+// is in that set, so a redacted copy can never be saved back over the original.
+//
+// `getSupervisedIds(root)` returns root + everyone it supervises (canonical ids).
+// Returns null when the caller may see every file.
+export async function userFileViewerScope(
+  user: AuthedUser,
+  getSupervisedIds: (rootCanonicalId: string) => Promise<string[]>,
+): Promise<Set<string> | null> {
+  if (canReadAll(user)) return null;
+  const ids = new Set(await getSupervisedIds(canonicalId(user)));
+  ids.add(user.id); // the auth uid too — a row may be keyed either way
+  return ids;
+}
+
+/** True when this users document carries a certificate file. */
+export function userDocHasFiles(data: Doc | null | undefined): boolean {
+  if (!data || data.certificates == null) return false;
+  return certificateList(data.certificates).some((c) => c && typeof c === 'object' && !!c.fileUrl);
+}
+
+/**
+ * The same document with every certificate's `fileUrl` removed, in the SAME
+ * wire shape it arrived in (the SPA stringifies `certificates`, so a string
+ * stays a string). Anything unparseable is dropped rather than passed through.
+ */
+export function redactUserFiles(data: Doc): Doc {
+  if (!userDocHasFiles(data)) return data;
+  const stripped = certificateList(data.certificates).map((c) => {
+    if (!c || typeof c !== 'object') return c;
+    const { fileUrl: _scan, ...rest } = c as Record<string, unknown>;
+    return rest;
+  });
+  return {
+    ...data,
+    certificates: typeof data.certificates === 'string' ? JSON.stringify(stripped) : stripped,
+  };
+}
+
+function certificateList(value: unknown): any[] {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
