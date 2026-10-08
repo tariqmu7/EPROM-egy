@@ -181,8 +181,17 @@ export function authRouter(): Router {
         await query('SELECT password_hash, must_reset FROM auth_credentials WHERE user_id = $1', [userId])
       ).rows[0];
 
+      // No credential row = the login was released (or never existed). This
+      // route must never CREATE one: it would mint a fresh password and token
+      // for a leaver without asking for any current password. Only an admin
+      // (/admin/set-password) can give someone a login back.
+      if (!cred) {
+        res.status(403).json({ error: 'no login to change' });
+        return;
+      }
+
       // If the account isn't in a forced-reset state, require the current password.
-      if (cred && !cred.must_reset && cred.password_hash) {
+      if (!cred.must_reset && cred.password_hash) {
         const ok = parsed.data.currentPassword
           ? await verifyPassword(parsed.data.currentPassword, cred.password_hash)
           : false;

@@ -51,6 +51,16 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
   // `iat` has SECOND precision, so a token minted in the same second as the
   // credential write can look up to 999 ms older than it. CLOCK_SKEW_MS covers
   // that; the cost is only that revocation takes effect a second later.
+  //
+  // No credential row at all means the login was RELEASED (Admin → delete →
+  // /auth/admin/release-login). Tokens are only ever minted by /login and
+  // /change-password, both of which need that row, so a token without one is a
+  // leftover session of a leaver — and without the row the `iat` check below
+  // has nothing to compare against. Refuse it outright.
+  if (!rows[0].auth_email && !rows[0].credential_updated_at) {
+    res.status(401).json({ error: 'session ended: login released' });
+    return;
+  }
   const credentialUpdatedAt = rows[0].credential_updated_at as Date | string | null | undefined;
   if (claims.iat !== undefined && credentialUpdatedAt) {
     const changedAtMs = new Date(credentialUpdatedAt).getTime();
@@ -61,6 +71,13 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
   }
 
   const data = rows[0].data as Record<string, unknown>;
+  // A deleted employee is ARCHIVED, not deactivated — their `status` stays
+  // ACTIVE — so the status check alone let a leaver's open session keep working.
+  // Same answer /login gives an archived profile.
+  if (data.isArchived) {
+    res.status(403).json({ error: 'account_not_active', status: 'ARCHIVED' });
+    return;
+  }
   // A user deactivated/rejected after their token was issued cannot act.
   if (data.status && data.status !== 'ACTIVE') {
     res.status(403).json({ error: 'account_not_active', status: String(data.status) });

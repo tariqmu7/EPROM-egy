@@ -1129,6 +1129,44 @@ describe('deleting an employee releases their login', () => {
     expect(res.body.emailReleased).toBe(null);
   });
 
+  it('ends a leaver\'s OPEN session — archive, then release, then the change-password back door', async () => {
+    // The hole: archive leaves status ACTIVE, release deletes the credential row
+    // (which also disabled the iat check), and change-password then INSERTED a
+    // new credential with no current password and handed back a fresh token.
+    const quitter = { id: 'quitter-1', email: 'quitter@eprom.local' };
+    await seedUser(quitter, 'EMPLOYEE', 'quitter-pass');
+    const oldTok = await login(quitter.email, 'quitter-pass');
+    const adminTok = await login(ADMIN.email, 'admin-pass');
+
+    // Archived (what Admin → delete does first): the open token stops working.
+    const before = (await query('SELECT data FROM users WHERE id = $1', [quitter.id])).rows[0].data;
+    await query('UPDATE users SET data = $2 WHERE id = $1', [quitter.id, { ...before, isArchived: true }]);
+    const me1 = await request(app).get('/auth/me').set('Authorization', `Bearer ${oldTok}`);
+    expect(me1.status).toBe(403);
+    expect(me1.body.error).toBe('account_not_active');
+
+    // Released: still refused, now because there is no login at all.
+    const rel = await request(app)
+      .post('/auth/admin/release-login')
+      .set('Authorization', `Bearer ${adminTok}`)
+      .send({ userId: quitter.id });
+    expect(rel.status).toBe(200);
+    // Even with the archive flag cleared (an admin "restore"), the old token is dead.
+    const now = (await query('SELECT data FROM users WHERE id = $1', [quitter.id])).rows[0].data;
+    await query('UPDATE users SET data = $2 WHERE id = $1', [quitter.id, { ...now, isArchived: false }]);
+    const me2 = await request(app).get('/auth/me').set('Authorization', `Bearer ${oldTok}`);
+    expect(me2.status).toBe(401);
+
+    // And the back door: no new password, no new token, no credential row created.
+    const cp = await request(app)
+      .post('/auth/change-password')
+      .set('Authorization', `Bearer ${oldTok}`)
+      .send({ newPassword: 'i-am-back-forever' });
+    expect(cp.status).toBe(401);
+    expect(cp.body.token).toBeUndefined();
+    expect((await query('SELECT 1 FROM auth_credentials WHERE user_id = $1', [quitter.id])).rows.length).toBe(0);
+  });
+
   it('blocks login for an archived profile whose credential survived', async () => {
     // Pre-existing state: archived before this feature shipped, credential intact.
     const legacy = { id: 'legacy-archived', email: 'legacy@eprom.local' };
