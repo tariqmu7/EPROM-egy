@@ -672,6 +672,33 @@ export interface CompetencyCoverage {
 }
 
 /**
+ * One row of the SERVER's audit log (`GET /audit`, table `audit_log`, migration
+ * 010). Written by the API in the same transaction as the change it describes,
+ * with the actor taken from the session — unlike `ActivityLog`, which is the
+ * browser's own narration. `changes` is field → before/after for the top-level
+ * fields that moved; files arrive summarised (`[file application/pdf, N chars]`).
+ */
+export interface AuditLogEntry {
+  id: string;
+  at: string;
+  actorId: string | null;
+  actorName: string | null;
+  actorEmail: string | null;
+  /** create / update / delete, or set-password / release-login. Free text. */
+  action: string;
+  collection: string;
+  docId: string;
+  changes: Record<string, { before?: unknown; after?: unknown }>;
+  requestId: string | null;
+}
+
+export interface AuditLogPage {
+  entries: AuditLogEntry[];
+  /** Pass `next.beforeId` back for the older page; null = nothing older. */
+  next: { beforeId: string } | null;
+}
+
+/**
  * One stored monthly reading of a scope's competency position — the system's
  * only memory of its own numbers (server table `competency_snapshots`, written
  * by the nightly job, migration 008).

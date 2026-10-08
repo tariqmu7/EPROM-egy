@@ -95,6 +95,11 @@ export const SUB_VIEWS: Record<string, SubViewSpec> = {
     values: ['overview', 'idp', 'history', 'certificates', 'career', 'experience'],
     default: 'overview',
   },
+  'admin-audit': {
+    parentPath: '/admin/audit',
+    values: ['changes', 'notes'],
+    default: 'changes',
+  },
   // NOTE: page-level sub-views only. In-page state that depends on a selection
   // (e.g. the Personnel/Sub-units tabs inside a *specific* department's profile,
   // or admin list filters) is persisted to sessionStorage via useSessionState —

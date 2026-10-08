@@ -1839,4 +1839,32 @@ describe('the server keeps its own audit log (R9)', () => {
 
     expect((await request(app).get('/audit?before=yesterday').set('Authorization', `Bearer ${ceoTok}`)).status).toBe(400);
   });
+
+  it('"load older" never skips the rest of a batch cut at a page edge (R9b)', async () => {
+    // In Postgres every row one batch writes carries the SAME time (the
+    // transaction's start). pg-mem ticks per statement, so stage that directly.
+    const at = '2026-10-01T09:00:00.000Z';
+    for (const id of ['pg-a', 'pg-b', 'pg-c']) {
+      await query(
+        `INSERT INTO audit_log (id, at, actor_cid, action, collection, doc_id, changes) VALUES ($1, $2, 'aud-pg', 'create', 'evidences', $1, '{}')`,
+        [id, at],
+      );
+    }
+    const adminTok = await login(ADMIN.email, 'admin-pass');
+    const get = async (qs: string) => {
+      const res = await request(app).get(`/audit?actorId=aud-pg&limit=2${qs}`).set('Authorization', `Bearer ${adminTok}`);
+      expect(res.status).toBe(200);
+      return res.body;
+    };
+
+    const first = await get('');
+    expect(first.entries.map((e: any) => e.id)).toEqual(['pg-c', 'pg-b']);
+    expect(first.next).toEqual({ beforeId: 'pg-b' });
+    // Paging by time alone loses pg-a: it is not older than pg-b, only beside it.
+    expect((await get(`&before=${at}`)).entries).toEqual([]);
+
+    const second = await get(`&beforeId=${first.next.beforeId}`);
+    expect(second.entries.map((e: any) => e.id)).toEqual(['pg-a']);
+    expect(second.next).toBeNull(); // a short page is the end
+  });
 });

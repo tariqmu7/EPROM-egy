@@ -1,4 +1,4 @@
-import { User, Role, JobProfile, Skill, Project, Department, Assessment, ActivityLog, ORG_LEVEL_NUMBERS, Notification, AssessmentCycle, Nomination, IndividualTrainingPlan, OrgLevel, Evidence, CareerProgressionPlan, TrainingCourse, CoursePreparation, ScheduledAssessment, AssessmentMethod, Certificate, CareerHistoryEntry, SkillLevel, EvaluationQuestion, AssessmentPlan, AssessmentInstruction, SkillAssessmentMethod, AssessmentAudience, JobProfileSkill, DepartmentType, DEPT_TYPE_TO_ORG_LEVEL, RaterWeights, WorkExperience, WorkExperienceSkill, WorkExperienceStatus, WorkExperiencePolicy, SkillScoreSource, CompetencyCoverage, CompetencySnapshot, OrgOverview, TrainingNeedsAnalysis, DevelopmentPlan, DevelopmentPlanItem, DevelopmentPlanStatus, DevelopmentItemStatus, DevelopmentPlanItemProgress, DevelopmentPlanProgress, isCourseApproved } from '../types';
+import { User, Role, JobProfile, Skill, Project, Department, Assessment, ActivityLog, ORG_LEVEL_NUMBERS, Notification, AssessmentCycle, Nomination, IndividualTrainingPlan, OrgLevel, Evidence, CareerProgressionPlan, TrainingCourse, CoursePreparation, ScheduledAssessment, AssessmentMethod, Certificate, CareerHistoryEntry, SkillLevel, EvaluationQuestion, AssessmentPlan, AssessmentInstruction, SkillAssessmentMethod, AssessmentAudience, JobProfileSkill, DepartmentType, DEPT_TYPE_TO_ORG_LEVEL, RaterWeights, WorkExperience, WorkExperienceSkill, WorkExperienceStatus, WorkExperiencePolicy, SkillScoreSource, CompetencyCoverage, CompetencySnapshot, AuditLogPage, OrgOverview, TrainingNeedsAnalysis, DevelopmentPlan, DevelopmentPlanItem, DevelopmentPlanStatus, DevelopmentItemStatus, DevelopmentPlanItemProgress, DevelopmentPlanProgress, isCourseApproved } from '../types';
 import { DEFAULT_WORK_EXPERIENCE_POLICY, suggestLevelFromYears } from '../constants/experiencePolicy';
 import {
   collection,
@@ -2295,6 +2295,20 @@ export class DataService {
   // On-demand fetch of the full audit trail (ISO.1). The live listener keeps
   // only the latest 50 in memory; the admin Audit Trail view pulls a deeper
   // history when opened.
+  /**
+   * The server's own audit log (admin/CEO only) — see `AuditLogEntry`. Newest
+   * first; pass the previous page's `next.beforeId` to load older rows.
+   */
+  async getAuditLog(opts: { limit?: number; beforeId?: string; collection?: string; docId?: string; actorId?: string } = {}): Promise<AuditLogPage> {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries({ limit: 100, ...opts })) {
+      if (v !== undefined && v !== '') qs.set(k, String(v));
+    }
+    const res = await api.get<AuditLogPage>(`/audit?${qs.toString()}`);
+    return { entries: res.entries || [], next: res.next ?? null };
+  }
+
+  /** The browser-written `activityLogs` notes — narration, not the audit trail. */
   async fetchAuditLogs(max = 500): Promise<ActivityLog[]> {
     try {
       const snap = await getDocs(

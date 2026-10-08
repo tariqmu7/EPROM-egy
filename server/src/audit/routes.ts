@@ -6,7 +6,13 @@
 // rows are added only by the write paths themselves (audit/log.ts).
 //
 //   ?limit=N          newest N rows (default 100, max 500)
-//   ?before=<iso>     rows strictly older than this time (paging)
+//   ?before=<iso>     rows strictly older than this time
+//   ?beforeId=<id>    the page after a previous one: pass back the response's
+//                     `next.beforeId`. Rows of one batch share one timestamp
+//                     (the transaction's start), so paging by time alone would
+//                     skip the rest of a batch cut at a page edge; ordering by
+//                     (at, id) from that row's OWN stored time cannot, and keeps
+//                     the database's microseconds a JS Date would round off.
 //   ?collection=…&docId=…   one record's history
 //   ?actorId=<id>     one person's actions (canonical user id)
 // ============================================================================
@@ -46,6 +52,13 @@ export function auditRouter(): Router {
         }
         add('at <', before);
       }
+      const beforeId = str(req.query.beforeId);
+      if (beforeId) {
+        params.push(beforeId);
+        const p = `$${params.length}`;
+        const t = `(SELECT at FROM audit_log WHERE id = ${p})`;
+        where.push(`(at < ${t} OR (at = ${t} AND id < ${p}))`);
+      }
       const collection = str(req.query.collection);
       if (collection) add('collection =', collection);
       const docId = str(req.query.docId);
@@ -60,7 +73,10 @@ export function auditRouter(): Router {
           LIMIT ${limit}`,
         params,
       );
+      // A full page may have more behind it; a short one is the end.
+      const last = rows.length === limit ? rows[rows.length - 1] : null;
       res.json({
+        next: last ? { beforeId: last.id } : null,
         entries: rows.map((r) => ({
           id: r.id,
           at: r.at instanceof Date ? r.at.toISOString() : r.at,
