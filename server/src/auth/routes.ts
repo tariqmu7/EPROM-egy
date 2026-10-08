@@ -4,7 +4,7 @@ import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { config } from '../config.js';
 import { query, withTransaction } from '../db.js';
-import { hashPassword, verifyPassword, MAX_PASSWORD_LENGTH } from './password.js';
+import { hashPassword, verifyPassword, warmUpPasswordCheck, MAX_PASSWORD_LENGTH } from './password.js';
 import { signToken } from './jwt.js';
 import { authenticate } from '../middleware/authenticate.js';
 import { isAdmin } from '../authz.js';
@@ -44,6 +44,7 @@ const passwordSchema = z.string().max(MAX_PASSWORD_LENGTH, `password must be at 
 export function authRouter(opts: { rateLimits?: boolean } = {}): Router {
   const router = Router();
   const limit = makeLimiters(opts.rateLimits ?? process.env.NODE_ENV !== 'test');
+  void warmUpPasswordCheck();
 
   // ── LOGIN ─────────────────────────────────────────────────────────────────
   router.post('/login', limit.login, async (req: Request, res: Response, next) => {
@@ -59,8 +60,11 @@ export function authRouter(opts: { rateLimits?: boolean } = {}): Router {
         await query('SELECT user_id, password_hash, must_reset FROM auth_credentials WHERE lower(email) = $1', [email])
       ).rows[0];
 
-      // Constant-ish response: never reveal whether the email exists.
-      if (!cred || !(await verifyPassword(password, cred.password_hash))) {
+      // Never reveal whether the email exists — not in the answer, and not in
+      // the TIME it takes: an unknown address still pays a full bcrypt compare
+      // (against a dummy hash), so it is as slow as a wrong password.
+      const passwordOk = await verifyPassword(password, cred?.password_hash);
+      if (!cred || !passwordOk) {
         res.status(401).json({ error: 'invalid email or password' });
         return;
       }

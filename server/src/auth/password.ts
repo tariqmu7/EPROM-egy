@@ -48,7 +48,25 @@ export async function hashPassword(plain: string): Promise<string> {
   return gated(() => bcrypt.hash(plain, config.bcryptRounds));
 }
 
-export async function verifyPassword(plain: string, hash: string | null): Promise<boolean> {
-  if (!hash) return false;
+// A login for an email with no account (or a credential with no hash) must
+// cost the same as a wrong password, or the response time alone says which
+// addresses are registered. So a missing hash is compared against this one —
+// same rounds as a real hash, through the same gate — and the answer is still
+// false. Built once, off the request path: `warmUpPasswordCheck()` starts it
+// when the auth router is created, so even the first miss pays one compare,
+// not a hash plus a compare.
+let dummyHash: Promise<string> | null = null;
+
+export function warmUpPasswordCheck(): Promise<string> {
+  dummyHash ??= bcrypt.hash('no-such-account', config.bcryptRounds);
+  return dummyHash;
+}
+
+export async function verifyPassword(plain: string, hash: string | null | undefined): Promise<boolean> {
+  if (!hash) {
+    const dummy = await warmUpPasswordCheck();
+    await gated(() => bcrypt.compare(plain, dummy));
+    return false;
+  }
   return gated(() => bcrypt.compare(plain, hash));
 }
